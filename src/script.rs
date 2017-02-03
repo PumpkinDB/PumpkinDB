@@ -48,6 +48,30 @@
 //! * Indexing filters
 //! * Subscription filters
 //!
+//! # Data Representation
+//!
+//! `Instruction` is a type alias for `[u8]` for a single instruction (be it a word or data)
+//!
+//! In an effort to make PumpkinScript interpretation efficient,
+//! we are not introducing enums or structures to represent instructions.
+//! Instead, their byte representation is kept.
+//!
+//! * `<len @ 0..120u8> [_;len]` — byte arrays of up to 120 bytes can have their size indicated in the first byte,
+//! followed by that size's number of bytes
+//! * `<121u8> <len u8> [_; len]` — byte array from 121 to 255 bytes can have their size indicated in the second byte,
+//! followed by that size's number of bytes, with `121u8` as the first byte
+//! * `<122u8> <len u16> [_; len]` — byte array from 256 to 65535 bytes can have their size indicated in the second and third bytes (u16),
+//! followed by that size's number of bytes, with `122u8` as the first byte
+//! * `<123u8> <len u32> [_; len]` — byte array from 65536 to 4294967296 bytes can have their size indicated in the second, third,
+//! fourth and fifth bytes (u32), followed by that size's number of bytes, with `123u8` as the first byte
+//! * `<len @ 129u8..255u8> [_; len ^ 128u8]` — if `len` is greater than `128u8`, the following byte array of `len & 128u8` length
+//! (len without the highest bit set) is considered a word. Length must be greater than zero.
+//!
+//! The rest of tags (`124u8` to `128u8`) are reserved for future use.
+//!
+//! `Data` is used as another alias for `[u8]` to distinguish the fact that this is only data
+//! and has already been stripped of encoding. Useful for representing data on the stack.
+//!
 //! # Usage
 //!
 //! The main entry point for executing PumpkinScript is [`Env`](struct.Env.html) via
@@ -98,31 +122,8 @@ word!(SWAP, (a, b => b, a), b"\x84SWAP");
 /// `ROT` moves third item from the top to the top
 word!(ROT, (a, b, c  => b, c, a), b"\x83ROT");
 
-
-/// `Instruction` is a type alias for a single instruction (be it a word or data)
-///
-/// In an effort to make PumpkinScript interpretation efficient,
-/// we are not introducing enums or structures to represent instructions.
-/// Instead, their byte representation is kept.
-///
-/// # Representation
-///
-/// `<len @ 0..120u8> [_;len]` — byte arrays of up to 120 bytes can have their size indicated in the first byte,
-/// followed by that size's number of bytes
-/// `<121u8> <len u8> [_; len]` — byte array from 121 to 255 bytes can have their size indicated in the second byte,
-/// followed by that size's number of bytes, with `121u8` as the first byte
-/// `<122u8> <len u16> [_; len]` — byte array from 256 to 65535 bytes can have their size indicated in the second and third bytes (u16),
-/// followed by that size's number of bytes, with `122u8` as the first byte
-/// `<123u8> <len u32> [_; len]` — byte array from 65536 to 4294967296 bytes can have their size indicated in the second, third,
-/// fourth and fifth bytes (u32), followed by that size's number of bytes, with `123u8` as the first byte
-/// `<len @ 129u8..255u8> [_; len ^ 128u8]` — if `len` is greater than `128u8`, the following byte array of `len & 128u8` length
-/// (len without the highest bit set) is considered a word. Length must be greater than zero.
-///
-/// The rest of tags (`124u8` to `128u8`) are reserved for future use.
-///
 type Instruction = [u8];
-/// Data is used as another alias to a byte slice to distinguish the fact that this is only data
-/// and has already been stripped of encoding. Useful for representing data on the stack.
+
 type Data = [u8];
 
 /// `Error` represents an enumeration of possible `Executor` errors.
