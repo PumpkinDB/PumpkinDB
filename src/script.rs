@@ -29,14 +29,15 @@
 //! support all the formats without knowing what they are?
 //!
 //! What if there was a way to describe how data should be processed, for example,
-//! for indexing — in a compact, unambiguous and composable form? Or even for recording data itself?
+//! for indexing — in a compact, unambiguous and composable form? Or even for recording data
+//! itself?
 //! Well, that's where the idea to use something like a Forth-like script was born.
 //!
 //! Instead of devising custom protocols for talking to PumpkinDB, the protocol of communication has
 //! become a pipeline to a script executor.
 //!
-//! So, for example, a command/events set can be recorded with something like this (not an actual script,
-//! below is pseudocode):
+//! So, for example, a command/events set can be recorded with something like this (not an actual
+//! script, below is pseudocode):
 //!
 //! ```forth
 //! <command id> <command payload> JOURNAL <event id> <event payload> JOURNAL
@@ -56,16 +57,19 @@
 //! we are not introducing enums or structures to represent instructions.
 //! Instead, their byte representation is kept.
 //!
-//! * `<len @ 0..120u8> [_;len]` — byte arrays of up to 120 bytes can have their size indicated in the first byte,
-//! followed by that size's number of bytes
-//! * `<121u8> <len u8> [_; len]` — byte array from 121 to 255 bytes can have their size indicated in the second byte,
-//! followed by that size's number of bytes, with `121u8` as the first byte
-//! * `<122u8> <len u16> [_; len]` — byte array from 256 to 65535 bytes can have their size indicated in the second and third bytes (u16),
-//! followed by that size's number of bytes, with `122u8` as the first byte
-//! * `<123u8> <len u32> [_; len]` — byte array from 65536 to 4294967296 bytes can have their size indicated in the second, third,
-//! fourth and fifth bytes (u32), followed by that size's number of bytes, with `123u8` as the first byte
-//! * `<len @ 129u8..255u8> [_; len ^ 128u8]` — if `len` is greater than `128u8`, the following byte array of `len & 128u8` length
-//! (len without the highest bit set) is considered a word. Length must be greater than zero.
+//! * `<len @ 0..120u8> [_;len]` — byte arrays of up to 120 bytes can have their size indicated
+//! in the first byte, followed by that size's number of bytes
+//! * `<121u8> <len u8> [_; len]` — byte array from 121 to 255 bytes can have their size indicated
+//! in the second byte, followed by that size's number of bytes, with `121u8` as the first byte
+//! * `<122u8> <len u16> [_; len]` — byte array from 256 to 65535 bytes can have their size
+//! indicated in the second and third bytes (u16), followed by that size's number of bytes,
+//! with `122u8` as the first byte
+//! * `<123u8> <len u32> [_; len]` — byte array from 65536 to 4294967296 bytes can have their
+//! size indicated in the second, third, fourth and fifth bytes (u32), followed by that size's
+//! number of bytes, with `123u8` as the first byte
+//! * `<len @ 129u8..255u8> [_; len ^ 128u8]` — if `len` is greater than `128u8`, the following
+//! byte array of `len & 128u8` length (len without the highest bit set) is considered a word.
+//! Length must be greater than zero.
 //!
 //! The rest of tags (`124u8` to `128u8`) are reserved for future use.
 //!
@@ -172,7 +176,12 @@ impl<'a> Env<'a> {
 }
 
 macro_rules! pop_or_fail {
-    ($stack:expr) => { match $stack.pop() { Some(v) => v, None => return future::err(Error::EmptyStack).boxed() } };
+    ($stack:expr) => {
+      match $stack.pop() {
+        Some(v) => v,
+        None => return future::err(Error::EmptyStack).boxed()
+      }
+    };
 }
 
 impl<'a> Executor<'a> for Env<'a> {
@@ -323,7 +332,8 @@ mod hrparser {
     /// Parses human-readable PumpkinScript
     ///
     /// The format is simple, it is a sequence of space-separated tokens,
-    /// which binaries represented `0x<hexadecimal>` or `"STRING"` (no quoted characters support yet)
+    /// which binaries represented `0x<hexadecimal>` or `"STRING"`
+    /// (no quoted characters support yet)
     /// and the rest of the instructions considered to be words
     ///
     /// # Example
