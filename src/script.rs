@@ -91,7 +91,6 @@
 use futures::future;
 use futures::{Future, BoxFuture};
 
-
 /// `word!` macro is used to define a known (embedded) word, its signature (if applicable)
 /// and representation
 macro_rules! word {
@@ -182,8 +181,15 @@ impl<'a> Executor<'a> for Env<'a> {
             // data
             &[sz @ 0u8...120u8, ref body..] if body.len() == sz as usize => self.push(body),
             &[121u8, sz, ref body..] if body.len() == sz as usize => self.push(body),
-            &[122u8, sz0, sz1, ref body..] if body.len() == (sz0 as usize) << 8 | (sz1 as usize) => self.push(body),
-            &[123u8, sz0, sz1, sz2, sz3, ref body..] if body.len() == (sz0 as usize) << 24 | (sz1 as usize) << 16 | (sz2 as usize) << 8 | (sz3 as usize) => self.push(body),
+            &[122u8, sz0, sz1, ref body..] if body.len() ==
+                                              (sz0 as usize) << 8 | (sz1 as usize) => {
+                self.push(body)
+            }
+            &[123u8, sz0, sz1, sz2, sz3, ref body..] if body.len() ==
+                                                        (sz0 as usize) << 24 |
+                                                        (sz1 as usize) << 16 |
+                                                        (sz2 as usize) << 8 |
+                                                        (sz3 as usize) => self.push(body),
             // words
             &[ref body..] if body == DROP => {
                 let _ = pop_or_fail!(self);
@@ -192,7 +198,7 @@ impl<'a> Executor<'a> for Env<'a> {
                 let v = pop_or_fail!(self);
                 self.push(v);
                 self.push(v);
-            },
+            }
             &[ref body..] if body == SWAP => {
                 let a = pop_or_fail!(self);
                 let b = pop_or_fail!(self);
@@ -208,9 +214,11 @@ impl<'a> Executor<'a> for Env<'a> {
                 self.push(c);
             }
             // unknown word
-            &[sz @ 129u8...255u8, ref body..] if body.len() == (sz ^ 128u8) as usize => return future::err(Error::UnknownWord).boxed(),
+            &[sz @ 129u8...255u8, ref body..] if body.len() == (sz ^ 128u8) as usize => {
+                return future::err(Error::UnknownWord).boxed()
+            }
             // decoding error
-            _ => return future::err(Error::DecodingError).boxed()
+            _ => return future::err(Error::DecodingError).boxed(),
         }
         return future::ok(()).boxed();
 
@@ -226,6 +234,145 @@ impl<'a> HasStack<'a> for Env<'a> {
         self.stack.pop()
     }
 }
+
+
+mod hrparser {
+
+    use nom::is_hex_digit;
+
+    fn prefix_word(word: &[u8]) -> Vec<u8> {
+        let mut vec = Vec::new();
+        vec.push(word.len() as u8 | 128u8);
+        vec.extend_from_slice(word);
+        vec
+    }
+
+    #[inline]
+    fn hex_digit(v: u8) -> u8 {
+        match v {
+            0x61u8...0x66u8 => v - 32 - 0x41 + 10,
+            0x41u8...0x46u8 => v - 0x41 + 10,
+            _ => v - 48,
+        }
+    }
+
+    macro_rules! write_size {
+        ($vec : expr, $size : expr) => {
+          match $size {
+            0...120 => $vec.push($size as u8),
+            121...255 => {
+                $vec.push(121u8);
+                $vec.push($size as u8);
+            }
+            256...65535 => {
+                $vec.push(122u8);
+                $vec.push(($size >> 8) as u8);
+                $vec.push($size as u8);
+            }
+            65536...4294967296 => {
+                $vec.push(123u8);
+                $vec.push(($size >> 24) as u8);
+                $vec.push(($size >> 16) as u8);
+                $vec.push(($size >> 8) as u8);
+                $vec.push($size as u8);
+            }
+            _ => unimplemented!()
+          }
+        };
+    }
+
+
+    fn bin(bin: &[u8]) -> Vec<u8> {
+        let mut bin_ = Vec::new();
+        for i in 0..bin.len() - 1 {
+            if i % 2 != 0 {
+                continue;
+            }
+            bin_.push((hex_digit(bin[i]) << 4) | hex_digit(bin[i + 1]));
+        }
+        let mut vec = Vec::new();
+        let size = bin_.len();
+        write_size!(vec, size);
+        vec.extend_from_slice(bin_.as_slice());
+        vec
+    }
+
+    fn string_to_vec(s: &[u8]) -> Vec<u8> {
+        let mut bin = Vec::new();
+        let size = s.len();
+        write_size!(bin, size);
+        bin.extend_from_slice(s);
+        bin
+    }
+
+    named!(word<Vec<u8>>, do_parse!(
+                      word: take_until!(" ") >>
+                      (prefix_word(word))));
+    named!(binary<Vec<u8>>,
+                          do_parse!(
+                             tag!(b"0x")               >>
+                        hex: take_while1!(is_hex_digit) >>
+                             (bin(hex))
+    ));
+    named!(string<Vec<u8>>, do_parse!(
+                    str: delimited!(char!('"'), is_not!("\""), char!('"')) >>
+                         (string_to_vec(str))));
+    named!(item<Vec<u8>>, alt!(binary | string | word));
+    named!(program<Vec<Vec<u8>>>, separated_list!(tag!(" "), item));
+
+    /// Parses human-readable PumpkinScript
+    ///
+    /// The format is simple, it is a sequence of space-separated tokens,
+    /// which binaries represented `0x<hexadecimal>` or `"STRING"` (no quoted characters support yet)
+    /// and the rest of the instructions considered to be words
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// parse("0xABCD DUP DROP DROP")
+    /// ```
+    ///
+    /// It's especially useful for testing but there is a chance that there will be
+    /// a "suboptimal" protocol that allows to converse with PumpkinDB over telnet
+    pub fn parse(script: &str) -> Vec<Vec<u8>> {
+        let (_, x) = program(script.as_bytes()).unwrap();
+        return x;
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use script::hrparser::parse;
+        use script::{Env, Executor, HasStack};
+
+        #[test]
+        fn human_readable_parser() {
+            let script = parse("0xAABB DUP 0xFF00CC \"Hello\"");
+            let aabb = [0x02, 0xAA, 0xBB];
+            let dup = [0x83, b'D', b'U', b'P'];
+            let ff00cc = [0x03, 0xFF, 0x00, 0xCC];
+            let hello = [0x05, b'H', b'e', b'l', b'l', b'o'];
+            let mut vec: Vec<&[u8]> = Vec::new();
+            vec.push(&aabb);
+            vec.push(&dup);
+            vec.push(&ff00cc);
+            vec.push(&hello);
+            assert_eq!(script, vec);
+
+            let mut env = Env::new();
+            for i in vec {
+                env.execute(i);
+            }
+            env.pop();
+            env.pop();
+            env.pop();
+            env.pop();
+            assert_eq!(env.pop(), None);
+        }
+
+    }
+}
+
+pub use self::hrparser::parse;
 
 #[cfg(test)]
 mod tests {
@@ -383,4 +530,5 @@ mod tests {
         // to rotate should result in an error
         assert_eq!(env.execute(ROT).wait().err().unwrap(), Error::EmptyStack);
     }
+
 }

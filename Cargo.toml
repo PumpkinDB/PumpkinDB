@@ -5,6 +5,8 @@ authors = ["Yurii Rashkovskii <yrashk@gmail.com>"]
 
 [dependencies]
 futures = "0.1.10"
+nom = "^2.1"
+
 
 [dev-dependencies]
 quickcheck = "0.4.1"

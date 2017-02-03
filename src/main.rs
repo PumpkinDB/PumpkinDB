@@ -10,6 +10,10 @@
 #[cfg(test)]
 extern crate quickcheck;
 
+// Parser
+#[macro_use]
+extern crate nom;
+
 extern crate futures;
 
 pub mod script;
