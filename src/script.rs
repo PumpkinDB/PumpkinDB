@@ -146,7 +146,7 @@ pub trait Executor<'a> {
 
 /// `HasStack` is a trait that serves as an interface for accessing PumpkinScript
 /// stack
-trait HasStack<'a> {
+pub trait HasStack<'a> {
     fn push(&mut self, &'a Data);
     fn pop(&mut self) -> Option<&'a Data>;
 }
