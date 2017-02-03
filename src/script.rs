@@ -315,17 +315,16 @@ mod hrparser {
     }
 
     named!(word<Vec<u8>>, do_parse!(
-                      word: take_until!(" ") >>
-                      (prefix_word(word))));
-    named!(binary<Vec<u8>>,
-                          do_parse!(
-                             tag!(b"0x")               >>
-                        hex: take_while1!(is_hex_digit) >>
-                             (bin(hex))
+                            word: take_until!(" ")           >>
+                                  (prefix_word(word))));
+    named!(binary<Vec<u8>>, do_parse!(
+                                  tag!(b"0x")                >>
+                             hex: take_while1!(is_hex_digit) >>
+                                  (bin(hex))
     ));
     named!(string<Vec<u8>>, do_parse!(
-                    str: delimited!(char!('"'), is_not!("\""), char!('"')) >>
-                         (string_to_vec(str))));
+                             str: delimited!(char!('"'), is_not!("\""), char!('"')) >>
+                                  (string_to_vec(str))));
     named!(item<Vec<u8>>, alt!(binary | string | word));
     named!(program<Vec<Vec<u8>>>, separated_list!(tag!(" "), item));
 
