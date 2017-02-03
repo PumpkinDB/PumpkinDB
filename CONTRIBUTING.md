@@ -56,3 +56,6 @@ able to understand it better.
 Solution: explanation of the solution to the problem. Could
 be longer than one line.
 ```
+
+Also, please run `rustfmt` (`cargo fmt`) over your patch before committing.
+This will make everybody's life easier!  
