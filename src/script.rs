@@ -141,6 +141,14 @@ pub enum Error {
 /// `Executor` is a trait that serves as an interface for executing scripts
 pub trait Executor<'a> {
     /// Executes one instruction (word or push)
+    ///
+    /// A curious observer might notice that this function returns
+    /// a future. The reason for that is that some of the words inherently take
+    /// an non-trivial amount of time to finish (I/O, waiting, etc.). In order
+    /// to avoid writing blocking code and limiting the capacity of the executor,
+    /// all executions are represented through futures. In trivial cases those futures
+    /// can be immediately resolved because they never really involved any async
+    /// operations.
     fn execute(&mut self, instruction: &'a Instruction) -> BoxFuture<(), Error>;
 }
 
