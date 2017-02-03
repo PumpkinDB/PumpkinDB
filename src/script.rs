@@ -245,7 +245,7 @@ impl<'a> HasStack<'a> for Env<'a> {
 }
 
 
-mod hrparser {
+mod textparser {
 
     use nom::is_hex_digit;
 
@@ -350,11 +350,11 @@ mod hrparser {
 
     #[cfg(test)]
     mod tests {
-        use script::hrparser::parse;
+        use script::textparser::parse;
         use script::{Env, Executor, HasStack};
 
         #[test]
-        fn human_readable_parser() {
+        fn test() {
             let script = parse("0xAABB DUP 0xFF00CC \"Hello\"");
             let aabb = [0x02, 0xAA, 0xBB];
             let dup = [0x83, b'D', b'U', b'P'];
@@ -381,7 +381,7 @@ mod hrparser {
     }
 }
 
-pub use self::hrparser::parse;
+pub use self::textparser::parse;
 
 #[cfg(test)]
 mod tests {
