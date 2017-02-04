@@ -95,6 +95,8 @@ word!(DUP, (a => a, a), b"\x83DUP");
 word!(SWAP, (a, b => b, a), b"\x84SWAP");
 /// `ROT` moves third item from the top to the top
 word!(ROT, (a, b, c  => b, c, a), b"\x83ROT");
+/// `OVER` copies the second topmost item to the top of the stack
+word!(OVER, (a, b => a, b, a), b"\x84OVER");
 
 /// `Instruction` is a type alias for `Vec<u8>` for a single instruction (be it a word or data)
 ///
@@ -221,6 +223,14 @@ impl VM {
                     let a = pop_or_fail!(stack, program);
                     let b = pop_or_fail!(stack, program);
                     let c = pop_or_fail!(stack, program);
+                    stack.push(b);
+                    stack.push(a);
+                    stack.push(c);
+                }
+                &[ref body..] if body == OVER => {
+                    let a = pop_or_fail!(stack, program);
+                    let b = pop_or_fail!(stack, program);
+                    let c = b.clone();
                     stack.push(b);
                     stack.push(a);
                     stack.push(c);
@@ -398,6 +408,21 @@ mod tests {
         // now that the stack is empty, at attempt
         // to rotate should result in an error
         assert!(matches!(vm.execute(stack, parse("ROT")).wait().err(), Some(Error::EmptyStack(_))));
+    }
+
+    #[test]
+    fn over() {
+        let vm = VM::new();
+        let (mut stack, _) = vm.execute(Vec::new(), parse("0x010203 0x00 OVER")).wait().unwrap();
+        assert_eq!(stack.pop().unwrap(), vec![1, 2, 3]);
+        assert_eq!(stack.pop().unwrap(), vec![0]);
+        assert_eq!(stack.pop().unwrap(), vec![1, 2, 3]);
+        assert_eq!(stack.pop(), None);
+
+        // now that the stack is empty, at attempt
+        // to rotate should result in an error
+        assert!(matches!(vm.execute(stack, parse("OVER")).wait().err(),
+        Some(Error::EmptyStack(_))));
     }
 
 }
