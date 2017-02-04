@@ -736,7 +736,7 @@ mod textparser {
                              str: delimited!(char!('"'), is_not!("\""), char!('"')) >>
                                   (string_to_vec(str))));
     named!(code<Vec<u8>>, do_parse!(
-                             prog: delimited!(char!('['), program, char!(']')) >>
+                             prog: delimited!(char!('['), ws!(program), char!(']')) >>
                                    (program_to_vec(prog))));
     named!(item<Vec<u8>>, alt!(binary | string | code | word));
     named!(program<Vec<Vec<u8>>>, separated_list!(tag!(" "), item));
@@ -807,10 +807,12 @@ mod textparser {
         #[test]
         fn test_code() {
             let script = parse("[DUP]").unwrap();
+            let script_spaced = parse("[ DUP ]").unwrap();
             let dup = [4, 0x83, b'D', b'U', b'P'];
             let mut vec: Vec<&[u8]> = Vec::new();
             vec.push(&dup);
             assert_eq!(script, vec);
+            assert_eq!(script_spaced, vec);
         }
 
     }
