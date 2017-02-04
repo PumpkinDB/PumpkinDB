@@ -98,6 +98,8 @@
 use futures::future;
 use futures::{Future, BoxFuture};
 
+use std::collections::HashMap;
+
 /// `word!` macro is used to define a known (embedded) word, its signature (if applicable)
 /// and representation
 macro_rules! word {
@@ -163,12 +165,20 @@ pub trait Executor<'a> {
 
 /// PumpkinScript environment. This is the structure typically used to run
 /// the scripts.
-pub struct VM {}
+pub struct VM<'a> {
+    executors: HashMap<&'a Instruction, &'a mut Executor<'a>>,
+}
 
-impl VM {
+impl<'a> VM<'a> {
     /// Creates a new PumpkinScript environment.
     fn new() -> Self {
-        VM {}
+        VM { executors: HashMap::new() }
+    }
+    /// Maps an executor to handle a word `VM` can't handle. If, during execution,
+    /// an unknown word will be encountered, VM's executor will try to locate a matching
+    /// executor. If none will be found, `UnknownWord` error future will be returned.
+    fn map_executor(&mut self, word: &'a Instruction, executor: &'a mut Executor<'a>) {
+        self.executors.insert(word, executor);
     }
 }
 
@@ -181,7 +191,7 @@ macro_rules! pop_or_fail {
     };
 }
 
-impl<'a> Executor<'a> for VM {
+impl<'a> Executor<'a> for VM<'a> {
     fn execute(&mut self,
                stack: &mut Stack<'a>,
                instruction: &'a Instruction)
@@ -222,15 +232,17 @@ impl<'a> Executor<'a> for VM {
                 stack.push(a);
                 stack.push(c);
             }
-            // unknown word
             &[sz @ 129u8...255u8, ref body..] if body.len() == (sz ^ 128u8) as usize => {
-                return future::err(Error::UnknownWord).boxed()
+                if let Some(executor) = self.executors.get_mut(instruction) {
+                    return executor.execute(stack, instruction);
+                } else {
+                    return future::err::<(), Error>(Error::UnknownWord).boxed();
+                }
             }
             // decoding error
             _ => return future::err(Error::DecodingError).boxed(),
         }
         return future::ok(()).boxed();
-
     }
 }
 
@@ -375,9 +387,11 @@ pub use self::textparser::parse;
 
 #[cfg(test)]
 mod tests {
-    use script::{VM, Executor, Error, Stack};
+    use script::{VM, Executor, Error, Stack, Instruction};
     use script::{DUP, DROP, SWAP, ROT};
-    use futures::Future;
+
+    use futures::{Future, BoxFuture};
+    use futures::future;
 
     #[quickcheck]
     fn push_micro(size: u8) -> bool {
@@ -457,6 +471,23 @@ mod tests {
         let f = vm.execute(&mut stack, b"\x83XXX").wait();
         assert!(f.is_err());
         assert_eq!(f.err(), Some(Error::UnknownWord));
+    }
+
+    struct XxxExecutor {}
+    impl<'a> Executor<'a> for XxxExecutor {
+        fn execute(&mut self, _: &mut Stack<'a>, _: &'a Instruction) -> BoxFuture<(), Error> {
+            return future::ok(()).boxed();
+        }
+    }
+
+    #[test]
+    fn additional_executor() {
+        let mut xxx = XxxExecutor {};
+        let mut vm = VM::new();
+        vm.map_executor(b"\x83XXX", &mut xxx);
+        let mut stack: Stack = Vec::new();
+        let f = vm.execute(&mut stack, b"\x83XXX").wait();
+        assert!(!f.is_err());
     }
 
     #[test]
