@@ -127,6 +127,7 @@ pub type Instruction = Vec<u8>;
 pub type Data = Vec<u8>;
 /// `Stack` is an alias for `Vec<Data>`
 pub type Stack = Vec<Data>;
+/// `Program` is a vector of instructions.
 pub type Program = Vec<Instruction>;
 
 /// `Error` represents an enumeration of possible `Executor` errors.
