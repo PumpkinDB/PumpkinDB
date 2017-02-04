@@ -76,19 +76,22 @@
 //! `Data` is used as another alias for `[u8]` to distinguish the fact that this is only data
 //! and has already been stripped of encoding. Useful for representing data on the stack.
 //!
+//! `Stack` is an alias for `Vec<&Data>`
+//!
 //! # Usage
 //!
-//! The main entry point for executing PumpkinScript is [`Env`](struct.Env.html) via
+//! The main entry point for executing PumpkinScript is [`Env`](struct.vm.html) via
 //! the [`Executor`](trait.Executor.html) trait.
 //!
 //! # Examples
 //!
 //! ```
 //! let x = [65, 66];
-//! let mut env = Env::new();
-//! env.push(&x);
-//! env.execute(DROP).wait().unwrap();
-//! assert_eq!(env.pop(), None);
+//! let mut stack: Stack = Vec::new();
+//! let mut vm = Env::new();
+//! stack.push(&x);
+//! vm.execute(&mut stack, DROP).wait().unwrap();
+//! assert_eq!(stack.pop(), None);
 //! ```
 
 
@@ -126,8 +129,8 @@ word!(SWAP, (a, b => b, a), b"\x84SWAP");
 word!(ROT, (a, b, c  => b, c, a), b"\x83ROT");
 
 type Instruction = [u8];
-
 type Data = [u8];
+type Stack<'a> = Vec<&'a Data>;
 
 /// `Error` represents an enumeration of possible `Executor` errors.
 #[derive(Debug, PartialEq)]
@@ -152,26 +155,20 @@ pub trait Executor<'a> {
     /// all executions are represented through futures. In trivial cases those futures
     /// can be immediately resolved because they never really involved any async
     /// operations.
-    fn execute(&mut self, instruction: &'a Instruction) -> BoxFuture<(), Error>;
-}
-
-/// `HasStack` is a trait that serves as an interface for accessing PumpkinScript
-/// stack
-pub trait HasStack<'a> {
-    fn push(&mut self, &'a Data);
-    fn pop(&mut self) -> Option<&'a Data>;
+    fn execute(&mut self,
+               stack: &mut Stack<'a>,
+               instruction: &'a Instruction)
+               -> BoxFuture<(), Error>;
 }
 
 /// PumpkinScript environment. This is the structure typically used to run
 /// the scripts.
-pub struct Env<'a> {
-    stack: Vec<&'a Data>,
-}
+pub struct VM {}
 
-impl<'a> Env<'a> {
+impl VM {
     /// Creates a new PumpkinScript environment.
     fn new() -> Self {
-        Env { stack: Vec::new() }
+        VM {}
     }
 }
 
@@ -184,43 +181,46 @@ macro_rules! pop_or_fail {
     };
 }
 
-impl<'a> Executor<'a> for Env<'a> {
-    fn execute(&mut self, instruction: &'a Instruction) -> BoxFuture<(), Error> {
+impl<'a> Executor<'a> for VM {
+    fn execute(&mut self,
+               stack: &mut Stack<'a>,
+               instruction: &'a Instruction)
+               -> BoxFuture<(), Error> {
         match instruction {
             // data
-            &[sz @ 0u8...120u8, ref body..] if body.len() == sz as usize => self.push(body),
-            &[121u8, sz, ref body..] if body.len() == sz as usize => self.push(body),
+            &[sz @ 0u8...120u8, ref body..] if body.len() == sz as usize => stack.push(body),
+            &[121u8, sz, ref body..] if body.len() == sz as usize => stack.push(body),
             &[122u8, sz0, sz1, ref body..] if body.len() ==
                                               (sz0 as usize) << 8 | (sz1 as usize) => {
-                self.push(body)
+                stack.push(body)
             }
             &[123u8, sz0, sz1, sz2, sz3, ref body..] if body.len() ==
                                                         (sz0 as usize) << 24 |
                                                         (sz1 as usize) << 16 |
                                                         (sz2 as usize) << 8 |
-                                                        (sz3 as usize) => self.push(body),
+                                                        (sz3 as usize) => stack.push(body),
             // words
             &[ref body..] if body == DROP => {
-                let _ = pop_or_fail!(self);
+                let _ = pop_or_fail!(stack);
             }
             &[ref body..] if body == DUP => {
-                let v = pop_or_fail!(self);
-                self.push(v);
-                self.push(v);
+                let v = pop_or_fail!(stack);
+                stack.push(v);
+                stack.push(v);
             }
             &[ref body..] if body == SWAP => {
-                let a = pop_or_fail!(self);
-                let b = pop_or_fail!(self);
-                self.push(a);
-                self.push(b);
+                let a = pop_or_fail!(stack);
+                let b = pop_or_fail!(stack);
+                stack.push(a);
+                stack.push(b);
             }
             &[ref body..] if body == ROT => {
-                let a = pop_or_fail!(self);
-                let b = pop_or_fail!(self);
-                let c = pop_or_fail!(self);
-                self.push(b);
-                self.push(a);
-                self.push(c);
+                let a = pop_or_fail!(stack);
+                let b = pop_or_fail!(stack);
+                let c = pop_or_fail!(stack);
+                stack.push(b);
+                stack.push(a);
+                stack.push(c);
             }
             // unknown word
             &[sz @ 129u8...255u8, ref body..] if body.len() == (sz ^ 128u8) as usize => {
@@ -233,17 +233,6 @@ impl<'a> Executor<'a> for Env<'a> {
 
     }
 }
-
-impl<'a> HasStack<'a> for Env<'a> {
-    fn push(&mut self, v: &'a Data) {
-        self.stack.push(v)
-    }
-
-    fn pop(&mut self) -> Option<&'a Data> {
-        self.stack.pop()
-    }
-}
-
 
 mod textparser {
 
@@ -351,7 +340,7 @@ mod textparser {
     #[cfg(test)]
     mod tests {
         use script::textparser::parse;
-        use script::{Env, Executor, HasStack};
+        use script::{VM, Executor, Stack};
 
         #[test]
         fn test() {
@@ -367,15 +356,16 @@ mod textparser {
             vec.push(&hello);
             assert_eq!(script, vec);
 
-            let mut env = Env::new();
+            let mut stack: Stack = Vec::new();
+            let mut vm = VM::new();
             for i in vec {
-                env.execute(i);
+                vm.execute(&mut stack, i);
             }
-            env.pop();
-            env.pop();
-            env.pop();
-            env.pop();
-            assert_eq!(env.pop(), None);
+            stack.pop();
+            stack.pop();
+            stack.pop();
+            stack.pop();
+            assert_eq!(stack.pop(), None);
         }
 
     }
@@ -385,7 +375,7 @@ pub use self::textparser::parse;
 
 #[cfg(test)]
 mod tests {
-    use script::{Env, HasStack, Executor, Error};
+    use script::{VM, Executor, Error, Stack};
     use script::{DUP, DROP, SWAP, ROT};
     use futures::Future;
 
@@ -402,9 +392,10 @@ mod tests {
         vec.extend_from_slice(data.as_slice());
         assert_eq!(vec.len(), size as usize + 1);
         let slice = vec.as_slice();
-        let mut env = Env::new();
-        env.execute(slice).wait().unwrap();
-        env.pop().unwrap() == data.as_slice()
+        let mut stack: Stack = Vec::new();
+        let mut vm = VM::new();
+        vm.execute(&mut stack, slice).wait().unwrap();
+        stack.pop().unwrap() == data.as_slice()
     }
 
     #[quickcheck]
@@ -417,9 +408,10 @@ mod tests {
         vec.extend_from_slice(data.as_slice());
         assert_eq!(vec.len(), size as usize + 2);
         let slice = vec.as_slice();
-        let mut env = Env::new();
-        env.execute(slice).wait().unwrap();
-        env.pop().unwrap() == data.as_slice()
+        let mut stack: Stack = Vec::new();
+        let mut vm = VM::new();
+        vm.execute(&mut stack, slice).wait().unwrap();
+        stack.pop().unwrap() == data.as_slice()
     }
 
     #[quickcheck]
@@ -433,9 +425,10 @@ mod tests {
         vec.extend_from_slice(data.as_slice());
         assert_eq!(vec.len(), size as usize + 3);
         let slice = vec.as_slice();
-        let mut env = Env::new();
-        env.execute(slice).wait().unwrap();
-        env.pop().unwrap() == data.as_slice()
+        let mut stack: Stack = Vec::new();
+        let mut vm = VM::new();
+        vm.execute(&mut stack, slice).wait().unwrap();
+        stack.pop().unwrap() == data.as_slice()
     }
 
     #[quickcheck]
@@ -451,26 +444,29 @@ mod tests {
         vec.extend_from_slice(data.as_slice());
         assert_eq!(vec.len(), size as usize + 5);
         let slice = vec.as_slice();
-        let mut env = Env::new();
-        env.execute(slice).wait().unwrap();
-        env.pop().unwrap() == data.as_slice()
+        let mut stack: Stack = Vec::new();
+        let mut vm = VM::new();
+        vm.execute(&mut stack, slice).wait().unwrap();
+        stack.pop().unwrap() == data.as_slice()
     }
 
     #[test]
     fn unknown_word() {
-        let mut env = Env::new();
-        let f = env.execute(b"\x83XXX").wait();
+        let mut vm = VM::new();
+        let mut stack: Stack = Vec::new();
+        let f = vm.execute(&mut stack, b"\x83XXX").wait();
         assert!(f.is_err());
         assert_eq!(f.err(), Some(Error::UnknownWord));
     }
 
     #[test]
     fn invalid_word_encoding() {
-        let mut env = Env::new();
-        let f = env.execute(b"\x84XXX").wait();
+        let mut vm = VM::new();
+        let mut stack: Stack = Vec::new();
+        let f = vm.execute(&mut stack, b"\x84XXX").wait();
         assert!(f.is_err());
         assert_eq!(f.err(), Some(Error::DecodingError));
-        let f = env.execute(b"\x80XXX").wait();
+        let f = vm.execute(&mut stack, b"\x80XXX").wait();
         assert!(f.is_err());
         assert_eq!(f.err(), Some(Error::DecodingError));
     }
@@ -478,46 +474,49 @@ mod tests {
     #[test]
     fn drop() {
         let x = [1, 2, 3];
-        let mut env = Env::new();
-        env.push(&x);
-        env.execute(DROP).wait().unwrap();
-        assert_eq!(env.pop(), None);
+        let mut stack: Stack = Vec::new();
+        let mut vm = VM::new();
+        stack.push(&x);
+        vm.execute(&mut stack, DROP).wait().unwrap();
+        assert_eq!(stack.pop(), None);
 
         // now that the stack is empty, at attempt
         // to drop should result in an error
-        assert_eq!(env.execute(DROP).wait().err().unwrap(), Error::EmptyStack);
+        assert_eq!(vm.execute(&mut stack, DROP).wait().err().unwrap(), Error::EmptyStack);
     }
 
     #[test]
     fn dup() {
         let x = [1, 2, 3];
-        let mut env = Env::new();
-        env.push(&x);
-        env.execute(DUP).wait().unwrap();
-        assert_eq!(env.pop().unwrap(), x);
-        assert_eq!(env.pop().unwrap(), x);
-        assert_eq!(env.pop(), None);
+        let mut stack: Stack = Vec::new();
+        let mut vm = VM::new();
+        stack.push(&x);
+        vm.execute(&mut stack, DUP).wait().unwrap();
+        assert_eq!(stack.pop().unwrap(), x);
+        assert_eq!(stack.pop().unwrap(), x);
+        assert_eq!(stack.pop(), None);
 
         // now that the stack is empty, at attempt
         // to duplicate should result in an error
-        assert_eq!(env.execute(DUP).wait().err().unwrap(), Error::EmptyStack);
+        assert_eq!(vm.execute(&mut stack, DUP).wait().err().unwrap(), Error::EmptyStack);
     }
 
     #[test]
     fn swap() {
         let x1 = [1, 2, 3];
         let x2 = [3, 2, 1];
-        let mut env = Env::new();
-        env.push(&x1);
-        env.push(&x2);
-        env.execute(SWAP).wait().unwrap();
-        assert_eq!(env.pop().unwrap(), x1);
-        assert_eq!(env.pop().unwrap(), x2);
-        assert_eq!(env.pop(), None);
+        let mut stack: Stack = Vec::new();
+        let mut vm = VM::new();
+        stack.push(&x1);
+        stack.push(&x2);
+        vm.execute(&mut stack, SWAP).wait().unwrap();
+        assert_eq!(stack.pop().unwrap(), x1);
+        assert_eq!(stack.pop().unwrap(), x2);
+        assert_eq!(stack.pop(), None);
 
         // now that the stack is empty, at attempt
         // to swap should result in an error
-        assert_eq!(env.execute(SWAP).wait().err().unwrap(), Error::EmptyStack);
+        assert_eq!(vm.execute(&mut stack, SWAP).wait().err().unwrap(), Error::EmptyStack);
     }
 
     #[test]
@@ -525,19 +524,20 @@ mod tests {
         let x1 = [1, 2, 3];
         let x2 = [3, 2, 1];
         let x3 = [0];
-        let mut env = Env::new();
-        env.push(&x1);
-        env.push(&x2);
-        env.push(&x3);
-        env.execute(ROT).wait().unwrap();
-        assert_eq!(env.pop().unwrap(), x1);
-        assert_eq!(env.pop().unwrap(), x3);
-        assert_eq!(env.pop().unwrap(), x2);
-        assert_eq!(env.pop(), None);
+        let mut stack: Stack = Vec::new();
+        let mut vm = VM::new();
+        stack.push(&x1);
+        stack.push(&x2);
+        stack.push(&x3);
+        vm.execute(&mut stack, ROT).wait().unwrap();
+        assert_eq!(stack.pop().unwrap(), x1);
+        assert_eq!(stack.pop().unwrap(), x3);
+        assert_eq!(stack.pop().unwrap(), x2);
+        assert_eq!(stack.pop(), None);
 
         // now that the stack is empty, at attempt
         // to rotate should result in an error
-        assert_eq!(env.execute(ROT).wait().err().unwrap(), Error::EmptyStack);
+        assert_eq!(vm.execute(&mut stack, ROT).wait().err().unwrap(), Error::EmptyStack);
     }
 
 }
