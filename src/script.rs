@@ -57,8 +57,7 @@
 //! # Examples
 //!
 //! ```
-//! let vm = Env::new();
-//! let (mut stack, _) = vm.execute(Vec::new(), "\"Hello\" DROP").wait().unwrap();
+//! let (mut stack, _) = script::execute(Vec::new(), "\"Hello\" DROP").wait().unwrap();
 //! assert_eq!(stack.pop(), None);
 //! ```
 
@@ -142,24 +141,18 @@ pub enum Error {
     DecodingError(Instruction),
 }
 
-/// `Executor` is a trait that serves as an interface for executing scripts
-pub trait Executor<'a> {
-    /// Executes one instruction (word or push)
-    ///
-    /// A curious observer might notice that this function returns
-    /// a future. The reason for that is that some of the words inherently take
-    /// an non-trivial amount of time to finish (I/O, waiting, etc.). In order
-    /// to avoid writing blocking code and limiting the capacity of the executor,
-    /// all executions are represented through futures. In trivial cases those futures
-    /// can be immediately resolved because they never really involved any async
-    /// operations.
-    fn execute(&'a self, stack: Stack, program: Program) -> BoxFuture<(Stack, Program), Error>;
+/// Executes a program
+///
+/// A curious observer might notice that this function returns
+/// a future. The reason for that is that some of the words inherently take
+/// an non-trivial amount of time to finish (I/O, waiting, etc.). In order
+/// to avoid writing blocking code and limiting the capacity of the executor,
+/// all executions are represented through futures. In trivial cases those futures
+/// can be immediately resolved because they never really involved any async
+/// operations.
+pub fn execute(stack: Stack, program: Program) -> BoxFuture<(Stack, Program), Error> {
+    run((stack, program))
 }
-
-
-/// PumpkinScript environment. This is the structure typically used to run
-/// the scripts.
-pub struct VM {}
 
 macro_rules! pop_or_fail {
     ($stack:expr, $program:expr) => {
@@ -180,92 +173,79 @@ macro_rules! push {
     };
 }
 
-impl VM {
-    /// Creates a new PumpkinScript environment.
-    pub fn new() -> Self {
-        VM {}
-    }
-
-    fn run(tuple: (Stack, Program)) -> BoxFuture<(Stack, Program), Error> {
-        let (mut stack, mut program) = tuple;
-        if program.len() > 0 {
-            let instruction = program.remove(0);
-            match instruction.clone().as_slice() {
-                // data
-                &[sz @ 0u8...120u8, ref body..] if body.len() == sz as usize => push!(stack, body),
-                &[121u8, sz, ref body..] if body.len() == sz as usize => push!(stack, body),
-                &[122u8, sz0, sz1, ref body..] if body.len() ==
-                                                  (sz0 as usize) << 8 | (sz1 as usize) => {
-                    push!(stack, body)
-                }
-                &[123u8, sz0, sz1, sz2, sz3, ref body..] if body.len() ==
-                                                            (sz0 as usize) << 24 |
-                                                            (sz1 as usize) << 16 |
-                                                            (sz2 as usize) << 8 |
-                                                            (sz3 as usize) => push!(stack, body),
-                // words
-                &[ref body..] if body == DROP => {
-                    let _ = pop_or_fail!(stack, program);
-                }
-                &[ref body..] if body == DUP => {
-                    let v = pop_or_fail!(stack, program);
-                    let v1 = v.clone();
-                    stack.push(v);
-                    stack.push(v1);
-                }
-                &[ref body..] if body == SWAP => {
-                    let a = pop_or_fail!(stack, program);
-                    let b = pop_or_fail!(stack, program);
-                    stack.push(a);
-                    stack.push(b);
-                }
-                &[ref body..] if body == ROT => {
-                    let a = pop_or_fail!(stack, program);
-                    let b = pop_or_fail!(stack, program);
-                    let c = pop_or_fail!(stack, program);
-                    stack.push(b);
-                    stack.push(a);
-                    stack.push(c);
-                }
-                &[ref body..] if body == OVER => {
-                    let a = pop_or_fail!(stack, program);
-                    let b = pop_or_fail!(stack, program);
-                    let c = b.clone();
-                    stack.push(b);
-                    stack.push(a);
-                    stack.push(c);
-                }
-                &[sz @ 129u8...255u8, ref body..] if body.len() == (sz ^ 128u8) as usize => {
-                    let mut vec = Vec::new();
-                    vec.extend_from_slice(body);
-                    program.insert(0, instruction);
-                    return future::err(Error::UnknownWord(vec, stack, program)).boxed();
-                }
-                // decoding error
-                data => {
-                    let mut vec = Vec::new();
-                    vec.extend_from_slice(data);
-                    return future::err(Error::DecodingError(vec)).boxed();
-                }
+fn run(tuple: (Stack, Program)) -> BoxFuture<(Stack, Program), Error> {
+    let (mut stack, mut program) = tuple;
+    if program.len() > 0 {
+        let instruction = program.remove(0);
+        match instruction.clone().as_slice() {
+            // data
+            &[sz @ 0u8...120u8, ref body..] if body.len() == sz as usize => push!(stack, body),
+            &[121u8, sz, ref body..] if body.len() == sz as usize => push!(stack, body),
+            &[122u8, sz0, sz1, ref body..] if body.len() ==
+                                              (sz0 as usize) << 8 | (sz1 as usize) => {
+                push!(stack, body)
+            }
+            &[123u8, sz0, sz1, sz2, sz3, ref body..] if body.len() ==
+                                                        (sz0 as usize) << 24 |
+                                                        (sz1 as usize) << 16 |
+                                                        (sz2 as usize) << 8 |
+                                                        (sz3 as usize) => push!(stack, body),
+            // words
+            &[ref body..] if body == DROP => {
+                let _ = pop_or_fail!(stack, program);
+            }
+            &[ref body..] if body == DUP => {
+                let v = pop_or_fail!(stack, program);
+                let v1 = v.clone();
+                stack.push(v);
+                stack.push(v1);
+            }
+            &[ref body..] if body == SWAP => {
+                let a = pop_or_fail!(stack, program);
+                let b = pop_or_fail!(stack, program);
+                stack.push(a);
+                stack.push(b);
+            }
+            &[ref body..] if body == ROT => {
+                let a = pop_or_fail!(stack, program);
+                let b = pop_or_fail!(stack, program);
+                let c = pop_or_fail!(stack, program);
+                stack.push(b);
+                stack.push(a);
+                stack.push(c);
+            }
+            &[ref body..] if body == OVER => {
+                let a = pop_or_fail!(stack, program);
+                let b = pop_or_fail!(stack, program);
+                let c = b.clone();
+                stack.push(b);
+                stack.push(a);
+                stack.push(c);
+            }
+            &[sz @ 129u8...255u8, ref body..] if body.len() == (sz ^ 128u8) as usize => {
+                let mut vec = Vec::new();
+                vec.extend_from_slice(body);
+                program.insert(0, instruction);
+                return future::err(Error::UnknownWord(vec, stack, program)).boxed();
+            }
+            // decoding error
+            data => {
+                let mut vec = Vec::new();
+                vec.extend_from_slice(data);
+                return future::err(Error::DecodingError(vec)).boxed();
             }
         }
-        if program.is_empty() {
-            return future::ok((stack, program)).boxed();
-        } else {
-            return future::ok((stack, program)).and_then(VM::run).boxed();
-        }
     }
-}
-
-impl<'a> Executor<'a> for VM {
-    fn execute(&'a self, stack: Stack, program: Program) -> BoxFuture<(Stack, Program), Error> {
-        VM::run((stack, program))
+    if program.is_empty() {
+        return future::ok((stack, program)).boxed();
+    } else {
+        return future::ok((stack, program)).and_then(run).boxed();
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use script::{VM, Executor, Error, parse};
+    use script::{Error, parse, execute};
 
     use futures::Future;
 
@@ -281,8 +261,7 @@ mod tests {
         vec.push(size);
         vec.extend_from_slice(data.as_slice());
         assert_eq!(vec.len(), size as usize + 1);
-        let vm = VM::new();
-        let (mut stack, _) = vm.execute(Vec::new(), vec![vec]).wait().unwrap();
+        let (mut stack, _) = execute(Vec::new(), vec![vec]).wait().unwrap();
         stack.pop().unwrap() == data.as_slice()
     }
 
@@ -295,8 +274,7 @@ mod tests {
         vec.push(size);
         vec.extend_from_slice(data.as_slice());
         assert_eq!(vec.len(), size as usize + 2);
-        let vm = VM::new();
-        let (mut stack, _) = vm.execute(Vec::new(), vec![vec]).wait().unwrap();
+        let (mut stack, _) = execute(Vec::new(), vec![vec]).wait().unwrap();
         stack.pop().unwrap() == data.as_slice()
     }
 
@@ -310,8 +288,7 @@ mod tests {
         vec.push(size as u8);
         vec.extend_from_slice(data.as_slice());
         assert_eq!(vec.len(), size as usize + 3);
-        let vm = VM::new();
-        let (mut stack, _) = vm.execute(Vec::new(), vec![vec]).wait().unwrap();
+        let (mut stack, _) = execute(Vec::new(), vec![vec]).wait().unwrap();
         stack.pop().unwrap() == data.as_slice()
     }
 
@@ -327,15 +304,13 @@ mod tests {
         vec.push(size as u8);
         vec.extend_from_slice(data.as_slice());
         assert_eq!(vec.len(), size as usize + 5);
-        let vm = VM::new();
-        let (mut stack, _) = vm.execute(Vec::new(), vec![vec]).wait().unwrap();
+        let (mut stack, _) = execute(Vec::new(), vec![vec]).wait().unwrap();
         stack.pop().unwrap() == data.as_slice()
     }
 
     #[test]
     fn unknown_word() {
-        let vm = VM::new();
-        let f = vm.execute(Vec::new(), parse("XXX")).wait();
+        let f = execute(Vec::new(), parse("XXX")).wait();
         assert!(f.is_err());
         if let Error::UnknownWord(instruction, _, mut program) = f.err().unwrap() {
             assert_eq!(instruction, vec![b'X', b'X', b'X']);
@@ -346,60 +321,54 @@ mod tests {
 
     #[test]
     fn invalid_word_encoding() {
-        let vm = VM::new();
-        let f = vm.execute(Vec::new(), vec![vec![0x84, b'X', b'X', b'X']]).wait();
+        let f = execute(Vec::new(), vec![vec![0x84, b'X', b'X', b'X']]).wait();
         assert!(f.is_err());
         assert!(matches!(f.err(), Some(Error::DecodingError(_))));
-        let f = vm.execute(Vec::new(), vec![vec![0x80, b'X', b'X', b'X']]).wait();
+        let f = execute(Vec::new(), vec![vec![0x80, b'X', b'X', b'X']]).wait();
         assert!(f.is_err());
         assert!(matches!(f.err(), Some(Error::DecodingError(_))));
     }
 
     #[test]
     fn drop() {
-        let vm = VM::new();
-        let (mut stack, _) = vm.execute(Vec::new(), parse("0x010203 DROP")).wait().unwrap();
+        let (mut stack, _) = execute(Vec::new(), parse("0x010203 DROP")).wait().unwrap();
         assert_eq!(stack.pop(), None);
 
         // now that the stack is empty, at attempt
         // to drop should result in an error
-        assert!(matches!(vm.execute(stack, parse("DROP")).wait().err(),
+        assert!(matches!(execute(stack, parse("DROP")).wait().err(),
         Some(Error::EmptyStack(_))));
     }
 
     #[test]
     fn dup() {
-        let vm = VM::new();
-        let (mut stack, _) = vm.execute(Vec::new(), parse("0x010203 DUP")).wait().unwrap();
+        let (mut stack, _) = execute(Vec::new(), parse("0x010203 DUP")).wait().unwrap();
         assert_eq!(stack.pop().unwrap(), vec![1, 2, 3]);
         assert_eq!(stack.pop().unwrap(), vec![1, 2, 3]);
         assert_eq!(stack.pop(), None);
 
         // now that the stack is empty, at attempt
         // to duplicate should result in an error
-        assert!(matches!(vm.execute(stack, parse("DUP")).wait().err(), Some(Error::EmptyStack(_))));
+        assert!(matches!(execute(stack, parse("DUP")).wait().err(), Some(Error::EmptyStack(_))));
     }
 
     #[test]
     fn swap() {
-        let vm = VM::new();
-        let (mut stack, _) =
-            vm.execute(Vec::new(), parse("0x010203 0x030201 SWAP")).wait().unwrap();
+        let (mut stack, _) = execute(Vec::new(), parse("0x010203 0x030201 SWAP")).wait().unwrap();
         assert_eq!(stack.pop().unwrap(), vec![1, 2, 3]);
         assert_eq!(stack.pop().unwrap(), vec![3, 2, 1]);
         assert_eq!(stack.pop(), None);
 
         // now that the stack is empty, at attempt
         // to swap should result in an error
-        assert!(matches!(vm.execute(stack, parse("SWAP")).wait().err(),
+        assert!(matches!(execute(stack, parse("SWAP")).wait().err(),
         Some(Error::EmptyStack(_))));
     }
 
     #[test]
     fn rot() {
-        let vm = VM::new();
         let (mut stack, _) =
-            vm.execute(Vec::new(), parse("0x010203 0x030201 0x00 ROT")).wait().unwrap();
+            execute(Vec::new(), parse("0x010203 0x030201 0x00 ROT")).wait().unwrap();
         assert_eq!(stack.pop().unwrap(), vec![1, 2, 3]);
         assert_eq!(stack.pop().unwrap(), vec![0]);
         assert_eq!(stack.pop().unwrap(), vec![3, 2, 1]);
@@ -407,13 +376,12 @@ mod tests {
 
         // now that the stack is empty, at attempt
         // to rotate should result in an error
-        assert!(matches!(vm.execute(stack, parse("ROT")).wait().err(), Some(Error::EmptyStack(_))));
+        assert!(matches!(execute(stack, parse("ROT")).wait().err(), Some(Error::EmptyStack(_))));
     }
 
     #[test]
     fn over() {
-        let vm = VM::new();
-        let (mut stack, _) = vm.execute(Vec::new(), parse("0x010203 0x00 OVER")).wait().unwrap();
+        let (mut stack, _) = execute(Vec::new(), parse("0x010203 0x00 OVER")).wait().unwrap();
         assert_eq!(stack.pop().unwrap(), vec![1, 2, 3]);
         assert_eq!(stack.pop().unwrap(), vec![0]);
         assert_eq!(stack.pop().unwrap(), vec![1, 2, 3]);
@@ -421,7 +389,7 @@ mod tests {
 
         // now that the stack is empty, at attempt
         // to rotate should result in an error
-        assert!(matches!(vm.execute(stack, parse("OVER")).wait().err(),
+        assert!(matches!(execute(stack, parse("OVER")).wait().err(),
         Some(Error::EmptyStack(_))));
     }
 
@@ -538,9 +506,8 @@ mod textparser {
 
     #[cfg(test)]
     mod tests {
+        use script::execute;
         use script::textparser::parse;
-        use script::{VM, Executor};
-
         use futures::Future;
 
         #[test]
@@ -567,8 +534,7 @@ mod textparser {
             vec.push(&hello);
             assert_eq!(script, vec);
 
-            let vm = VM::new();
-            let (mut stack, _) = vm.execute(Vec::new(), script).wait().unwrap();
+            let (mut stack, _) = execute(Vec::new(), script).wait().unwrap();
 
             stack.pop();
             stack.pop();
