@@ -9,6 +9,9 @@
 #![cfg_attr(test, plugin(quickcheck_macros))]
 #[cfg(test)]
 extern crate quickcheck;
+#[cfg(test)]
+#[macro_use]
+extern crate matches;
 
 // Parser
 #[macro_use]

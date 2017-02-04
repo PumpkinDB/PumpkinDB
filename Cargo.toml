@@ -11,3 +11,4 @@ nom = "^2.1"
 [dev-dependencies]
 quickcheck = "0.4.1"
 quickcheck_macros = "0.4.1"
+matches = "0.1.4"
