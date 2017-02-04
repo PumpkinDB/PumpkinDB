@@ -97,6 +97,11 @@ word!(ROT, (a, b, c  => b, c, a), b"\x83ROT");
 /// `OVER` copies the second topmost item to the top of the stack
 word!(OVER, (a, b => a, b, a), b"\x84OVER");
 
+// Byte arrays
+
+/// `CONCAT` takes two topmost items and concatenates them, and
+/// pushes result to the top of the stack
+word!(CONCAT, (a, b => c), b"\x86CONCAT");
 
 // Control flow
 
@@ -393,6 +398,12 @@ fn run(tuple: (Stack, Program)) -> BoxFuture<(Stack, Program), Error> {
                 stack.push(a);
                 stack.push(c);
             }
+            &[ref body..] if body == CONCAT => {
+                let mut a = pop_or_fail!(stack, program);
+                let mut b = pop_or_fail!(stack, program);
+                b.append(&mut a);
+                stack.push(b);
+            }
             &[ref body..] if body == EVAL => {
                 let code = pop_or_fail!(stack, program);
                 return execute(stack, parse_bin(code)).and_then(|(s, _)| run((s, program))).boxed();
@@ -565,6 +576,18 @@ mod tests {
         // now that the stack is empty, at attempt
         // to rotate should result in an error
         assert!(matches!(execute(stack, parse("OVER")).wait().err(),
+        Some(Error::EmptyStack(_))));
+    }
+
+    #[test]
+    fn concat() {
+        let (mut stack, _) = execute(Vec::new(), parse("0x10 0x20 CONCAT")).wait().unwrap();
+        assert_eq!(stack.pop().unwrap(), vec![0x10, 0x20]);
+        assert_eq!(stack.pop(), None);
+
+        // now that the stack is empty, at attempt
+        // to rotate should result in an error
+        assert!(matches!(execute(stack, parse("CONCAT")).wait().err(),
         Some(Error::EmptyStack(_))));
     }
 
