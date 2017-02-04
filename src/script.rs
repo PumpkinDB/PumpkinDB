@@ -152,6 +152,8 @@ pub enum Error {
     UnknownWord(Instruction, Stack, Program),
     /// Binary format decoding failed
     DecodingError(Instruction),
+    /// Program parsing error
+    ProgramParsingError(ParseError),
 }
 
 /// Executes a program
@@ -186,9 +188,17 @@ macro_rules! push {
     };
 }
 
+#[derive(Debug, PartialEq)]
+pub enum ParseError {
+    Incomplete,
+    Err(u32),
+    UnknownErr,
+}
+
+
 mod binparser {
     use nom::{IResult, Needed, ErrorKind};
-    use script::Program;
+    use script::{Program, ParseError};
 
 
     fn to_vec(s: &[u8]) -> Vec<u8> {
@@ -281,9 +291,13 @@ mod binparser {
     named!(split_code<Vec<Vec<u8>>>, many0!(alt!(word | data)));
 
     /// Parse single Vec<u8> into separate instructions (a program)
-    pub fn parse(code: Vec<u8>) -> Program {
-        let (_, x) = split_code(code.as_slice()).unwrap();
-        x
+    pub fn parse(code: Vec<u8>) -> Result<Program, ParseError> {
+        match split_code(code.as_slice()) {
+            IResult::Done(_, x) => Ok(x),
+            IResult::Incomplete(_) => Err(ParseError::Incomplete),
+            IResult::Error(ErrorKind::Custom(code)) => Err(ParseError::Err(code)),
+            _ => Err(ParseError::UnknownErr),
+        }
     }
 
     #[cfg(test)]
@@ -293,12 +307,12 @@ mod binparser {
 
         #[test]
         fn test() {
-            let v = parse_text("0x10 DUP");
+            let v = parse_text("0x10 DUP").unwrap();
             let mut vec = Vec::new();
             for mut item in v {
                 vec.append(&mut item);
             }
-            assert_eq!(parse(vec), parse_text("0x10 DUP"));
+            assert_eq!(parse(vec).unwrap(), parse_text("0x10 DUP").unwrap());
         }
 
         #[test]
@@ -307,12 +321,12 @@ mod binparser {
             for _ in 1..200 {
                 byte_sized_sequence.push_str("AA");
             }
-            let v = parse_text(byte_sized_sequence.as_ref());
+            let v = parse_text(byte_sized_sequence.as_ref()).unwrap();
             let mut vec = Vec::new();
             for mut item in v {
                 vec.append(&mut item);
             }
-            assert_eq!(parse(vec), parse_text(byte_sized_sequence.as_ref()));
+            assert_eq!(parse(vec).unwrap(), parse_text(byte_sized_sequence.as_ref()).unwrap());
         }
 
         #[test]
@@ -321,12 +335,12 @@ mod binparser {
             for _ in 1..300 {
                 byte_sized_sequence.push_str("AA");
             }
-            let v = parse_text(byte_sized_sequence.as_ref());
+            let v = parse_text(byte_sized_sequence.as_ref()).unwrap();
             let mut vec = Vec::new();
             for mut item in v {
                 vec.append(&mut item);
             }
-            assert_eq!(parse(vec), parse_text(byte_sized_sequence.as_ref()));
+            assert_eq!(parse(vec).unwrap(), parse_text(byte_sized_sequence.as_ref()).unwrap());
         }
 
         #[test]
@@ -335,12 +349,12 @@ mod binparser {
             for _ in 1..70000 {
                 byte_sized_sequence.push_str("AA");
             }
-            let v = parse_text(byte_sized_sequence.as_ref());
+            let v = parse_text(byte_sized_sequence.as_ref()).unwrap();
             let mut vec = Vec::new();
             for mut item in v {
                 vec.append(&mut item);
             }
-            assert_eq!(parse(vec), parse_text(byte_sized_sequence.as_ref()));
+            assert_eq!(parse(vec).unwrap(), parse_text(byte_sized_sequence.as_ref()).unwrap());
         }
 
     }
@@ -406,7 +420,10 @@ fn run(tuple: (Stack, Program)) -> BoxFuture<(Stack, Program), Error> {
             }
             &[ref body..] if body == EVAL => {
                 let code = pop_or_fail!(stack, program);
-                return execute(stack, parse_bin(code)).and_then(|(s, _)| run((s, program))).boxed();
+                match parse_bin(code) {
+                    Ok(p) => return execute(stack, p).and_then(|(s, _)| run((s, program))).boxed(),
+                    Err(err) => return future::err(Error::ProgramParsingError(err)).boxed(),
+                }
             }
             &[sz @ 129u8...255u8, ref body..] if body.len() == (sz ^ 128u8) as usize => {
                 let mut vec = Vec::new();
@@ -496,7 +513,7 @@ mod tests {
 
     #[test]
     fn unknown_word() {
-        let f = execute(Vec::new(), parse("XXX")).wait();
+        let f = execute(Vec::new(), parse("XXX").unwrap()).wait();
         assert!(f.is_err());
         if let Error::UnknownWord(instruction, _, mut program) = f.err().unwrap() {
             assert_eq!(instruction, vec![b'X', b'X', b'X']);
@@ -517,44 +534,46 @@ mod tests {
 
     #[test]
     fn drop() {
-        let (mut stack, _) = execute(Vec::new(), parse("0x010203 DROP")).wait().unwrap();
+        let (mut stack, _) = execute(Vec::new(), parse("0x010203 DROP").unwrap()).wait().unwrap();
         assert_eq!(stack.pop(), None);
 
         // now that the stack is empty, at attempt
         // to drop should result in an error
-        assert!(matches!(execute(stack, parse("DROP")).wait().err(),
+        assert!(matches!(execute(stack, parse("DROP").unwrap()).wait().err(),
         Some(Error::EmptyStack(_))));
     }
 
     #[test]
     fn dup() {
-        let (mut stack, _) = execute(Vec::new(), parse("0x010203 DUP")).wait().unwrap();
+        let (mut stack, _) = execute(Vec::new(), parse("0x010203 DUP").unwrap()).wait().unwrap();
         assert_eq!(stack.pop().unwrap(), vec![1, 2, 3]);
         assert_eq!(stack.pop().unwrap(), vec![1, 2, 3]);
         assert_eq!(stack.pop(), None);
 
         // now that the stack is empty, at attempt
         // to duplicate should result in an error
-        assert!(matches!(execute(stack, parse("DUP")).wait().err(), Some(Error::EmptyStack(_))));
+        assert!(matches!(execute(stack, parse("DUP").unwrap()).wait().err(),
+                         Some(Error::EmptyStack(_))));
     }
 
     #[test]
     fn swap() {
-        let (mut stack, _) = execute(Vec::new(), parse("0x010203 0x030201 SWAP")).wait().unwrap();
+        let (mut stack, _) =
+            execute(Vec::new(), parse("0x010203 0x030201 SWAP").unwrap()).wait().unwrap();
         assert_eq!(stack.pop().unwrap(), vec![1, 2, 3]);
         assert_eq!(stack.pop().unwrap(), vec![3, 2, 1]);
         assert_eq!(stack.pop(), None);
 
         // now that the stack is empty, at attempt
         // to swap should result in an error
-        assert!(matches!(execute(stack, parse("SWAP")).wait().err(),
+        assert!(matches!(execute(stack, parse("SWAP").unwrap()).wait().err(),
         Some(Error::EmptyStack(_))));
     }
 
     #[test]
     fn rot() {
         let (mut stack, _) =
-            execute(Vec::new(), parse("0x010203 0x030201 0x00 ROT")).wait().unwrap();
+            execute(Vec::new(), parse("0x010203 0x030201 0x00 ROT").unwrap()).wait().unwrap();
         assert_eq!(stack.pop().unwrap(), vec![1, 2, 3]);
         assert_eq!(stack.pop().unwrap(), vec![0]);
         assert_eq!(stack.pop().unwrap(), vec![3, 2, 1]);
@@ -562,12 +581,14 @@ mod tests {
 
         // now that the stack is empty, at attempt
         // to rotate should result in an error
-        assert!(matches!(execute(stack, parse("ROT")).wait().err(), Some(Error::EmptyStack(_))));
+        assert!(matches!(execute(stack, parse("ROT").unwrap()).wait().err(),
+                         Some(Error::EmptyStack(_))));
     }
 
     #[test]
     fn over() {
-        let (mut stack, _) = execute(Vec::new(), parse("0x010203 0x00 OVER")).wait().unwrap();
+        let (mut stack, _) =
+            execute(Vec::new(), parse("0x010203 0x00 OVER").unwrap()).wait().unwrap();
         assert_eq!(stack.pop().unwrap(), vec![1, 2, 3]);
         assert_eq!(stack.pop().unwrap(), vec![0]);
         assert_eq!(stack.pop().unwrap(), vec![1, 2, 3]);
@@ -575,41 +596,52 @@ mod tests {
 
         // now that the stack is empty, at attempt
         // to rotate should result in an error
-        assert!(matches!(execute(stack, parse("OVER")).wait().err(),
+        assert!(matches!(execute(stack, parse("OVER").unwrap()).wait().err(),
         Some(Error::EmptyStack(_))));
     }
 
     #[test]
     fn concat() {
-        let (mut stack, _) = execute(Vec::new(), parse("0x10 0x20 CONCAT")).wait().unwrap();
+        let (mut stack, _) =
+            execute(Vec::new(), parse("0x10 0x20 CONCAT").unwrap()).wait().unwrap();
         assert_eq!(stack.pop().unwrap(), vec![0x10, 0x20]);
         assert_eq!(stack.pop(), None);
 
         // now that the stack is empty, at attempt
         // to rotate should result in an error
-        assert!(matches!(execute(stack, parse("CONCAT")).wait().err(),
+        assert!(matches!(execute(stack, parse("CONCAT").unwrap()).wait().err(),
         Some(Error::EmptyStack(_))));
     }
 
     #[test]
     fn eval() {
-        let (mut stack, _) =
-            execute(Vec::new(), parse("[0x01 DUP [DUP] EVAL] EVAL DROP")).wait().unwrap();
+        let (mut stack, _) = execute(Vec::new(),
+                                     parse("[0x01 DUP [DUP] EVAL] EVAL DROP").unwrap())
+            .wait()
+            .unwrap();
         assert_eq!(stack.pop().unwrap(), vec![1]);
         assert_eq!(stack.pop().unwrap(), vec![1]);
         assert_eq!(stack.pop(), None);
 
         // now that the stack is empty, at attempt
         // to rotate should result in an error
-        assert!(matches!(execute(stack, parse("EVAL")).wait().err(),
+        assert!(matches!(execute(stack, parse("EVAL").unwrap()).wait().err(),
         Some(Error::EmptyStack(_))));
+    }
+
+    #[test]
+    fn invalid_eval() {
+        let f = execute(Vec::new(), parse("0x10 EVAL").unwrap()).wait();
+        assert!(f.is_err());
+        assert!(matches!(f.err(), Some(Error::ProgramParsingError(_))));
     }
 
 }
 
 
 mod textparser {
-
+    use nom::{IResult, ErrorKind};
+    use script::{Program, ParseError};
     use nom::is_hex_digit;
 
     fn prefix_word(word: &[u8]) -> Vec<u8> {
@@ -724,9 +756,13 @@ mod textparser {
     ///
     /// It's especially useful for testing but there is a chance that there will be
     /// a "suboptimal" protocol that allows to converse with PumpkinDB over telnet
-    pub fn parse(script: &str) -> Vec<Vec<u8>> {
-        let (_, x) = program(script.as_bytes()).unwrap();
-        return x;
+    pub fn parse(script: &str) -> Result<Program, ParseError> {
+        match program(script.as_bytes()) {
+            IResult::Done(_, x) => Ok(x),
+            IResult::Incomplete(_) => Err(ParseError::Incomplete),
+            IResult::Error(ErrorKind::Custom(code)) => Err(ParseError::Err(code)),
+            _ => Err(ParseError::UnknownErr),
+        }
     }
 
     #[cfg(test)]
@@ -737,17 +773,17 @@ mod textparser {
 
         #[test]
         fn test_one() {
-            let mut script = parse("0xAABB");
+            let mut script = parse("0xAABB").unwrap();
             assert_eq!(script.len(), 1);
             assert_eq!(script.pop(), Some(vec![2, 0xaa,0xbb]));
-            let mut script = parse("HELLO");
+            let mut script = parse("HELLO").unwrap();
             assert_eq!(script.len(), 1);
             assert_eq!(script.pop(), Some(vec![0x85, b'H', b'E', b'L', b'L', b'O']));
         }
 
         #[test]
         fn test() {
-            let script = parse("0xAABB DUP 0xFF00CC \"Hello\"");
+            let script = parse("0xAABB DUP 0xFF00CC \"Hello\"").unwrap();
             let aabb = [0x02, 0xAA, 0xBB];
             let dup = [0x83, b'D', b'U', b'P'];
             let ff00cc = [0x03, 0xFF, 0x00, 0xCC];
@@ -770,7 +806,7 @@ mod textparser {
 
         #[test]
         fn test_code() {
-            let script = parse("[DUP]");
+            let script = parse("[DUP]").unwrap();
             let dup = [4, 0x83, b'D', b'U', b'P'];
             let mut vec: Vec<&[u8]> = Vec::new();
             vec.push(&dup);
