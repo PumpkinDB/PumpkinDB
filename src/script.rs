@@ -171,13 +171,13 @@ pub struct VM<'a> {
 
 impl<'a> VM<'a> {
     /// Creates a new PumpkinScript environment.
-    fn new() -> Self {
+    pub fn new() -> Self {
         VM { executors: HashMap::new() }
     }
     /// Maps an executor to handle a word `VM` can't handle. If, during execution,
     /// an unknown word will be encountered, VM's executor will try to locate a matching
     /// executor. If none will be found, `UnknownWord` error future will be returned.
-    fn map_executor(&mut self, word: &'a Instruction, executor: &'a mut Executor<'a>) {
+    pub fn map_executor(&mut self, word: &'a Instruction, executor: &'a mut Executor<'a>) {
         self.executors.insert(word, executor);
     }
 }
