@@ -51,7 +51,7 @@
 //!
 //! # Data Representation
 //!
-//! `Instruction` is a type alias for `[u8]` for a single instruction (be it a word or data)
+//! `Instruction` is a type alias for `Vec<u8>` for a single instruction (be it a word or data)
 //!
 //! In an effort to make PumpkinScript interpretation efficient,
 //! we are not introducing enums or structures to represent instructions.
@@ -73,10 +73,10 @@
 //!
 //! The rest of tags (`124u8` to `128u8`) are reserved for future use.
 //!
-//! `Data` is used as another alias for `[u8]` to distinguish the fact that this is only data
+//! `Data` is used as another alias for `Vec<u8>` to distinguish the fact that this is only data
 //! and has already been stripped of encoding. Useful for representing data on the stack.
 //!
-//! `Stack` is an alias for `Vec<&Data>`
+//! `Stack` is an alias for `Vec<Data>`
 //!
 //! # Usage
 //!
@@ -86,11 +86,13 @@
 //! # Examples
 //!
 //! ```
-//! let x = [65, 66];
+//! let x = vec![65, 66];
 //! let mut stack: Stack = Vec::new();
 //! let mut vm = Env::new();
-//! stack.push(&x);
-//! vm.execute(&mut stack, DROP).wait().unwrap();
+//! stack.push(x);
+//! for instruction in script::parse("DROP") {
+//!   vm.execute(&mut stack, instruction).wait().unwrap();
+//! }
 //! assert_eq!(stack.pop(), None);
 //! ```
 
@@ -130,9 +132,9 @@ word!(SWAP, (a, b => b, a), b"\x84SWAP");
 /// `ROT` moves third item from the top to the top
 word!(ROT, (a, b, c  => b, c, a), b"\x83ROT");
 
-type Instruction = [u8];
-type Data = [u8];
-type Stack<'a> = Vec<&'a Data>;
+type Instruction = Vec<u8>;
+type Data = Vec<u8>;
+type Stack = Vec<Data>;
 
 /// `Error` represents an enumeration of possible `Executor` errors.
 #[derive(Debug, PartialEq)]
@@ -147,7 +149,7 @@ pub enum Error {
 }
 
 /// `Executor` is a trait that serves as an interface for executing scripts
-pub trait Executor<'a> {
+pub trait Executor {
     /// Executes one instruction (word or push)
     ///
     /// A curious observer might notice that this function returns
@@ -157,16 +159,13 @@ pub trait Executor<'a> {
     /// all executions are represented through futures. In trivial cases those futures
     /// can be immediately resolved because they never really involved any async
     /// operations.
-    fn execute(&mut self,
-               stack: &mut Stack<'a>,
-               instruction: &'a Instruction)
-               -> BoxFuture<(), Error>;
+    fn execute(&mut self, stack: &mut Stack, instruction: Instruction) -> BoxFuture<(), Error>;
 }
 
 /// PumpkinScript environment. This is the structure typically used to run
 /// the scripts.
 pub struct VM<'a> {
-    executors: HashMap<&'a Instruction, &'a mut Executor<'a>>,
+    executors: HashMap<Instruction, &'a mut Executor>,
 }
 
 impl<'a> VM<'a> {
@@ -177,7 +176,7 @@ impl<'a> VM<'a> {
     /// Maps an executor to handle a word `VM` can't handle. If, during execution,
     /// an unknown word will be encountered, VM's executor will try to locate a matching
     /// executor. If none will be found, `UnknownWord` error future will be returned.
-    pub fn map_executor(&mut self, word: &'a Instruction, executor: &'a mut Executor<'a>) {
+    pub fn map_executor(&mut self, word: Instruction, executor: &'a mut Executor) {
         self.executors.insert(word, executor);
     }
 }
@@ -191,32 +190,40 @@ macro_rules! pop_or_fail {
     };
 }
 
-impl<'a> Executor<'a> for VM<'a> {
-    fn execute(&mut self,
-               stack: &mut Stack<'a>,
-               instruction: &'a Instruction)
-               -> BoxFuture<(), Error> {
-        match instruction {
+macro_rules! push {
+    ($stack:expr, $slice:expr) => {
+    {
+       let mut vec = Vec::new();
+       vec.extend_from_slice($slice);
+       $stack.push(vec);
+    }
+    };
+}
+
+impl<'a> Executor for VM<'a> {
+    fn execute(&mut self, stack: &mut Stack, instruction: Instruction) -> BoxFuture<(), Error> {
+        match instruction.clone().as_slice() {
             // data
-            &[sz @ 0u8...120u8, ref body..] if body.len() == sz as usize => stack.push(body),
-            &[121u8, sz, ref body..] if body.len() == sz as usize => stack.push(body),
+            &[sz @ 0u8...120u8, ref body..] if body.len() == sz as usize => push!(stack, body),
+            &[121u8, sz, ref body..] if body.len() == sz as usize => push!(stack, body),
             &[122u8, sz0, sz1, ref body..] if body.len() ==
                                               (sz0 as usize) << 8 | (sz1 as usize) => {
-                stack.push(body)
+                push!(stack, body)
             }
             &[123u8, sz0, sz1, sz2, sz3, ref body..] if body.len() ==
                                                         (sz0 as usize) << 24 |
                                                         (sz1 as usize) << 16 |
                                                         (sz2 as usize) << 8 |
-                                                        (sz3 as usize) => stack.push(body),
+                                                        (sz3 as usize) => push!(stack, body),
             // words
             &[ref body..] if body == DROP => {
                 let _ = pop_or_fail!(stack);
             }
             &[ref body..] if body == DUP => {
                 let v = pop_or_fail!(stack);
+                let v1 = v.clone();
                 stack.push(v);
-                stack.push(v);
+                stack.push(v1);
             }
             &[ref body..] if body == SWAP => {
                 let a = pop_or_fail!(stack);
@@ -233,7 +240,7 @@ impl<'a> Executor<'a> for VM<'a> {
                 stack.push(c);
             }
             &[sz @ 129u8...255u8, ref body..] if body.len() == (sz ^ 128u8) as usize => {
-                if let Some(executor) = self.executors.get_mut(instruction) {
+                if let Some(executor) = self.executors.get_mut(&instruction) {
                     return executor.execute(stack, instruction);
                 } else {
                     return future::err::<(), Error>(Error::UnknownWord).boxed();
@@ -315,12 +322,17 @@ mod textparser {
         bin
     }
 
+    fn is_word_char(s: u8) -> bool {
+        (s >= b'a' && s <= b'z') || (s >= b'A' && s <= b'Z') || (s >= b'0' && s <= b'9') ||
+        s == b'_' || s == b':' || s == b'-'
+    }
+
     named!(word<Vec<u8>>, do_parse!(
-                            word: take_until!(" ")           >>
+                            word: take_while1!(is_word_char)  >>
                                   (prefix_word(word))));
     named!(binary<Vec<u8>>, do_parse!(
-                                  tag!(b"0x")                >>
-                             hex: take_while1!(is_hex_digit) >>
+                                  tag!(b"0x")                 >>
+                             hex: take_while1!(is_hex_digit)  >>
                                   (bin(hex))
     ));
     named!(string<Vec<u8>>, do_parse!(
@@ -355,6 +367,16 @@ mod textparser {
         use script::{VM, Executor, Stack};
 
         #[test]
+        fn test_one() {
+            let mut script = parse("0xAABB");
+            assert_eq!(script.len(), 1);
+            assert_eq!(script.pop(), Some(vec![2, 0xaa,0xbb]));
+            let mut script = parse("HELLO");
+            assert_eq!(script.len(), 1);
+            assert_eq!(script.pop(), Some(vec![0x85, b'H', b'E', b'L', b'L', b'O']));
+        }
+
+        #[test]
         fn test() {
             let script = parse("0xAABB DUP 0xFF00CC \"Hello\"");
             let aabb = [0x02, 0xAA, 0xBB];
@@ -370,7 +392,8 @@ mod textparser {
 
             let mut stack: Stack = Vec::new();
             let mut vm = VM::new();
-            for i in vec {
+
+            for i in script {
                 vm.execute(&mut stack, i);
             }
             stack.pop();
@@ -387,8 +410,7 @@ pub use self::textparser::parse;
 
 #[cfg(test)]
 mod tests {
-    use script::{VM, Executor, Error, Stack, Instruction};
-    use script::{DUP, DROP, SWAP, ROT};
+    use script::{VM, Executor, Error, Stack, Instruction, parse};
 
     use futures::{Future, BoxFuture};
     use futures::future;
@@ -405,10 +427,9 @@ mod tests {
         vec.push(size);
         vec.extend_from_slice(data.as_slice());
         assert_eq!(vec.len(), size as usize + 1);
-        let slice = vec.as_slice();
         let mut stack: Stack = Vec::new();
         let mut vm = VM::new();
-        vm.execute(&mut stack, slice).wait().unwrap();
+        vm.execute(&mut stack, vec).wait().unwrap();
         stack.pop().unwrap() == data.as_slice()
     }
 
@@ -421,10 +442,9 @@ mod tests {
         vec.push(size);
         vec.extend_from_slice(data.as_slice());
         assert_eq!(vec.len(), size as usize + 2);
-        let slice = vec.as_slice();
         let mut stack: Stack = Vec::new();
         let mut vm = VM::new();
-        vm.execute(&mut stack, slice).wait().unwrap();
+        vm.execute(&mut stack, vec).wait().unwrap();
         stack.pop().unwrap() == data.as_slice()
     }
 
@@ -438,10 +458,9 @@ mod tests {
         vec.push(size as u8);
         vec.extend_from_slice(data.as_slice());
         assert_eq!(vec.len(), size as usize + 3);
-        let slice = vec.as_slice();
         let mut stack: Stack = Vec::new();
         let mut vm = VM::new();
-        vm.execute(&mut stack, slice).wait().unwrap();
+        vm.execute(&mut stack, vec).wait().unwrap();
         stack.pop().unwrap() == data.as_slice()
     }
 
@@ -457,10 +476,9 @@ mod tests {
         vec.push(size as u8);
         vec.extend_from_slice(data.as_slice());
         assert_eq!(vec.len(), size as usize + 5);
-        let slice = vec.as_slice();
         let mut stack: Stack = Vec::new();
         let mut vm = VM::new();
-        vm.execute(&mut stack, slice).wait().unwrap();
+        vm.execute(&mut stack, vec).wait().unwrap();
         stack.pop().unwrap() == data.as_slice()
     }
 
@@ -468,14 +486,16 @@ mod tests {
     fn unknown_word() {
         let mut vm = VM::new();
         let mut stack: Stack = Vec::new();
-        let f = vm.execute(&mut stack, b"\x83XXX").wait();
-        assert!(f.is_err());
-        assert_eq!(f.err(), Some(Error::UnknownWord));
+        for i in parse("XXX") {
+            let f = vm.execute(&mut stack, i).wait();
+            assert!(f.is_err());
+            assert_eq!(f.err(), Some(Error::UnknownWord));
+        }
     }
 
     struct XxxExecutor {}
-    impl<'a> Executor<'a> for XxxExecutor {
-        fn execute(&mut self, _: &mut Stack<'a>, _: &'a Instruction) -> BoxFuture<(), Error> {
+    impl Executor for XxxExecutor {
+        fn execute(&mut self, _: &mut Stack, _: Instruction) -> BoxFuture<(), Error> {
             return future::ok(()).boxed();
         }
     }
@@ -484,91 +504,109 @@ mod tests {
     fn additional_executor() {
         let mut xxx = XxxExecutor {};
         let mut vm = VM::new();
-        vm.map_executor(b"\x83XXX", &mut xxx);
+        vm.map_executor(vec![0x83, b'X', b'X', b'X'], &mut xxx);
         let mut stack: Stack = Vec::new();
-        let f = vm.execute(&mut stack, b"\x83XXX").wait();
-        assert!(!f.is_err());
+        for i in parse("XXX") {
+            let f = vm.execute(&mut stack, i).wait();
+            assert!(!f.is_err());
+        }
     }
 
     #[test]
     fn invalid_word_encoding() {
         let mut vm = VM::new();
         let mut stack: Stack = Vec::new();
-        let f = vm.execute(&mut stack, b"\x84XXX").wait();
+        let f = vm.execute(&mut stack, vec![0x84, b'X', b'X', b'X']).wait();
         assert!(f.is_err());
         assert_eq!(f.err(), Some(Error::DecodingError));
-        let f = vm.execute(&mut stack, b"\x80XXX").wait();
+        let f = vm.execute(&mut stack, vec![0x80, b'X', b'X', b'X']).wait();
         assert!(f.is_err());
         assert_eq!(f.err(), Some(Error::DecodingError));
     }
 
     #[test]
     fn drop() {
-        let x = [1, 2, 3];
+        let x = vec![1, 2, 3];
         let mut stack: Stack = Vec::new();
         let mut vm = VM::new();
-        stack.push(&x);
-        vm.execute(&mut stack, DROP).wait().unwrap();
+        stack.push(x);
+        for i in parse("DROP") {
+            vm.execute(&mut stack, i).wait().unwrap();
+        }
         assert_eq!(stack.pop(), None);
 
         // now that the stack is empty, at attempt
         // to drop should result in an error
-        assert_eq!(vm.execute(&mut stack, DROP).wait().err().unwrap(), Error::EmptyStack);
+        for i in parse("DROP") {
+            assert_eq!(vm.execute(&mut stack, i).wait().err().unwrap(), Error::EmptyStack);
+        }
     }
 
     #[test]
     fn dup() {
-        let x = [1, 2, 3];
+        let x = vec![1, 2, 3];
         let mut stack: Stack = Vec::new();
         let mut vm = VM::new();
-        stack.push(&x);
-        vm.execute(&mut stack, DUP).wait().unwrap();
-        assert_eq!(stack.pop().unwrap(), x);
-        assert_eq!(stack.pop().unwrap(), x);
+        stack.push(x);
+        for i in parse("DUP") {
+            vm.execute(&mut stack, i).wait().unwrap();
+        }
+        assert_eq!(stack.pop().unwrap(), vec![1, 2, 3]);
+        assert_eq!(stack.pop().unwrap(), vec![1, 2, 3]);
         assert_eq!(stack.pop(), None);
 
         // now that the stack is empty, at attempt
         // to duplicate should result in an error
-        assert_eq!(vm.execute(&mut stack, DUP).wait().err().unwrap(), Error::EmptyStack);
+        for i in parse("DUP") {
+            assert_eq!(vm.execute(&mut stack, i).wait().err().unwrap(), Error::EmptyStack);
+        }
     }
 
     #[test]
     fn swap() {
-        let x1 = [1, 2, 3];
-        let x2 = [3, 2, 1];
+        let x1 = vec![1, 2, 3];
+        let x2 = vec![3, 2, 1];
         let mut stack: Stack = Vec::new();
         let mut vm = VM::new();
-        stack.push(&x1);
-        stack.push(&x2);
-        vm.execute(&mut stack, SWAP).wait().unwrap();
-        assert_eq!(stack.pop().unwrap(), x1);
-        assert_eq!(stack.pop().unwrap(), x2);
+        stack.push(x1);
+        stack.push(x2);
+        for i in parse("SWAP") {
+            vm.execute(&mut stack, i).wait().unwrap();
+        }
+        assert_eq!(stack.pop().unwrap(), vec![1, 2, 3]);
+        assert_eq!(stack.pop().unwrap(), vec![3, 2, 1]);
         assert_eq!(stack.pop(), None);
 
         // now that the stack is empty, at attempt
         // to swap should result in an error
-        assert_eq!(vm.execute(&mut stack, SWAP).wait().err().unwrap(), Error::EmptyStack);
+        for i in parse("SWAP") {
+            assert_eq!(vm.execute(&mut stack, i).wait().err().unwrap(), Error::EmptyStack);
+        }
     }
 
     #[test]
     fn rot() {
-        let x1 = [1, 2, 3];
-        let x2 = [3, 2, 1];
-        let x3 = [0];
+        let x1 = vec![1, 2, 3];
+        let x2 = vec![3, 2, 1];
+        let x3 = vec![0];
         let mut stack: Stack = Vec::new();
         let mut vm = VM::new();
-        stack.push(&x1);
-        stack.push(&x2);
-        stack.push(&x3);
-        vm.execute(&mut stack, ROT).wait().unwrap();
-        assert_eq!(stack.pop().unwrap(), x1);
-        assert_eq!(stack.pop().unwrap(), x3);
-        assert_eq!(stack.pop().unwrap(), x2);
+        stack.push(x1);
+        stack.push(x2);
+        stack.push(x3);
+        for i in parse("ROT") {
+            vm.execute(&mut stack, i).wait().unwrap();
+        }
+        assert_eq!(stack.pop().unwrap(), vec![1, 2, 3]);
+        assert_eq!(stack.pop().unwrap(), vec![0]);
+        assert_eq!(stack.pop().unwrap(), vec![3, 2, 1]);
         assert_eq!(stack.pop(), None);
 
         // now that the stack is empty, at attempt
         // to rotate should result in an error
-        assert_eq!(vm.execute(&mut stack, ROT).wait().err().unwrap(), Error::EmptyStack);
+        for i in parse("ROT") {
+            assert_eq!(vm.execute(&mut stack, i).wait().err().unwrap(), Error::EmptyStack);
+        }
     }
 
 }
