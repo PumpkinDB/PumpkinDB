@@ -84,7 +84,13 @@ macro_rules! word {
 // Built-in words
 // TODO: the list of built-in words is far from completion
 
-// Stack words
+// How to write a new built-in word:
+// 1. Add `word!(...)` to define a constant
+// 2. Document it
+// 3. Write a test in mod tests
+// 4. Add a match case in run((script, program))
+
+// Category: Stack
 
 /// `DROP` removes an item from the top of the stack
 word!(DROP, (a => ), b"\x84DROP");
@@ -97,13 +103,13 @@ word!(ROT, (a, b, c  => b, c, a), b"\x83ROT");
 /// `OVER` copies the second topmost item to the top of the stack
 word!(OVER, (a, b => a, b, a), b"\x84OVER");
 
-// Byte arrays
+// Category: Byte arrays
 
 /// `CONCAT` takes two topmost items and concatenates them, and
 /// pushes result to the top of the stack
 word!(CONCAT, (a, b => c), b"\x86CONCAT");
 
-// Control flow
+// category: Control flow
 
 /// `EVAL` takes the topmost item and evaluates it as a PumpkinScript
 /// program on the current stack
