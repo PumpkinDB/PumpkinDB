@@ -642,7 +642,7 @@ mod tests {
 mod textparser {
     use nom::{IResult, ErrorKind};
     use script::{Program, ParseError};
-    use nom::is_hex_digit;
+    use nom::{is_hex_digit, is_space};
 
     fn prefix_word(word: &[u8]) -> Vec<u8> {
         let mut vec = Vec::new();
@@ -739,7 +739,11 @@ mod textparser {
                              prog: delimited!(char!('['), ws!(program), char!(']')) >>
                                    (program_to_vec(prog))));
     named!(item<Vec<u8>>, alt!(binary | string | code | word));
-    named!(program<Vec<Vec<u8>>>, separated_list!(tag!(" "), item));
+    named!(program<Vec<Vec<u8>>>, do_parse!(
+                                   take_while!(is_space)                            >>
+                             item: separated_list!(take_while!(is_space), item)     >>
+                                   take_while!(is_space)                            >>
+                                   (item)));
 
     /// Parses human-readable PumpkinScript
     ///
@@ -779,6 +783,14 @@ mod textparser {
             let mut script = parse("HELLO").unwrap();
             assert_eq!(script.len(), 1);
             assert_eq!(script.pop(), Some(vec![0x85, b'H', b'E', b'L', b'L', b'O']));
+        }
+
+        #[test]
+        fn test_extra_spaces() {
+            let mut script = parse(" 0xAABB  \"Hi\" ").unwrap();
+            assert_eq!(script.len(), 2);
+            assert_eq!(script.pop(), Some(vec![2, b'H', b'i']));
+            assert_eq!(script.pop(), Some(vec![2, 0xaa,0xbb]));
         }
 
         #[test]
