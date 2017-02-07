@@ -4,9 +4,9 @@ version = "0.1.0"
 authors = ["Yurii Rashkovskii <yrashk@gmail.com>"]
 
 [dependencies]
-futures = "0.1.10"
 nom = "^2.1"
-
+multiqueue = "0.3.1"
+snowflake = "1.2.0"
 
 [dev-dependencies]
 quickcheck = "0.4.1"

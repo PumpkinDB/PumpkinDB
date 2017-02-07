@@ -7,13 +7,6 @@
 use nom::{IResult, Needed, ErrorKind};
 use script::{Program, ParseError};
 
-
-fn to_vec(s: &[u8]) -> Vec<u8> {
-    let mut vec = Vec::new();
-    vec.extend_from_slice(s);
-    vec
-}
-
 pub fn word_tag(i: &[u8]) -> IResult<&[u8], u8> {
     if i.len() < 1 {
         IResult::Incomplete(Needed::Size(1))
@@ -76,7 +69,7 @@ pub fn big_length(i: &[u8]) -> IResult<&[u8], usize> {
         IResult::Error(ErrorKind::Custom(123))
     } else {
         let size = (i[1] as usize) << 24 | (i[2] as usize) << 16 | (i[3] as usize) << 8 |
-            (i[4] as usize);
+                   (i[4] as usize);
         if size > i.len() - 5 {
             IResult::Incomplete(Needed::Size(5 + size))
         } else {
@@ -84,22 +77,28 @@ pub fn big_length(i: &[u8]) -> IResult<&[u8], usize> {
         }
     }
 }
-named!(data<Vec<u8>>, do_parse!(
-                              data: length_bytes!(alt!(micro_length |
-                                                       byte_length  |
-                                                       small_length |
-                                                       big_length))  >>
-                                    (to_vec(data))));
 
-named!(word<Vec<u8>>, do_parse!(
-                             word: length_bytes!(word_tag)      >>
-                                   (to_vec(word))));
+fn flatten_program(p: Vec<&[u8]>) -> Vec<u8> {
+    let mut vec = Vec::new();
+    for item in p {
+        vec.extend_from_slice(item);
+    }
+    vec
+}
 
-named!(split_code<Vec<Vec<u8>>>, many0!(alt!(word | data)));
+named!(pub data_size<usize>, alt!(micro_length | byte_length | small_length | big_length));
+named!(pub data, length_bytes!(data_size));
+named!(pub word, length_bytes!(word_tag));
+named!(item, alt!(word | data));
+named!(split_code<Vec<u8>>, do_parse!(
+                             prog: many0!(item) >>
+                                   (flatten_program(prog))));
 
-/// Parse single Vec<u8> into separate instructions (a program)
-pub fn parse(code: Vec<u8>) -> Result<Program, ParseError> {
-    match split_code(code.as_slice()) {
+
+/// Parse code into a program. This function serves mainly
+/// as a binary form validator.
+pub fn parse(code: &[u8]) -> Result<Program, ParseError> {
+    match split_code(code) {
         IResult::Done(_, x) => Ok(x),
         IResult::Incomplete(_) => Err(ParseError::Incomplete),
         IResult::Error(ErrorKind::Custom(code)) => Err(ParseError::Err(code)),
@@ -115,11 +114,7 @@ mod tests {
     #[test]
     fn test() {
         let v = parse_text("0x10 DUP").unwrap();
-        let mut vec = Vec::new();
-        for mut item in v {
-            vec.append(&mut item);
-        }
-        assert_eq!(parse(vec).unwrap(), parse_text("0x10 DUP").unwrap());
+        assert_eq!(parse(v.as_slice()).unwrap(), parse_text("0x10 DUP").unwrap());
     }
 
     #[test]
@@ -129,11 +124,7 @@ mod tests {
             byte_sized_sequence.push_str("AA");
         }
         let v = parse_text(byte_sized_sequence.as_ref()).unwrap();
-        let mut vec = Vec::new();
-        for mut item in v {
-            vec.append(&mut item);
-        }
-        assert_eq!(parse(vec).unwrap(), parse_text(byte_sized_sequence.as_ref()).unwrap());
+        assert_eq!(parse(v.as_slice()).unwrap(), parse_text(byte_sized_sequence.as_ref()).unwrap());
     }
 
     #[test]
@@ -143,11 +134,7 @@ mod tests {
             byte_sized_sequence.push_str("AA");
         }
         let v = parse_text(byte_sized_sequence.as_ref()).unwrap();
-        let mut vec = Vec::new();
-        for mut item in v {
-            vec.append(&mut item);
-        }
-        assert_eq!(parse(vec).unwrap(), parse_text(byte_sized_sequence.as_ref()).unwrap());
+        assert_eq!(parse(v.as_slice()).unwrap(), parse_text(byte_sized_sequence.as_ref()).unwrap());
     }
 
     #[test]
@@ -157,11 +144,7 @@ mod tests {
             byte_sized_sequence.push_str("AA");
         }
         let v = parse_text(byte_sized_sequence.as_ref()).unwrap();
-        let mut vec = Vec::new();
-        for mut item in v {
-            vec.append(&mut item);
-        }
-        assert_eq!(parse(vec).unwrap(), parse_text(byte_sized_sequence.as_ref()).unwrap());
+        assert_eq!(parse(v.as_slice()).unwrap(), parse_text(byte_sized_sequence.as_ref()).unwrap());
     }
 
 }

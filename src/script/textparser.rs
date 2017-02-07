@@ -5,8 +5,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use nom::{IResult, ErrorKind};
-use script::{Program, ParseError};
 use nom::{is_hex_digit, is_space};
+
+use script::{Program, ParseError};
 
 fn prefix_word(word: &[u8]) -> Vec<u8> {
     let mut vec = Vec::new();
@@ -44,7 +45,7 @@ macro_rules! write_size {
             $vec.push(($size >> 8) as u8);
             $vec.push($size as u8);
         }
-        _ => unimplemented!()
+        _ => unreachable!()
       }
     };
 }
@@ -73,15 +74,23 @@ fn string_to_vec(s: &[u8]) -> Vec<u8> {
     bin
 }
 
-fn is_word_char(s: u8) -> bool {
-    (s >= b'a' && s <= b'z') || (s >= b'A' && s <= b'Z') || (s >= b'0' && s <= b'9') ||
-        s == b'_' || s == b':' || s == b'-'
+fn sized_vec(s: Vec<u8>) -> Vec<u8> {
+    let mut vec = Vec::new();
+    let size = s.len();
+    write_size!(vec, size);
+    vec.extend_from_slice(s.as_slice());
+    vec
+
 }
 
-fn program_to_vec(p: Vec<Vec<u8>>) -> Vec<u8> {
+fn is_word_char(s: u8) -> bool {
+    (s >= b'a' && s <= b'z') || (s >= b'A' && s <= b'Z') ||
+    (s >= b'0' && s <= b'9') || s == b'_' || s == b':' || s == b'-' || s == b'!' ||
+    s == b'#' || s == b'$' || s == b'%' || s == b'@'
+}
+
+fn flatten_program(p: Vec<Vec<u8>>) -> Vec<u8> {
     let mut vec = Vec::new();
-    let s = p.iter().fold(0, |s, i| i.len() + s);
-    write_size!(vec, s);
     for mut item in p {
         vec.append(&mut item);
     }
@@ -101,20 +110,25 @@ named!(string<Vec<u8>>, do_parse!(
                               (string_to_vec(str))));
 named!(code<Vec<u8>>, do_parse!(
                          prog: delimited!(char!('['), ws!(program), char!(']')) >>
-                               (program_to_vec(prog))));
+                               (sized_vec(prog))));
 named!(item<Vec<u8>>, alt!(binary | string | code | word));
-named!(program<Vec<Vec<u8>>>, do_parse!(
+named!(program<Vec<u8>>, do_parse!(
                                take_while!(is_space)                            >>
                          item: separated_list!(take_while!(is_space), item)     >>
                                take_while!(is_space)                            >>
-                               (item)));
+                               (flatten_program(item))));
 
 /// Parses human-readable PumpkinScript
 ///
 /// The format is simple, it is a sequence of space-separated tokens,
 /// which binaries represented `0x<hexadecimal>` or `"STRING"`
 /// (no quoted characters support yet)
-/// and the rest of the instructions considered to be words
+/// and the rest of the instructions considered to be words.
+///
+/// One additional piece of syntax is code included within square
+/// brackets: `[DUP]`. This means that the parser will take the code inside,
+/// compile it to the binary form and add as a data push. This is useful for
+/// words like EVAL
 ///
 /// # Example
 ///
@@ -135,60 +149,36 @@ pub fn parse(script: &str) -> Result<Program, ParseError> {
 
 #[cfg(test)]
 mod tests {
-    use script::execute;
     use script::textparser::parse;
-    use futures::Future;
 
     #[test]
     fn test_one() {
-        let mut script = parse("0xAABB").unwrap();
-        assert_eq!(script.len(), 1);
-        assert_eq!(script.pop(), Some(vec![2, 0xaa,0xbb]));
-        let mut script = parse("HELLO").unwrap();
-        assert_eq!(script.len(), 1);
-        assert_eq!(script.pop(), Some(vec![0x85, b'H', b'E', b'L', b'L', b'O']));
+        let script = parse("0xAABB").unwrap();
+        assert_eq!(script, vec![2, 0xaa,0xbb]);
+        let script = parse("HELLO").unwrap();
+        assert_eq!(script, vec![0x85, b'H', b'E', b'L', b'L', b'O']);
     }
 
     #[test]
     fn test_extra_spaces() {
-        let mut script = parse(" 0xAABB  \"Hi\" ").unwrap();
-        assert_eq!(script.len(), 2);
-        assert_eq!(script.pop(), Some(vec![2, b'H', b'i']));
-        assert_eq!(script.pop(), Some(vec![2, 0xaa,0xbb]));
+        let script = parse(" 0xAABB  \"Hi\" ").unwrap();
+        assert_eq!(script, vec![2, 0xaa,0xbb, 2, b'H', b'i']);
     }
 
     #[test]
     fn test() {
         let script = parse("0xAABB DUP 0xFF00CC \"Hello\"").unwrap();
-        let aabb = [0x02, 0xAA, 0xBB];
-        let dup = [0x83, b'D', b'U', b'P'];
-        let ff00cc = [0x03, 0xFF, 0x00, 0xCC];
-        let hello = [0x05, b'H', b'e', b'l', b'l', b'o'];
-        let mut vec: Vec<&[u8]> = Vec::new();
-        vec.push(&aabb);
-        vec.push(&dup);
-        vec.push(&ff00cc);
-        vec.push(&hello);
-        assert_eq!(script, vec);
 
-        let (mut stack, _) = execute(Vec::new(), script).wait().unwrap();
-
-        stack.pop();
-        stack.pop();
-        stack.pop();
-        stack.pop();
-        assert_eq!(stack.pop(), None);
+        assert_eq!(script, vec![0x02, 0xAA, 0xBB, 0x83, b'D', b'U', b'P',
+                                0x03, 0xFF, 0x00, 0xCC, 0x05, b'H', b'e', b'l', b'l', b'o']);
     }
 
     #[test]
     fn test_code() {
         let script = parse("[DUP]").unwrap();
         let script_spaced = parse("[ DUP ]").unwrap();
-        let dup = [4, 0x83, b'D', b'U', b'P'];
-        let mut vec: Vec<&[u8]> = Vec::new();
-        vec.push(&dup);
-        assert_eq!(script, vec);
-        assert_eq!(script_spaced, vec);
+        assert_eq!(script, vec![4, 0x83, b'D', b'U', b'P']);
+        assert_eq!(script_spaced, vec![4, 0x83, b'D', b'U', b'P']);
     }
 
 }
