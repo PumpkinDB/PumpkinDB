@@ -27,6 +27,58 @@ extern crate tempdir;
 extern crate crossbeam;
 
 
-pub mod script;
+extern crate futures;
+extern crate tokio_core;
+extern crate tokio_proto;
+extern crate tokio_service;
 
-fn main() {}
+extern crate config;
+
+#[macro_use]
+extern crate lazy_static;
+
+pub mod script;
+pub mod server;
+
+use std::thread;
+
+use std::fs;
+
+lazy_static! {
+ static ref ENV: lmdb::Environment = {
+     let _ = config::set_default("storage.path", "pumpkin.db");
+
+     let path = config::get_str("storage.path").unwrap().into_owned();
+     fs::create_dir_all(path.as_str()).expect("can't create directory");
+     unsafe {
+            lmdb::EnvBuilder::new()
+                .expect("can't create env builder")
+                .open(path.as_str(), lmdb::open::Flags::empty(), 0o600)
+                .expect("can't open env")
+    }
+ };
+
+ static ref DB: lmdb::Database<'static> = lmdb::Database::open(&ENV,
+                              None,
+                              &lmdb::DatabaseOptions::new(lmdb::db::CREATE))
+                              .expect("can't open database");
+
+
+}
+
+fn main() {
+    let _ = config::merge(config::Environment::new("PUMPKINDB"));
+    let _ = config::merge(config::File::new("pumpkindb.toml", config::FileFormat::Toml));
+
+    let _ = config::set_default("binary-server.port", 9980);
+    let _ = config::set_default("text-server.port", 9981);
+
+
+    let mut vm = script::VM::new(&ENV, &DB);
+    let sender = vm.sender();
+
+    thread::spawn(move || vm.run());
+
+    server::run_plain_server(config::get_int("text-server.port").unwrap(), sender);
+
+}

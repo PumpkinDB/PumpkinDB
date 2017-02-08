@@ -7,6 +7,12 @@ authors = ["Yurii Rashkovskii <yrashk@gmail.com>"]
 nom = "^2.1"
 snowflake = "1.2.0"
 lmdb-zero = { git = "https://github.com/yrashk/lmdb-zero.git", branch="drop-accessor" }
+futures = "0.1.10"
+tokio-core = "0.1.4"
+tokio-service = "0.1.0"
+tokio-proto = "0.1.0"
+config = "0.3.1"
+lazy_static = "0.2.2"
 
 [dev-dependencies]
 quickcheck = "0.4.1"

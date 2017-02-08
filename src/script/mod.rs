@@ -212,7 +212,7 @@ pub enum ParseError {
     UnknownErr,
 }
 
-mod binparser;
+pub mod binparser;
 pub use self::binparser::parse as parse_bin;
 
 mod textparser;
@@ -344,7 +344,7 @@ impl<'a> Drop for Env<'a> {
 use nom;
 
 #[inline]
-fn offset_by_size(size: usize) -> usize {
+pub fn offset_by_size(size: usize) -> usize {
     match size {
         0...120 => 1,
         120...255 => 2,
