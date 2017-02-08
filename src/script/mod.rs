@@ -352,24 +352,21 @@ macro_rules! handle_words {
     };
 }
 
-use multiqueue;
+use std::sync::mpsc;
 use snowflake::ProcessUniqueId;
 use std;
 
 pub type EnvId = ProcessUniqueId;
 
+pub type Sender<T> = mpsc::Sender<T>;
+pub type Receiver<T> = mpsc::Receiver<T>;
+
 /// Communication messages used to talk with the [VM](struct.VM.html) thread.
 #[derive(Clone, Debug)]
-pub enum Message<'a> {
+pub enum RequestMessage<'a> {
     /// Requests scheduling a new environment with a given
     /// id and a program.
-    ScheduleEnv(EnvId, Vec<u8>),
-    /// Notifies of successful environment termination with
-    /// an id, stack and top of the stack pointer.
-    EnvTerminated(EnvId, Vec<&'a [u8]>, usize),
-    /// Notifies of abnormal environment termination with
-    /// an id, error, stack and top of the stack pointer.
-    EnvFailed(EnvId, Error, Vec<&'a [u8]>, usize),
+    ScheduleEnv(EnvId, Vec<u8>, Sender<ResponseMessage<'a>>),
     /// An internal message that schedules an execution of
     /// the next instruction in an identified environment on
     /// the next 'tick'
@@ -378,12 +375,21 @@ pub enum Message<'a> {
     Shutdown,
 }
 
+/// Messages received from the [VM](struct.VM.html) thread.
+#[derive(Clone, Debug)]
+pub enum ResponseMessage<'a> {
+    /// Notifies of successful environment termination with
+    /// an id, stack and top of the stack pointer.
+    EnvTerminated(EnvId, Vec<&'a [u8]>, usize),
+    /// Notifies of abnormal environment termination with
+    /// an id, error, stack and top of the stack pointer.
+    EnvFailed(EnvId, Error, Vec<&'a [u8]>, usize),
+}
+
 pub type TrySendError<T> = std::sync::mpsc::TrySendError<T>;
 
 use std::collections::HashMap;
 
-pub type Sender<T> = multiqueue::BroadcastSender<T>;
-pub type Receiver<T> = multiqueue::BroadcastReceiver<T>;
 
 /// VM is a PumpkinScript scheduler and interpreter. This is the
 /// most central part of this module.
@@ -391,41 +397,39 @@ pub type Receiver<T> = multiqueue::BroadcastReceiver<T>;
 /// # Example
 ///
 /// ```no_run
-/// // Prepare the communication channels
-/// let (tsend, trecv) = multiqueue::broadcast_queue(4);
-/// let (rsend, rrecv) = multiqueue::broadcast_queue(4);
-/// let tsend_ = tsend.clone();
-/// /// Start the thread
+/// let mut vm = VM::new();
+///
+/// let sender = vm.sender();
 /// let handle = thread::spawn(move || {
-///     let mut vm = VM::new(rsend, tsend_, trecv);
 ///     vm.run();
 /// });
-/// // Prepare the script
-/// script = parse("0x10 DUP").unwrap();
-/// // Send the script
-/// let _ = tsend.try_send(Message::ScheduleEnv(EnvId::new(), script.clone()));
-/// match rrecv.recv() {
-///     Ok(Message::EnvTerminated(_, stack, stack_size)) => {
-///         let _ = tsend.try_send(Message::Shutdown);
-///         // successful execution
-///         ...
+/// let script = parse($script).unwrap();
+/// let (callback, receiver) = mpsc::channel::<ResponseMessage>();
+/// let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(), script.clone(), callback));
+/// match receiver.recv() {
+///     Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
+///         let _ = sender.send(RequestMessage::Shutdown);
+///         // success
+///         // ...
 ///     }
-///     Ok(Message::EnvFailed(_, error, stack, stack_size)) =>
-///         let _ = tsend.try_send(Message::Shutdown);
+///     Ok(ResponseMessage::EnvFailed(_, err, stack, stack_size)) => {
+///         let _ = sender.send(RequestMessage::Shutdown);
 ///         // failure
-///         ...
+///         // ...
 ///     }
-///     _ => {}
+///     Err(err) => {
+///         panic!("recv error: {:?}", err);
+///     }
 /// }
-/// handle.join();
-/// ...
 /// ```
 pub struct VM<'a> {
-    send: Sender<Message<'a>>,
-    self_send: Sender<Message<'a>>,
-    recv: Receiver<Message<'a>>,
-    envs: HashMap<EnvId, (Env<'a>, Vec<u8>)>,
+    inbox: Receiver<RequestMessage<'a>>,
+    sender: Sender<RequestMessage<'a>>,
+    loopback: Sender<RequestMessage<'a>>,
+    envs: HashMap<EnvId, (Env<'a>, Vec<u8>, Sender<ResponseMessage<'a>>)>,
 }
+
+unsafe impl<'a> Send for VM<'a> {}
 
 impl<'a> VM<'a> {
     /// Creates an instance of VM with three communication channels:
@@ -433,16 +437,19 @@ impl<'a> VM<'a> {
     /// * Response sender
     /// * Internal sender
     /// * Request receiver
-    pub fn new(send: Sender<Message<'a>>,
-               self_send: Sender<Message<'a>>,
-               recv: Receiver<Message<'a>>)
+    pub fn new()
                -> Self {
+        let (sender, receiver) = mpsc::channel::<RequestMessage<'a>>();
         VM {
-            send: send,
-            self_send: self_send,
-            recv: recv,
+            inbox: receiver,
+            sender: sender.clone(),
+            loopback: sender.clone(),
             envs: HashMap::new(),
         }
+    }
+
+    pub fn sender(&self) -> Sender<RequestMessage<'a>> {
+        self.sender.clone()
     }
 
     /// Scheduler thread. It is supposed to be running in a separate thread
@@ -456,38 +463,35 @@ impl<'a> VM<'a> {
     /// depending on the result (`EnvTerminated` or `EnvFailed`)
     pub fn run(&mut self) {
         loop {
-            match self.recv.recv() {
+            match self.inbox.recv() {
                 Err(err) => panic!("error receiving: {:?}", err),
-                Ok(Message::Shutdown) => break,
-                Ok(Message::ScheduleEnv(pid, program)) => {
+                Ok(RequestMessage::Shutdown) => break,
+                Ok(RequestMessage::ScheduleEnv(pid, program, chan)) => {
                     let env = Env::new();
-                    self.envs.insert(pid, (env, program));
-                    let _ = self.self_send.try_send(Message::RescheduleEnv(pid));
+                    self.envs.insert(pid, (env, program, chan));
+                    let _ = self.loopback.send(RequestMessage::RescheduleEnv(pid));
                 }
-                Ok(Message::RescheduleEnv(pid)) => {
-                    if let Some((mut env, mut program)) = self.envs.remove(&pid) {
+                Ok(RequestMessage::RescheduleEnv(pid)) => {
+                    if let Some((mut env, mut program, chan)) = self.envs.remove(&pid) {
                         match self.pass(&mut env, &mut program) {
                             Err(err) => {
-                                let _ = self.send
-                                    .try_send(Message::EnvFailed(pid,
+                                let _ = chan.send(ResponseMessage::EnvFailed(pid,
                                                                  err,
                                                                  Vec::from(env.stack()),
                                                                  env.stack_size));
                             }
                             Ok(Some(program)) => {
-                                self.envs.insert(pid, (env, program));
-                                let _ = self.self_send.try_send(Message::RescheduleEnv(pid));
+                                self.envs.insert(pid, (env, program, chan));
+                                let _ = self.loopback.send(RequestMessage::RescheduleEnv(pid));
                             }
                             Ok(None) => {
-                                let _ = self.send
-                                    .try_send(Message::EnvTerminated(pid,
+                                let _ = chan.send(ResponseMessage::EnvTerminated(pid,
                                                                      Vec::from(env.stack()),
                                                                      env.stack_size));
                             }
                         };
                     }
                 }
-                Ok(_) => {}
             }
         }
     }
@@ -678,10 +682,9 @@ impl<'a> VM<'a> {
 #[allow(unused_variables, unused_must_use, unused_mut)]
 mod tests {
 
-    use script::{Env, VM, Error, Message, EnvId, parse};
+    use script::{Env, VM, Error, RequestMessage, ResponseMessage, EnvId, parse};
     use std::thread;
-    use multiqueue;
-
+    use std::sync::mpsc;
 
     macro_rules! eval {
         ($script: expr, $env: ident, $expr: expr) => {
@@ -689,29 +692,28 @@ mod tests {
         };
         ($script: expr, $env: ident, $result: pat, $expr: expr) => {
           {
-            let (tsend, trecv) = multiqueue::broadcast_queue(4);
-            let (rsend, rrecv) = multiqueue::broadcast_queue(4);
-            let tsend_ = tsend.clone();
+            let mut vm = VM::new();
+
+            let sender = vm.sender();
             let handle = thread::spawn(move || {
-                let mut vm = VM::new(rsend, tsend_, trecv);
                 vm.run();
             });
             let script = parse($script).unwrap();
-            let _ = tsend.try_send(Message::ScheduleEnv(EnvId::new(), script.clone()));
-            match rrecv.recv() {
-               Ok(Message::EnvTerminated(_, stack, stack_size)) => {
-                  let _ = tsend.try_send(Message::Shutdown);
+            let (callback, receiver) = mpsc::channel::<ResponseMessage>();
+            let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(), script.clone(), callback));
+            match receiver.recv() {
+               Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
+                  let _ = sender.send(RequestMessage::Shutdown);
                   let $result = Ok::<(), Error>(());
                   let mut $env = Env::new_with_stack(stack, stack_size);
                   $expr;
                }
-               Ok(Message::EnvFailed(_, err, stack, stack_size)) => {
-                  let _ = tsend.try_send(Message::Shutdown);
+               Ok(ResponseMessage::EnvFailed(_, err, stack, stack_size)) => {
+                  let _ = sender.send(RequestMessage::Shutdown);
                   let $result = Err::<(), Error>(err);
                   let mut $env = Env::new_with_stack(stack, stack_size);
                   $expr;
                }
-               Ok(_) => {}
                Err(err) => {
                   panic!("recv error: {:?}", err);
                }

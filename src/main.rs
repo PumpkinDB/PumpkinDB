@@ -19,7 +19,6 @@ extern crate test;
 #[macro_use]
 extern crate nom;
 
-extern crate multiqueue;
 extern crate snowflake;
 
 pub mod script;
