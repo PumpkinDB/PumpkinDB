@@ -54,7 +54,9 @@
 //! * Binary and text (human readable & writable) forms
 //! * No types, just byte arrays
 //! * Dynamic code evaluation
-//! * Zero-copy interpretation (where feasible)
+//! * Zero-copy interpretation (where feasible; currently does not apply to the most
+//!   important part, the storage itself as transactional model of LMDB precludes us
+//!   from carrying these references outside of the scope of the transaction)
 //!
 
 
@@ -112,6 +114,39 @@ word!(CONCAT, (a, b => c), b"\x86CONCAT");
 /// program on the current stack
 word!(EVAL, b"\x84EVAL");
 
+// Category: Storage
+/// `WRITE` takes the topmost item from the stack and evaluates it in
+/// the context of a new write transaction
+word!(WRITE, b"\x85WRITE");
+word!(WRITE_END, b"\x80\x85WRITE"); // internal word
+
+/// `WRITE` takes the topmost item from the stack and evaluates it in
+/// the context of a new read transaction
+word!(READ, b"\x84READ");
+word!(READ_END, b"\x80\x84READ"); // internal word
+
+/// `ASSOC` takes the topmost item from the stack as a value and second
+/// item as a key and puts it into the database.
+///
+/// Will fail the script if not within a WRITE transaction's scope.
+/// Will fail the script if the key is already associated. (we're not allowing
+/// to overwrite data)
+word!(ASSOC, b"\x85ASSOC");
+
+/// `ASSOC` takes the topmost item from the stack and pushes `[1]` to
+/// the stack if the key is present, `[0]` if it is not
+/// Will fail the script if not within a READ or WRITE transaction's scope.
+word!(ASSOCQ, b"\x86ASSOC?");
+
+/// `RETR` takes the topmost item from the stack and returns the value
+/// associated with this key
+///
+/// Will fail the script if not within a READ or WRITE transaction's scope.
+/// Will fail the script if the key is not yet associated.
+word!(RETR, b"\x84RETR");
+/// `COMMIT` commits a WRITE transaction
+word!(COMMIT, b"\x86COMMIT");
+
 /// # Data Representation
 ///
 /// In an effort to keep PumpkinScript dead simple, we are not introducing enums
@@ -137,7 +172,10 @@ word!(EVAL, b"\x84EVAL");
 /// byte array of `len & 128u8` length (len without the highest bit set) is considered a word.
 /// Length must be greater than zero.
 ///
-/// The rest of tags (`124u8` to `128u8`) are reserved for future use.
+/// `128u8` is reserved as a prefix to be followed by an internal VM's word (not to be accessible
+/// to the end users).
+///
+/// The rest of tags (`124u8` to `127u8`) are reserved for future use.
 ///
 pub type Program = Vec<u8>;
 
@@ -151,6 +189,17 @@ pub enum Error {
     UnknownWord,
     /// Binary format decoding failed
     DecodingError,
+    /// Database Error
+    DatabaseError(lmdb::Error),
+    /// Duplicate key
+    DuplicateKey,
+    /// Key not found
+    UnknownKey,
+    /// No active transaction
+    NoTransaction,
+    /// An internal scheduler's error to indicate that currently
+    /// executed environment should be rescheduled from the same point
+    Reschedule,
 }
 /// Parse-related error
 #[derive(Debug, PartialEq)]
@@ -186,6 +235,14 @@ pub struct Env<'a> {
     heap_align: usize,
     heap_ptr: usize,
 }
+
+impl<'a> std::fmt::Debug for Env<'a> {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        fmt.write_str("Env()")
+    }
+}
+
+unsafe impl<'a> Send for Env<'a> {}
 
 const _EMPTY: &'static [u8] = b"";
 
@@ -338,17 +395,31 @@ macro_rules! data {
 }
 
 macro_rules! handle_words {
-    ($env: expr, $word: expr, $res: ident, [ $($name: ident),* ], $block: expr) => {
+    ($me: expr, $env: expr, $program: expr, $word: expr, $res: ident,
+     $pid: ident, [ $($name: ident),* ], $block: expr) => {
     {
+      let mut env = $env;
       $(
-        match VM::$name($env, $word) {
-          Err(Error::UnknownWord) => (),
-          Err(err) => return Err(err),
+       env =
+        match $me.$name(env, $word, $pid) {
+          Err((env, Error::Reschedule)) => return Ok((env, Some($program.clone()))),
+          Err((env, Error::UnknownWord)) => env,
+          Err((env, err)) => return Err((env, err)),
           Ok($res) => $block
-        }
+        };
       )*
-      return Err(Error::UnknownWord)
+      return Err((env, Error::UnknownWord))
     }
+    };
+}
+
+macro_rules! validate_lockout {
+    ($env: expr, $name: expr, $pid: expr) => {
+        if let Some((pid_, _)) = $name {
+            if pid_ != $pid {
+                return Err(($env, Error::Reschedule))
+            }
+        }
     };
 }
 
@@ -362,7 +433,7 @@ pub type Sender<T> = mpsc::Sender<T>;
 pub type Receiver<T> = mpsc::Receiver<T>;
 
 /// Communication messages used to talk with the [VM](struct.VM.html) thread.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum RequestMessage<'a> {
     /// Requests scheduling a new environment with a given
     /// id and a program.
@@ -370,13 +441,13 @@ pub enum RequestMessage<'a> {
     /// An internal message that schedules an execution of
     /// the next instruction in an identified environment on
     /// the next 'tick'
-    RescheduleEnv(EnvId),
+    RescheduleEnv(EnvId, Vec<u8>, Env<'a>, Sender<ResponseMessage<'a>>),
     /// Requests VM shutdown
     Shutdown,
 }
 
 /// Messages received from the [VM](struct.VM.html) thread.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum ResponseMessage<'a> {
     /// Notifies of successful environment termination with
     /// an id, stack and top of the stack pointer.
@@ -388,8 +459,7 @@ pub enum ResponseMessage<'a> {
 
 pub type TrySendError<T> = std::sync::mpsc::TrySendError<T>;
 
-use std::collections::HashMap;
-
+use lmdb;
 
 /// VM is a PumpkinScript scheduler and interpreter. This is the
 /// most central part of this module.
@@ -397,7 +467,7 @@ use std::collections::HashMap;
 /// # Example
 ///
 /// ```no_run
-/// let mut vm = VM::new();
+/// let mut vm = VM::new(&env, &db); // lmdb comes from outside
 ///
 /// let sender = vm.sender();
 /// let handle = thread::spawn(move || {
@@ -426,10 +496,20 @@ pub struct VM<'a> {
     inbox: Receiver<RequestMessage<'a>>,
     sender: Sender<RequestMessage<'a>>,
     loopback: Sender<RequestMessage<'a>>,
-    envs: HashMap<EnvId, (Env<'a>, Vec<u8>, Sender<ResponseMessage<'a>>)>,
+    db: &'a lmdb::Database<'a>,
+    db_env: &'a lmdb::Environment,
+    db_write_txn: Option<(EnvId, lmdb::WriteTransaction<'a>)>,
+    db_read_txn: Option<(EnvId, lmdb::ReadTransaction<'a>)>,
 }
 
 unsafe impl<'a> Send for VM<'a> {}
+
+type PassResult<'a> = Result<(Env<'a>, Option<Vec<u8>>), (Env<'a>, Error)>;
+
+const TRUE: &'static [u8] = b"\x01\x01";
+const FALSE: &'static [u8] = b"\x01\x00";
+
+use lmdb::traits::LmdbResultExt;
 
 impl<'a> VM<'a> {
     /// Creates an instance of VM with three communication channels:
@@ -437,14 +517,16 @@ impl<'a> VM<'a> {
     /// * Response sender
     /// * Internal sender
     /// * Request receiver
-    pub fn new()
-               -> Self {
+    pub fn new(db_env: &'a lmdb::Environment, db: &'a lmdb::Database<'a>) -> Self {
         let (sender, receiver) = mpsc::channel::<RequestMessage<'a>>();
         VM {
             inbox: receiver,
             sender: sender.clone(),
             loopback: sender.clone(),
-            envs: HashMap::new(),
+            db_env: db_env,
+            db: db,
+            db_write_txn: None,
+            db_read_txn: None,
         }
     }
 
@@ -468,35 +550,33 @@ impl<'a> VM<'a> {
                 Ok(RequestMessage::Shutdown) => break,
                 Ok(RequestMessage::ScheduleEnv(pid, program, chan)) => {
                     let env = Env::new();
-                    self.envs.insert(pid, (env, program, chan));
-                    let _ = self.loopback.send(RequestMessage::RescheduleEnv(pid));
+                    let _ = self.loopback
+                        .send(RequestMessage::RescheduleEnv(pid, program, env, chan));
                 }
-                Ok(RequestMessage::RescheduleEnv(pid)) => {
-                    if let Some((mut env, mut program, chan)) = self.envs.remove(&pid) {
-                        match self.pass(&mut env, &mut program) {
-                            Err(err) => {
-                                let _ = chan.send(ResponseMessage::EnvFailed(pid,
-                                                                 err,
-                                                                 Vec::from(env.stack()),
-                                                                 env.stack_size));
-                            }
-                            Ok(Some(program)) => {
-                                self.envs.insert(pid, (env, program, chan));
-                                let _ = self.loopback.send(RequestMessage::RescheduleEnv(pid));
-                            }
-                            Ok(None) => {
-                                let _ = chan.send(ResponseMessage::EnvTerminated(pid,
+                Ok(RequestMessage::RescheduleEnv(pid, mut program, env, chan)) => {
+                    match self.pass(env, &mut program, pid.clone()) {
+                        Err((env, err)) => {
+                            let _ = chan.send(ResponseMessage::EnvFailed(pid,
+                                                                         err,
+                                                                         Vec::from(env.stack()),
+                                                                         env.stack_size));
+                        }
+                        Ok((env, Some(program))) => {
+                            let _ = self.loopback
+                                .send(RequestMessage::RescheduleEnv(pid, program, env, chan));
+                        }
+                        Ok((env, None)) => {
+                            let _ = chan.send(ResponseMessage::EnvTerminated(pid,
                                                                      Vec::from(env.stack()),
                                                                      env.stack_size));
-                            }
-                        };
-                    }
+                        }
+                    };
                 }
             }
         }
     }
 
-    fn pass(&mut self, mut env: &mut Env, program: &mut Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
+    fn pass(&mut self, mut env: Env<'a>, program: &mut Vec<u8>, pid: EnvId) -> PassResult<'a> {
         let mut slice = env.alloc(program.len());
         for i in 0..program.len() {
             slice[i] = program[i];
@@ -505,130 +585,147 @@ impl<'a> VM<'a> {
             env.push(data);
             let rest = program.split_off(data.len());
             return Ok(match rest.len() {
-                0 => None,
-                _ => Some(rest),
+                0 => (env, None),
+                _ => (env, Some(rest)),
             });
-        } else if let nom::IResult::Done(_, word) = binparser::word(slice) {
-            handle_words!(env, word, res,
-                                     [handle_drop, handle_dup, handle_swap,
-                                      handle_rot, handle_over, handle_eval,
-                                      handle_concat], {
-                let rest = match res {
-                        Some(code_injection) => {
-                            let mut vec = Vec::from(code_injection);
-                            let mut rest_0 = program.split_off(word.len());
-                            vec.append(&mut rest_0);
-                            vec
-                        }
-                        None => program.split_off(word.len())
-                    };
-                return Ok(match rest.len() {
-                    0 => None,
-                    _ => Some(rest)
-                });
-            });
+        } else if let nom::IResult::Done(_, word) = binparser::word_or_internal_word(slice) {
+            handle_words!(self,
+                          env,
+                          program,
+                          word,
+                          res,
+                          pid,
+                          [handle_drop,
+                           handle_dup,
+                           handle_swap,
+                           handle_rot,
+                           handle_over,
+                           handle_concat,
+                           handle_eval,
+                           // storage
+                           handle_write,
+                           handle_read,
+                           handle_assoc,
+                           handle_assocq,
+                           handle_retr,
+                           handle_commit],
+                          {
+                              let (env_, rest) = match res {
+                                  (env_, Some(code_injection)) => {
+                                      let mut vec = Vec::from(code_injection);
+                                      let mut rest_0 = program.split_off(word.len());
+                                      vec.append(&mut rest_0);
+                                      (env_, vec)
+                                  }
+                                  (env_, None) => (env_, program.split_off(word.len())),
+                              };
+                              return Ok(match rest.len() {
+                                  0 => (env_, None),
+                                  _ => (env_, Some(rest)),
+                              });
+                          });
         } else {
-            return Err(Error::DecodingError);
+            return Err((env, Error::DecodingError));
         }
     }
 
     #[inline]
-    fn handle_dup(env: &mut Env, word: &[u8]) -> Result<Option<Vec<u8>>, Error> {
+    fn handle_dup(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == DUP {
             match env.pop() {
-                None => return Err(Error::EmptyStack),
+                None => return Err((env, Error::EmptyStack)),
                 Some(v) => {
                     env.push(v);
                     env.push(v);
-                    Ok(None)
+                    Ok((env, None))
                 }
             }
         } else {
-            Err(Error::UnknownWord)
+            Err((env, Error::UnknownWord))
         }
     }
 
     #[inline]
-    fn handle_swap(env: &mut Env, word: &[u8]) -> Result<Option<Vec<u8>>, Error> {
+    fn handle_swap(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == SWAP {
             let a = env.pop();
             let b = env.pop();
 
             if a.is_none() || b.is_none() {
-                return Err(Error::EmptyStack);
+                return Err((env, Error::EmptyStack));
             }
 
             env.push(a.unwrap());
             env.push(b.unwrap());
 
-            Ok(None)
+            Ok((env, None))
         } else {
-            Err(Error::UnknownWord)
+            Err((env, Error::UnknownWord))
         }
     }
 
     #[inline]
-    fn handle_over(env: &mut Env, word: &[u8]) -> Result<Option<Vec<u8>>, Error> {
+    fn handle_over(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == OVER {
             let a = env.pop();
             let b = env.pop();
 
             if a.is_none() || b.is_none() {
-                return Err(Error::EmptyStack);
+                return Err((env, Error::EmptyStack));
             }
 
             env.push(b.unwrap());
             env.push(a.unwrap());
             env.push(b.unwrap());
 
-            Ok(None)
+            Ok((env, None))
         } else {
-            Err(Error::UnknownWord)
+            Err((env, Error::UnknownWord))
         }
     }
 
     #[inline]
-    fn handle_rot(env: &mut Env, word: &[u8]) -> Result<Option<Vec<u8>>, Error> {
+    fn handle_rot(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == ROT {
             let a = env.pop();
             let b = env.pop();
             let c = env.pop();
 
             if a.is_none() || b.is_none() || c.is_none() {
-                return Err(Error::EmptyStack);
+                return Err((env, Error::EmptyStack));
             }
 
             env.push(b.unwrap());
             env.push(a.unwrap());
             env.push(c.unwrap());
 
-            Ok(None)
+            Ok((env, None))
         } else {
-            Err(Error::UnknownWord)
+            Err((env, Error::UnknownWord))
         }
     }
 
     #[inline]
-    fn handle_drop(env: &mut Env, word: &[u8]) -> Result<Option<Vec<u8>>, Error> {
+    fn handle_drop(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == DROP {
             match env.pop() {
-                None => return Err(Error::EmptyStack),
-                _ => Ok(None),
+                None => return Err((env, Error::EmptyStack)),
+                _ => Ok((env, None)),
             }
         } else {
-            Err(Error::UnknownWord)
+            Err((env, Error::UnknownWord))
         }
     }
 
 
     #[inline]
-    fn handle_concat(env: &mut Env, word: &[u8]) -> Result<Option<Vec<u8>>, Error> {
+    fn handle_concat(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == CONCAT {
             let a = env.pop();
             let b = env.pop();
 
             if a.is_none() || b.is_none() {
-                return Err(Error::EmptyStack);
+                return Err((env, Error::EmptyStack));
             }
 
             let a1 = a.unwrap();
@@ -654,28 +751,229 @@ impl<'a> VM<'a> {
 
             env.push(slice);
 
-            Ok(None)
+            Ok((env, None))
         } else {
-            Err(Error::UnknownWord)
+            Err((env, Error::UnknownWord))
         }
     }
 
     #[inline]
-    fn handle_eval(env: &mut Env, word: &[u8]) -> Result<Option<Vec<u8>>, Error> {
+    fn handle_eval(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == EVAL {
             match env.pop() {
-                None => return Err(Error::EmptyStack),
+                None => return Err((env, Error::EmptyStack)),
                 Some(v) => {
                     let (code, _) = data!(v);
-                    Ok(Some(Vec::from(code)))
+                    Ok((env, Some(Vec::from(code))))
                 }
             }
         } else {
-            Err(Error::UnknownWord)
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    fn handle_write(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        match word {
+            WRITE => {
+                match env.pop() {
+                    None => return Err((env, Error::EmptyStack)),
+                    Some(v) => {
+                        validate_lockout!(env, self.db_write_txn, pid);
+                        let (code, _) = data!(v);
+                        let mut vec = Vec::from(code);
+                        vec.extend_from_slice(WRITE_END); // transaction end marker
+                        // prepare transaction
+                        match lmdb::WriteTransaction::new(self.db_env) {
+                            Err(e) => Err((env, Error::DatabaseError(e))),
+                            Ok(txn) => {
+                                self.db_write_txn = Some((pid, txn));
+                                Ok((env, Some(vec)))
+                            }
+                        }
+                    }
+                }
+            }
+            WRITE_END => {
+                validate_lockout!(env, self.db_write_txn, pid);
+                self.db_write_txn = None;
+                Ok((env, None))
+            }
+            _ => Err((env, Error::UnknownWord)),
+        }
+    }
+
+    #[inline]
+    fn handle_read(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        match word {
+            READ => {
+                match env.pop() {
+                    None => return Err((env, Error::EmptyStack)),
+                    Some(v) => {
+                        validate_lockout!(env, self.db_read_txn, pid);
+                        validate_lockout!(env, self.db_write_txn, pid);
+                        let (code, _) = data!(v);
+                        let mut vec = Vec::from(code);
+                        vec.extend_from_slice(READ_END); // transaction end marker
+                        // prepare transaction
+                        match lmdb::ReadTransaction::new(self.db_env) {
+                            Err(e) => Err((env, Error::DatabaseError(e))),
+                            Ok(txn) => {
+                                self.db_read_txn = Some((pid, txn));
+                                Ok((env, Some(vec)))
+                            }
+                        }
+                    }
+                }
+            }
+            READ_END => {
+                validate_lockout!(env, self.db_read_txn, pid);
+                validate_lockout!(env, self.db_write_txn, pid);
+                self.db_read_txn = None;
+                Ok((env, None))
+            }
+            _ => Err((env, Error::UnknownWord)),
+        }
+    }
+
+    #[inline]
+    fn handle_assoc(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        if word == ASSOC {
+            validate_lockout!(env, self.db_write_txn, pid);
+            if let Some((_, ref txn)) = self.db_write_txn {
+                let value = env.pop();
+                let key = env.pop();
+
+                if value.is_none() || key.is_none() {
+                    return Err((env, Error::EmptyStack));
+                }
+
+                let value1 = value.unwrap();
+                let key1 = key.unwrap();
+
+                let mut access = txn.access();
+
+                match access.put(self.db, key1, value1, lmdb::put::NOOVERWRITE) {
+                    Ok(_) => Ok((env, None)),
+                    Err(lmdb::Error::ValRejected(_)) => Err((env, Error::DuplicateKey)),
+                    Err(err) => Err((env, Error::DatabaseError(err))),
+                }
+            } else {
+                Err((env, Error::NoTransaction))
+            }
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    fn handle_commit(&mut self, env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        if word == COMMIT {
+            validate_lockout!(env, self.db_write_txn, pid);
+            if let Some((_, txn)) = mem::replace(&mut self.db_write_txn, None) {
+                let _ = txn.commit();
+                Ok((env, None))
+            } else {
+                Err((env, Error::NoTransaction))
+            }
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+
+    #[inline]
+    fn handle_retr(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        if word == RETR {
+            validate_lockout!(env, self.db_write_txn, pid);
+            let key = env.pop();
+            if key.is_none() {
+                return Err((env, Error::EmptyStack));
+            }
+            let key1 = key.unwrap();
+            if let Some((_, ref txn)) = self.db_write_txn {
+                let access = txn.access();
+
+                match access.get::<[u8], [u8]>(self.db, key1).to_opt() {
+                    Ok(Some(val)) => {
+                        let slice = env.alloc(val.len());
+                        for i in 0..val.len() {
+                            slice[i] = val[i];
+                        }
+                        env.push(slice);
+                        Ok((env, None))
+                    }
+                    Ok(None) => Err((env, Error::UnknownKey)),
+                    Err(err) => Err((env, Error::DatabaseError(err))),
+                }
+            } else if let Some((_, ref txn)) = self.db_read_txn {
+                let access = txn.access();
+
+                match access.get::<[u8], [u8]>(self.db, key1).to_opt() {
+                    Ok(Some(val)) => {
+                        let slice = env.alloc(val.len());
+                        for i in 0..val.len() {
+                            slice[i] = val[i];
+                        }
+                        env.push(slice);
+                        Ok((env, None))
+                    }
+                    Ok(None) => Err((env, Error::UnknownKey)),
+                    Err(err) => Err((env, Error::DatabaseError(err))),
+                }
+            } else {
+                Err((env, Error::NoTransaction))
+            }
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    fn handle_assocq(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        if word == ASSOCQ {
+            validate_lockout!(env, self.db_write_txn, pid);
+            let key = env.pop();
+            if key.is_none() {
+                return Err((env, Error::EmptyStack));
+            }
+            let key1 = key.unwrap();
+            if let Some((_, ref txn)) = self.db_write_txn {
+                let access = txn.access();
+
+                match access.get::<[u8], [u8]>(self.db, key1).to_opt() {
+                    Ok(Some(_)) => {
+                        env.push(TRUE);
+                        Ok((env, None))
+                    }
+                    Ok(None) => {
+                        env.push(FALSE);
+                        Ok((env, None))
+                    }
+                    Err(err) => Err((env, Error::DatabaseError(err))),
+                }
+            } else if let Some((_, ref txn)) = self.db_read_txn {
+                let access = txn.access();
+
+                match access.get::<[u8], [u8]>(self.db, key1).to_opt() {
+                    Ok(Some(_)) => {
+                        env.push(TRUE);
+                        Ok((env, None))
+                    }
+                    Ok(None) => {
+                        env.push(FALSE);
+                        Ok((env, None))
+                    }
+                    Err(err) => Err((env, Error::DatabaseError(err))),
+                }
+            } else {
+                Err((env, Error::NoTransaction))
+            }
+        } else {
+            Err((env, Error::UnknownWord))
         }
     }
 }
-
 
 
 #[cfg(test)]
@@ -683,8 +981,11 @@ impl<'a> VM<'a> {
 mod tests {
 
     use script::{Env, VM, Error, RequestMessage, ResponseMessage, EnvId, parse};
-    use std::thread;
     use std::sync::mpsc;
+    use std::fs;
+    use tempdir::TempDir;
+    use lmdb;
+    use crossbeam;
 
     macro_rules! eval {
         ($script: expr, $env: ident, $expr: expr) => {
@@ -692,35 +993,51 @@ mod tests {
         };
         ($script: expr, $env: ident, $result: pat, $expr: expr) => {
           {
-            let mut vm = VM::new();
+            let dir = TempDir::new("pumpkindb").unwrap();
+            let path = dir.path().to_str().unwrap();
+            fs::create_dir_all(path).expect("can't create directory");
+            let env = unsafe {
+                lmdb::EnvBuilder::new()
+                    .expect("can't create env builder")
+                    .open(path, lmdb::open::Flags::empty(), 0o600)
+                    .expect("can't open env")
+            };
 
-            let sender = vm.sender();
-            let handle = thread::spawn(move || {
-                vm.run();
-            });
-            let script = parse($script).unwrap();
-            let (callback, receiver) = mpsc::channel::<ResponseMessage>();
-            let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(), script.clone(), callback));
-            match receiver.recv() {
-               Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
-                  let _ = sender.send(RequestMessage::Shutdown);
-                  let $result = Ok::<(), Error>(());
-                  let mut $env = Env::new_with_stack(stack, stack_size);
-                  $expr;
-               }
-               Ok(ResponseMessage::EnvFailed(_, err, stack, stack_size)) => {
-                  let _ = sender.send(RequestMessage::Shutdown);
-                  let $result = Err::<(), Error>(err);
-                  let mut $env = Env::new_with_stack(stack, stack_size);
-                  $expr;
-               }
-               Err(err) => {
-                  panic!("recv error: {:?}", err);
-               }
-            }
-            let _ = handle.join();
-          }
+            let db = lmdb::Database::open(&env,
+                                 None,
+                                 &lmdb::DatabaseOptions::new(lmdb::db::CREATE))
+                                 .expect("can't open database");
+            crossbeam::scope(|scope| {
+                let mut vm = VM::new(&env, &db);
+                let sender = vm.sender();
+                let handle = scope.spawn(move || {
+                    vm.run();
+                });
+                let script = parse($script).unwrap();
+                let (callback, receiver) = mpsc::channel::<ResponseMessage>();
+                let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(),
+                                    script.clone(), callback));
+                match receiver.recv() {
+                   Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
+                      let _ = sender.send(RequestMessage::Shutdown);
+                      let $result = Ok::<(), Error>(());
+                      let mut $env = Env::new_with_stack(stack, stack_size);
+                      $expr;
+                   }
+                   Ok(ResponseMessage::EnvFailed(_, err, stack, stack_size)) => {
+                      let _ = sender.send(RequestMessage::Shutdown);
+                      let $result = Err::<(), Error>(err);
+                      let mut $env = Env::new_with_stack(stack, stack_size);
+                      $expr;
+                   }
+                   Err(err) => {
+                      panic!("recv error: {:?}", err);
+                   }
+                }
+                let _ = handle.join();
+          });
         };
+      }
     }
 
     #[test]
@@ -843,6 +1160,56 @@ mod tests {
             assert!(result.is_err());
             assert!(matches!(result.err(), Some(Error::DecodingError)));
         });
+    }
+
+    #[test]
+    fn write() {
+        eval!("[\"Hello\" \"world\" ASSOC COMMIT] WRITE [\"Hello\" RETR] READ",
+              env,
+              result,
+              {
+                  assert!(!result.is_err());
+                  assert_eq!(Vec::from(env.pop().unwrap()), parse("\"world\"").unwrap());
+              });
+
+        // overwrite
+        eval!("[\"Hello\" \"world\" ASSOC \"Hello\" \"world\" ASSOC COMMIT] WRITE",
+              env,
+              result,
+              {
+                  assert!(result.is_err());
+              });
+
+        // missing key
+        eval!("[\"Hello\" \"world\" ASSOC COMMIT] WRITE [\"world\" RETR] READ",
+              env,
+              result,
+              {
+                  assert!(result.is_err());
+              });
+
+    }
+
+    #[test]
+    fn assocq() {
+        eval!("[\"Hello\" \"world\" ASSOC COMMIT] WRITE [\"Hello\" ASSOC? \"Bye\" ASSOC?] READ",
+              env,
+              result,
+              {
+                  assert!(!result.is_err());
+                  assert_eq!(Vec::from(env.pop().unwrap()), parse("0x00").unwrap());
+                  assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
+              });
+    }
+
+    #[test]
+    fn commit() {
+        eval!("[\"Hey\" \"everybody\" ASSOC] WRITE [\"Hey\" RETR] READ",
+              env,
+              result,
+              {
+                  assert!(result.is_err());
+              });
     }
 
 }

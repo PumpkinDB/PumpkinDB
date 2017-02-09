@@ -10,10 +10,21 @@ use script::{Program, ParseError};
 pub fn word_tag(i: &[u8]) -> IResult<&[u8], u8> {
     if i.len() < 1 {
         IResult::Incomplete(Needed::Size(1))
-    } else if i[0] & 128 != 128 {
+    } else if (i[0] & 128 != 128) || i[0] == 128 {
         IResult::Error(ErrorKind::Custom(128))
     } else {
         IResult::Done(&i[0..], i[0] - 128 + 1)
+    }
+}
+
+pub fn internal_word(i: &[u8]) -> IResult<&[u8], &[u8]> {
+    if i.len() < 2 {
+        IResult::Incomplete(Needed::Size(1))
+    } else if i[0] != 128 {
+        IResult::Error(ErrorKind::Custom(128))
+    } else {
+        IResult::Done(&i[(i[1] - 128 + 2) as usize..],
+                      &i[0..(i[1] - 128 + 2) as usize])
     }
 }
 
@@ -89,6 +100,7 @@ fn flatten_program(p: Vec<&[u8]>) -> Vec<u8> {
 named!(pub data_size<usize>, alt!(micro_length | byte_length | small_length | big_length));
 named!(pub data, length_bytes!(data_size));
 named!(pub word, length_bytes!(word_tag));
+named!(pub word_or_internal_word, alt!(internal_word | word));
 named!(item, alt!(word | data));
 named!(split_code<Vec<u8>>, do_parse!(
                              prog: many0!(item) >>
@@ -115,6 +127,12 @@ mod tests {
     fn test() {
         let v = parse_text("0x10 DUP").unwrap();
         assert_eq!(parse(v.as_slice()).unwrap(), parse_text("0x10 DUP").unwrap());
+    }
+
+    #[test]
+    fn test_internal() {
+        // should not be able to parse "internal words"
+        assert!(parse(vec![0x80, 0x81, b'A'].as_slice()).is_err());
     }
 
     #[test]

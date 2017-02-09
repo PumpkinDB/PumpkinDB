@@ -20,6 +20,12 @@ extern crate test;
 extern crate nom;
 
 extern crate snowflake;
+extern crate lmdb_zero as lmdb;
+#[cfg(test)]
+extern crate tempdir;
+#[cfg(test)]
+extern crate crossbeam;
+
 
 pub mod script;
 
