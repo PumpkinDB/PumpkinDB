@@ -1,3 +1,5 @@
+[![Gitter chat](https://badges.gitter.im/PumpkinDB.png)](https://gitter.im/PumpkinDB/Lobby)
+
 PumpkinDB
 =========
 
