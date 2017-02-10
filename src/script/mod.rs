@@ -62,6 +62,7 @@
 
 use alloc::heap;
 
+use std::cmp;
 
 /// `word!` macro is used to define a built-in word, its signature (if applicable)
 /// and representation
@@ -318,15 +319,17 @@ impl<'a> Env<'a> {
     /// Allocates a slice off the Env-specific heap. Will be collected
     /// once this Env is dropped.
     pub fn alloc(&mut self, len: usize) -> &'a mut [u8] {
-        let mut space = unsafe { slice::from_raw_parts_mut(self.heap, self.heap_size) };
         if self.heap_ptr + len > self.heap_size {
+            let increase = cmp::max(len, HEAP_SIZE);
             unsafe {
-                heap::reallocate(self.heap,
+                self.heap = heap::reallocate(self.heap,
                                  self.heap_size,
-                                 self.heap_size + HEAP_SIZE,
+                                 self.heap_size + increase,
                                  self.heap_align);
             }
+            self.heap_size += increase;
         }
+        let mut space = unsafe { slice::from_raw_parts_mut(self.heap, self.heap_size) };
         let slice = &mut space[self.heap_ptr..self.heap_ptr + len];
         self.heap_ptr += len;
         slice
