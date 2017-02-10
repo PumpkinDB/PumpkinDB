@@ -309,11 +309,13 @@ impl<'a> Env<'a> {
     /// Pushes value on top of the stack
     #[inline]
     pub fn push(&mut self, data: &'a [u8]) {
-        self.stack.as_mut_slice()[self.stack_size as usize] = data;
-        self.stack_size += 1;
+        // check if we are at capacity
         if self.stack_size == self.stack.len() {
-            self.stack.reserve(STACK_SIZE);
+            let mut vec = vec![_EMPTY; STACK_SIZE];
+            self.stack.append(&mut vec);
         }
+        self.stack.as_mut_slice()[self.stack_size] = data;
+        self.stack_size += 1;
     }
 
     /// Allocates a slice off the Env-specific heap. Will be collected
