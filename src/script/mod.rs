@@ -881,6 +881,7 @@ impl<'a> VM<'a> {
     fn handle_retr(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         if word == RETR {
             validate_lockout!(env, self.db_write_txn, pid);
+            validate_lockout!(env, self.db_read_txn, pid);
             let key = env.pop();
             if key.is_none() {
                 return Err((env, Error::EmptyStack));
