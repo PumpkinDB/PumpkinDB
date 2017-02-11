@@ -62,6 +62,7 @@
 
 use alloc::heap;
 
+use num_bigint::BigUint;
 use std::cmp;
 
 /// `word!` macro is used to define a built-in word, its signature (if applicable)
@@ -97,6 +98,7 @@ word!(DUP, (a => a, a), b"\x83DUP");
 word!(SWAP, (a, b => b, a), b"\x84SWAP");
 word!(ROT, (a, b, c  => b, c, a), b"\x83ROT");
 word!(OVER, (a, b => a, b, a), b"\x84OVER");
+word!(DEPTH, b"\x85DEPTH");
 
 // Category: Byte arrays
 
@@ -574,6 +576,7 @@ impl<'a> VM<'a> {
                            handle_swap,
                            handle_rot,
                            handle_over,
+                           handle_depth,
                            handle_concat,
                            handle_eval,
                            // storage
@@ -691,6 +694,24 @@ impl<'a> VM<'a> {
         }
     }
 
+    #[inline]
+    fn handle_depth(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == DEPTH {
+            let bytes = BigUint::from(env.stack_size).to_bytes_le();
+            let offset = offset_by_size(bytes.len());
+            let slice = env.alloc(bytes.len() + offset);
+            write_size_into_slice!(bytes.len(), slice);
+            let mut i = offset;
+            for byte in bytes {
+                slice[i] = byte;
+                i += 1;
+            }
+            env.push(slice);
+            Ok((env, None))
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
 
     #[inline]
     fn handle_concat(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
@@ -1120,6 +1141,13 @@ mod tests {
             assert!(matches!(result.err(), Some(Error::EmptyStack)));
         });
 
+    }
+
+    #[test]
+    fn depth() {
+        eval!("0x010203 0x00 \"Hello\" DEPTH", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parse("3").unwrap());
+        });
     }
 
     #[test]
