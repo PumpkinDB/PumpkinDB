@@ -53,6 +53,9 @@ use std::path;
 use std::ffi::CString;
 use libc::statvfs;
 
+use alloc::heap;
+use core::mem::size_of;
+
 lazy_static! {
  static ref ENV: lmdb::Environment = {
      let _ = config::set_default("storage.path", "pumpkin.db");
@@ -69,10 +72,8 @@ lazy_static! {
                 let canonical = fs::canonicalize(&path).unwrap();
                 let absolute_path = canonical.as_path().to_str().unwrap();
                 let absolute_path_c = CString::new(absolute_path).unwrap();
-                let mut stat: statvfs = statvfs{f_bsize: 0, f_frsize: 0, f_blocks: 0,
-                                                f_bfree: 0, f_bavail: 0, f_files: 0,
-                                                f_ffree: 0, f_favail: 0, f_fsid: 0,
-                                                f_flag: 0, f_namemax: 0};
+                let statp: *mut statvfs = heap::allocate(size_of::<statvfs>(), size_of::<usize>()) as *mut statvfs;
+                let mut stat = *statp;
                 if statvfs(absolute_path_c.as_ptr(), &mut stat) != 0 {
                    println!("Can't determine available disk space");
                 } else {
@@ -80,6 +81,7 @@ lazy_static! {
                    println!("Available disk space is approx. {}Gb, setting database map size to it", size / (1024*1024*1024));
                    env_builder.set_mapsize(size).expect("can't set map size");
                 }
+                heap::deallocate(statp as *mut u8, size_of::<statvfs>(), size_of::<usize>());
             }
             env_builder
                 .open(path.as_str(), lmdb::open::Flags::empty(), 0o600)
