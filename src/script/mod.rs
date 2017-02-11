@@ -92,60 +92,29 @@ macro_rules! word {
 
 // Category: Stack
 
-/// `DROP` removes an item from the top of the stack
 word!(DROP, (a => ), b"\x84DROP");
-/// `DUP` duplicates an item at the top of the stack
 word!(DUP, (a => a, a), b"\x83DUP");
-/// `SWAP` swaps the order of the two topmost items on the stack
 word!(SWAP, (a, b => b, a), b"\x84SWAP");
-/// `ROT` moves third item from the top to the top
 word!(ROT, (a, b, c  => b, c, a), b"\x83ROT");
-/// `OVER` copies the second topmost item to the top of the stack
 word!(OVER, (a, b => a, b, a), b"\x84OVER");
 
 // Category: Byte arrays
 
-/// `CONCAT` takes two topmost items and concatenates them, and
-/// pushes result to the top of the stack
 word!(CONCAT, (a, b => c), b"\x86CONCAT");
 
-// category: Control flow
-
-/// `EVAL` takes the topmost item and evaluates it as a PumpkinScript
-/// program on the current stack
+// Category: Control flow
 word!(EVAL, b"\x84EVAL");
 
 // Category: Storage
-/// `WRITE` takes the topmost item from the stack and evaluates it in
-/// the context of a new write transaction
 word!(WRITE, b"\x85WRITE");
 word!(WRITE_END, b"\x80\x85WRITE"); // internal word
 
-/// `WRITE` takes the topmost item from the stack and evaluates it in
-/// the context of a new read transaction
 word!(READ, b"\x84READ");
 word!(READ_END, b"\x80\x84READ"); // internal word
 
-/// `ASSOC` takes the topmost item from the stack as a value and second
-/// item as a key and puts it into the database.
-///
-/// Will fail the script if not within a WRITE transaction's scope.
-/// Will fail the script if the key is already associated. (we're not allowing
-/// to overwrite data)
 word!(ASSOC, b"\x85ASSOC");
-
-/// `ASSOC` takes the topmost item from the stack and pushes `[1]` to
-/// the stack if the key is present, `[0]` if it is not
-/// Will fail the script if not within a READ or WRITE transaction's scope.
 word!(ASSOCQ, b"\x86ASSOC?");
-
-/// `RETR` takes the topmost item from the stack and returns the value
-/// associated with this key
-///
-/// Will fail the script if not within a READ or WRITE transaction's scope.
-/// Will fail the script if the key is not yet associated.
 word!(RETR, b"\x84RETR");
-/// `COMMIT` commits a WRITE transaction
 word!(COMMIT, b"\x86COMMIT");
 
 /// # Data Representation
