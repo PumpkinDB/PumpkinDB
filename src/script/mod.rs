@@ -109,6 +109,7 @@ word!(CONCAT, (a, b => c), b"\x86CONCAT");
 // Category: Control flow
 word!(EVAL, b"\x84EVAL");
 word!(SET, b"\x83SET");
+word!(SET_IMM, b"\x84SET!"); // internal word
 
 // Category: Storage
 word!(WRITE, b"\x85WRITE");
@@ -716,13 +717,46 @@ impl<'a> VM<'a> {
                 Some(v) => {
                     let (closure, _) = data!(v);
                     match binparser::word(closure) {
-                        nom::IResult::Done(&[0x81, b':', ref rest..], word) => {
+                        nom::IResult::Done(&[0x81, b':', ref rest..], _) => {
+                            let word = &closure[0..closure.len() - rest.len() - 2];
                             env.dictionary.insert(word, rest);
                             Ok((env, None))
+                        },
+                        nom::IResult::Done(&[0x81, b'=', ref rest..], _) => {
+                            let word = &closure[0..closure.len() - rest.len() - 2];
+                            let mut vec = Vec::new();
+                            // inject the code
+                            vec.extend_from_slice(rest);
+                            // inject [word] \x00SET!
+                            let sz = word.len() as u8;
+                            if word.len() > 120 {
+                                vec.push(121);
+                            }
+                            vec.push(sz);
+                            vec.extend_from_slice(word);
+                            vec.extend_from_slice(SET_IMM);
+                            Ok((env, Some(vec)))
                         },
                         _ => Err((env, Error::UnknownWord))
                     }
                 }
+            }
+        } else if word == SET_IMM {
+            let a = env.pop();
+            let b = env.pop();
+            if a.is_none() || b.is_none() {
+                return Err((env, Error::EmptyStack));
+            }
+            let var = a.unwrap();
+            let val = b.unwrap();
+            let (closure, _) = data!(var);
+            match binparser::word(closure) {
+                nom::IResult::Done(_, _) => {
+                    let word = &closure[0..closure.len()];
+                    env.dictionary.insert(word, val);
+                    Ok((env, None))
+                },
+                _ => Err((env, Error::UnknownWord))
             }
         } else if env.dictionary.contains_key(word) {
             let mut vec = Vec::new();
@@ -1122,6 +1156,10 @@ mod tests {
             assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
             assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
             assert_eq!(env.pop(), None);
+        });
+
+        eval!("1 [current_depth = DEPTH] SET 1 2 3 current_depth", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
         });
 
         eval!("[mydup DUP DUP] SET 1 mydup mydup", env, result, {
