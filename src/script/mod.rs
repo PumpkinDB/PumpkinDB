@@ -1004,6 +1004,17 @@ mod tests {
         assert!(env.stack.len() >= target);
     }
 
+    #[test]
+    fn env_heap_growth() {
+        let mut env = Env::new();
+        let target = env.heap_size * 100;
+        let sz = env.heap_size;
+        for i in 1..target {
+            env.alloc(sz);
+        }
+        assert!(env.heap_size >= target);
+    }
+
     macro_rules! eval {
         ($script: expr, $env: ident, $expr: expr) => {
            eval!($script, $env, _result, $expr);
