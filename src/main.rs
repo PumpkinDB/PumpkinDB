@@ -19,6 +19,10 @@ extern crate test;
 #[macro_use]
 extern crate nom;
 
+extern crate core;
+
+extern crate num_bigint;
+extern crate num_traits;
 extern crate snowflake;
 extern crate lmdb_zero as lmdb;
 #[cfg(test)]

@@ -5,7 +5,11 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use nom::{IResult, ErrorKind};
-use nom::{is_hex_digit, is_space};
+use nom::{is_hex_digit, is_space, digit};
+
+use num_bigint::BigUint;
+use core::str::FromStr;
+use std::str;
 
 use script::{Program, ParseError};
 
@@ -98,6 +102,11 @@ fn flatten_program(p: Vec<Vec<u8>>) -> Vec<u8> {
     vec
 }
 
+named!(uint<Vec<u8>>, do_parse!(
+                     biguint: map_res!(
+                                map_res!(digit, str::from_utf8),
+                                BigUint::from_str)        >>
+                              (sized_vec(biguint.to_bytes_le()))));
 named!(word<Vec<u8>>, do_parse!(
                         word: take_while1!(is_word_char)  >>
                               (prefix_word(word))));
@@ -112,7 +121,7 @@ named!(string<Vec<u8>>, do_parse!(
 named!(code<Vec<u8>>, do_parse!(
                          prog: delimited!(char!('['), ws!(program), char!(']')) >>
                                (sized_vec(prog))));
-named!(item<Vec<u8>>, alt!(binary | string | code | word));
+named!(item<Vec<u8>>, alt!(binary | string | uint | code | word));
 named!(program<Vec<u8>>, do_parse!(
                                take_while!(is_space)                            >>
                          item: separated_list!(take_while!(is_space), item)     >>
@@ -122,9 +131,13 @@ named!(program<Vec<u8>>, do_parse!(
 /// Parses human-readable PumpkinScript
 ///
 /// The format is simple, it is a sequence of space-separated tokens,
-/// which binaries represented `0x<hexadecimal>` or `"STRING"`
-/// (no quoted characters support yet)
-/// and the rest of the instructions considered to be words.
+/// with binaries represented as:
+///
+/// * `0x<hexadecimal>` (hexadecimal form)
+/// * `"STRING"` (string form, no quoted characters support yet)
+/// * `integer` (integer form, will convert to a little endian big integer)
+///
+/// The rest of the instructions considered to be words.
 ///
 /// One additional piece of syntax is code included within square
 /// brackets: `[DUP]`. This means that the parser will take the code inside,
@@ -151,6 +164,8 @@ pub fn parse(script: &str) -> Result<Program, ParseError> {
 #[cfg(test)]
 mod tests {
     use script::textparser::parse;
+    use num_bigint::BigUint;
+    use core::str::FromStr;
 
     #[test]
     fn test_one() {
@@ -158,6 +173,16 @@ mod tests {
         assert_eq!(script, vec![2, 0xaa,0xbb]);
         let script = parse("HELLO").unwrap();
         assert_eq!(script, vec![0x85, b'H', b'E', b'L', b'L', b'O']);
+    }
+
+    #[test]
+    fn test_uint() {
+        let script = parse("1234567890").unwrap();
+        let mut bytes = BigUint::from_str("1234567890").unwrap().to_bytes_le();
+        let mut sized = Vec::new();
+        sized.push(4);
+        sized.append(&mut bytes);
+        assert_eq!(script, sized);
     }
 
     #[test]
