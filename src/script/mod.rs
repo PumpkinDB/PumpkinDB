@@ -292,7 +292,7 @@ impl<'a> Env<'a> {
     /// Allocates a slice off the Env-specific heap. Will be collected
     /// once this Env is dropped.
     pub fn alloc(&mut self, len: usize) -> &'a mut [u8] {
-        if self.heap_ptr + len > self.heap_size {
+        if self.heap_ptr + len >= self.heap_size {
             let increase = cmp::max(len, HEAP_SIZE);
             unsafe {
                 self.heap = heap::reallocate(self.heap,
@@ -997,12 +997,11 @@ mod tests {
     #[test]
     fn env_heap_growth() {
         let mut env = Env::new();
-        let target = env.heap_size * 100;
         let sz = env.heap_size;
-        for i in 1..target {
+        for i in 1..100 {
             env.alloc(sz);
         }
-        assert!(env.heap_size >= target);
+        assert!(env.heap_size >= sz * 100);
     }
 
     macro_rules! eval {
