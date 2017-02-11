@@ -992,6 +992,18 @@ mod tests {
     use lmdb;
     use crossbeam;
 
+    const _EMPTY: &'static [u8] = b"";
+
+    #[test]
+    fn env_stack_growth() {
+        let mut env = Env::new();
+        let target = env.stack.len() * 100;
+        for i in 1..target {
+            env.push(_EMPTY);
+        }
+        assert!(env.stack.len() >= target);
+    }
+
     macro_rules! eval {
         ($script: expr, $env: ident, $expr: expr) => {
            eval!($script, $env, _result, $expr);
