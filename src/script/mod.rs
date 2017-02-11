@@ -65,6 +65,8 @@ use alloc::heap;
 use num_bigint::BigUint;
 use std::cmp;
 
+use core::ops::Deref;
+
 /// `word!` macro is used to define a built-in word, its signature (if applicable)
 /// and representation
 macro_rules! word {
@@ -330,74 +332,7 @@ pub fn offset_by_size(size: usize) -> usize {
     }
 }
 
-macro_rules! write_size_into_slice {
-    ($size:expr, $slice: expr) => {
-     match $size {
-        0...120 => {
-            $slice[0] = $size as u8;
-            1
-        }
-        121...255 => {
-            $slice[0] = 121u8;
-            $slice[1] = $size as u8;
-            2
-        }
-        256...65535 => {
-            $slice[0] = 122u8;
-            $slice[1] = ($size >> 8) as u8;
-            $slice[2] = $size as u8;
-            3
-        }
-        65536...4294967296 => {
-            $slice[0] = 123u8;
-            $slice[1] = ($size >> 24) as u8;
-            $slice[2] = ($size >> 16) as u8;
-            $slice[3] = ($size >> 8) as u8;
-            $slice[4] = $size as u8;
-            5
-        }
-        _ => unreachable!(),
-    }
-    };
-}
-
-macro_rules! data {
-    ($ptr:expr) => {
-        {
-          let (_, size) = binparser::data_size($ptr).unwrap();
-          (&$ptr[offset_by_size(size)..$ptr.len()], size)
-        }
-    };
-}
-
-macro_rules! handle_words {
-    ($me: expr, $env: expr, $program: expr, $word: expr, $res: ident,
-     $pid: ident, [ $($name: ident),* ], $block: expr) => {
-    {
-      let mut env = $env;
-      $(
-       env =
-        match $me.$name(env, $word, $pid) {
-          Err((env, Error::Reschedule)) => return Ok((env, Some($program.clone()))),
-          Err((env, Error::UnknownWord)) => env,
-          Err((env, err)) => return Err((env, err)),
-          Ok($res) => $block
-        };
-      )*
-      return Err((env, Error::UnknownWord))
-    }
-    };
-}
-
-macro_rules! validate_lockout {
-    ($env: expr, $name: expr, $pid: expr) => {
-        if let Some((pid_, _)) = $name {
-            if pid_ != $pid {
-                return Err(($env, Error::Reschedule))
-            }
-        }
-    };
-}
+include!("macros.rs");
 
 use std::sync::mpsc;
 use snowflake::ProcessUniqueId;
@@ -887,38 +822,20 @@ impl<'a> VM<'a> {
                 return Err((env, Error::EmptyStack));
             }
             let key1 = key.unwrap();
-            if let Some((_, ref txn)) = self.db_write_txn {
-                let access = txn.access();
+            let txn = read_or_write_transaction!(self, env);
+            let access = txn.access();
 
-                match access.get::<[u8], [u8]>(self.db, key1).to_opt() {
-                    Ok(Some(val)) => {
-                        let slice = env.alloc(val.len());
-                        for i in 0..val.len() {
-                            slice[i] = val[i];
-                        }
-                        env.push(slice);
-                        Ok((env, None))
+            return match access.get::<[u8], [u8]>(self.db, key1).to_opt() {
+                Ok(Some(val)) => {
+                    let slice = env.alloc(val.len());
+                    for i in 0..val.len() {
+                        slice[i] = val[i];
                     }
-                    Ok(None) => Err((env, Error::UnknownKey)),
-                    Err(err) => Err((env, Error::DatabaseError(err))),
+                    env.push(slice);
+                    Ok((env, None))
                 }
-            } else if let Some((_, ref txn)) = self.db_read_txn {
-                let access = txn.access();
-
-                match access.get::<[u8], [u8]>(self.db, key1).to_opt() {
-                    Ok(Some(val)) => {
-                        let slice = env.alloc(val.len());
-                        for i in 0..val.len() {
-                            slice[i] = val[i];
-                        }
-                        env.push(slice);
-                        Ok((env, None))
-                    }
-                    Ok(None) => Err((env, Error::UnknownKey)),
-                    Err(err) => Err((env, Error::DatabaseError(err))),
-                }
-            } else {
-                Err((env, Error::NoTransaction))
+                Ok(None) => Err((env, Error::UnknownKey)),
+                Err(err) => Err((env, Error::DatabaseError(err))),
             }
         } else {
             Err((env, Error::UnknownWord))
@@ -934,36 +851,19 @@ impl<'a> VM<'a> {
                 return Err((env, Error::EmptyStack));
             }
             let key1 = key.unwrap();
-            if let Some((_, ref txn)) = self.db_write_txn {
-                let access = txn.access();
+            let txn = read_or_write_transaction!(self, env);
+            let access = txn.access();
 
-                match access.get::<[u8], [u8]>(self.db, key1).to_opt() {
-                    Ok(Some(_)) => {
-                        env.push(TRUE);
-                        Ok((env, None))
-                    }
-                    Ok(None) => {
-                        env.push(FALSE);
-                        Ok((env, None))
-                    }
-                    Err(err) => Err((env, Error::DatabaseError(err))),
+            match access.get::<[u8], [u8]>(self.db, key1).to_opt() {
+                Ok(Some(_)) => {
+                    env.push(TRUE);
+                    Ok((env, None))
                 }
-            } else if let Some((_, ref txn)) = self.db_read_txn {
-                let access = txn.access();
-
-                match access.get::<[u8], [u8]>(self.db, key1).to_opt() {
-                    Ok(Some(_)) => {
-                        env.push(TRUE);
-                        Ok((env, None))
-                    }
-                    Ok(None) => {
-                        env.push(FALSE);
-                        Ok((env, None))
-                    }
-                    Err(err) => Err((env, Error::DatabaseError(err))),
+                Ok(None) => {
+                    env.push(FALSE);
+                    Ok((env, None))
                 }
-            } else {
-                Err((env, Error::NoTransaction))
+                Err(err) => Err((env, Error::DatabaseError(err))),
             }
         } else {
             Err((env, Error::UnknownWord))
@@ -1216,13 +1116,27 @@ mod tests {
     }
 
     #[test]
+    fn retr() {
+        eval!("[\"Hello\" DUP DUP \"world\" ASSOC RETR COMMIT] WRITE SWAP [RETR] READ",
+              env,
+              result,
+              {
+                  assert!(!result.is_err());
+                  assert_eq!(Vec::from(env.pop().unwrap()), parse("\"world\"").unwrap());
+                  assert_eq!(Vec::from(env.pop().unwrap()), parse("\"world\"").unwrap());
+                  assert_eq!(env.pop(), None);
+              });
+    }
+
+    #[test]
     fn assocq() {
-        eval!("[\"Hello\" \"world\" ASSOC COMMIT] WRITE [\"Hello\" ASSOC? \"Bye\" ASSOC?] READ",
+        eval!("[\"Hello\" DUP \"world\" ASSOC ASSOC? COMMIT] WRITE [\"Hello\" ASSOC? \"Bye\" ASSOC?] READ",
               env,
               result,
               {
                   assert!(!result.is_err());
                   assert_eq!(Vec::from(env.pop().unwrap()), parse("0x00").unwrap());
+                  assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
                   assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
               });
     }
