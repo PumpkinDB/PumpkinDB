@@ -14,7 +14,7 @@ formats can it support, etc.
 PumpkinScript has no types, all values on the stack are byte arrays. However,
 there are some conventions:
 
-* Big integers represented as (unlimited length) little-endian byte arrays
+* Big integers represented as (unlimited length) big-endian byte arrays
 * Strings are represented as UTF-8 encoded byte arrays
 
 ## Text form
@@ -28,7 +28,7 @@ with binaries represented as:
 
 * `0x<hexadecimal>` (hexadecimal form)
 * `"STRING"` (string form, no quoted characters support yet)
-* `integer` (integer form, will convert to a little endian big integer)
+* `integer` (integer form, will convert to a big endian big integer)
 
 The rest of the instructions considered to be words.
 
