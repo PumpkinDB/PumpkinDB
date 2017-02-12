@@ -1,6 +1,6 @@
 # GT?
 
-Compares two topmost items.
+Compares two topmost items lexicographically.
 
 Input stack: `a b`
 
