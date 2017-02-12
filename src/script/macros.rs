@@ -35,15 +35,6 @@ macro_rules! write_size_into_slice {
     };
 }
 
-macro_rules! data {
-    ($ptr:expr) => {
-        {
-          let (_, size) = binparser::data_size($ptr).unwrap();
-          (&$ptr[offset_by_size(size)..$ptr.len()], size)
-        }
-    };
-}
-
 macro_rules! handle_words {
     ($me: expr, $env: expr, $program: expr, $word: expr, $res: ident,
      $pid: ident, [ $($name: ident),* ], $block: expr) => {
