@@ -1,10 +1,10 @@
 # EQUAL?
 
-Compares to topmost items.
+Compares two topmost items for equality.
 
-Input stack:
+Input stack: `a b`
 
-Output stack: `a`
+Output stack: `c`
 
 `EQUAL?` will push `1` if they are equal, `0` otherwise.
 
@@ -19,12 +19,12 @@ EmptyStack error if there are less than two items on the stack
 ## Examples
 
 ```
-"Hello, " "world!" EQUAL => 0
+"Hello, " "world!" EQUAL? => 0
 ```
 
 ## Tests
 
 ```
-"Hello, " "world!" EQUAL => 0
-"Hello, " "Hello, " EQUAL => 1
+"Hello, " "world!" EQUAL? => 0
+"Hello, " "Hello, " EQUAL? => 1
 ```
