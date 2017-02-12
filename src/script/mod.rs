@@ -104,6 +104,8 @@ word!(DEPTH, b"\x85DEPTH");
 
 // Category: Byte arrays
 word!(EQUALP, (a, b => c), b"\x86EQUAL?");
+word!(LTP, (a, b => c), b"\x83LT?");
+word!(GTP, (a, b => c), b"\x83GT?");
 word!(CONCAT, (a, b => c), b"\x86CONCAT");
 
 // Category: Control flow
@@ -512,6 +514,8 @@ impl<'a> VM<'a> {
                            handle_rot,
                            handle_over,
                            handle_depth,
+                           handle_ltp,
+                           handle_gtp,
                            handle_equal,
                            handle_concat,
                            handle_eval,
@@ -663,6 +667,56 @@ impl<'a> VM<'a> {
             let b1 = b.unwrap();
 
             if a1 == b1 {
+                env.push(TRUE);
+            } else {
+                env.push(FALSE);
+            }
+
+            Ok((env, None))
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    fn handle_ltp(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == LTP {
+            let a = env.pop();
+            let b = env.pop();
+
+            if a.is_none() || b.is_none() {
+                return Err((env, Error::EmptyStack));
+            }
+
+            let a1 = a.unwrap();
+            let b1 = b.unwrap();
+
+            if b1 < a1 {
+                env.push(TRUE);
+            } else {
+                env.push(FALSE);
+            }
+
+            Ok((env, None))
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    fn handle_gtp(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == GTP {
+            let a = env.pop();
+            let b = env.pop();
+
+            if a.is_none() || b.is_none() {
+                return Err((env, Error::EmptyStack));
+            }
+
+            let a1 = a.unwrap();
+            let b1 = b.unwrap();
+
+            if b1 > a1 {
                 env.push(TRUE);
             } else {
                 env.push(FALSE);
@@ -1083,6 +1137,24 @@ mod tests {
             assert_eq!(Vec::from(env.pop().unwrap()), parse("0x00").unwrap());
             assert_eq!(env.pop(), None);
         });
+    }
+
+    #[test]
+    fn ltgt() {
+        eval!("5000 7500 LT? 5000 5000 LT? 18000 300 LT?", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x00").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x00").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("3 99999 GT? 444 444 GT? 99434 234 GT?", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x00").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x00").unwrap());
+            assert_eq!(env.pop(), None);
+        });
+
     }
 
     #[test]
