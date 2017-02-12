@@ -111,10 +111,8 @@ impl<'a> Service for PlainServer<'a> {
 
                 for v in stack {
                     let _ = write!(&mut s, "0x");
-                    let (_, size) = script::binparser::data_size(v).unwrap();
-                    let offset = script::offset_by_size(size);
-                    for i in offset..offset + size - 1 {
-                        let _ = write!(&mut s, "{:X}", v[i]).unwrap();
+                    for b in v {
+                        let _ = write!(&mut s, "{:X}", b).unwrap();
                     }
                     let _ = write!(&mut s, " ");
                 }

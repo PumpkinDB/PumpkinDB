@@ -386,7 +386,7 @@ use lmdb;
 /// let handle = thread::spawn(move || {
 ///     vm.run();
 /// });
-/// let script = parse($script).unwrap();
+/// let script = parse("..script..");
 /// let (callback, receiver) = mpsc::channel::<ResponseMessage>();
 /// let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(), script.clone(), callback));
 /// match receiver.recv() {
@@ -419,8 +419,8 @@ unsafe impl<'a> Send for VM<'a> {}
 
 type PassResult<'a> = Result<(Env<'a>, Option<Vec<u8>>), (Env<'a>, Error)>;
 
-const TRUE: &'static [u8] = b"\x01\x01";
-const FALSE: &'static [u8] = b"\x01\x00";
+const STACK_TRUE: &'static [u8] = b"\x01";
+const STACK_FALSE: &'static [u8] = b"\x00";
 
 use lmdb::traits::LmdbResultExt;
 
@@ -495,7 +495,7 @@ impl<'a> VM<'a> {
             slice[i] = program[i];
         }
         if let nom::IResult::Done(_, data) = binparser::data(slice) {
-            env.push(data);
+            env.push(&data[offset_by_size(data.len())..]);
             let rest = program.split_off(data.len());
             return Ok(match rest.len() {
                 0 => (env, None),
@@ -638,13 +638,9 @@ impl<'a> VM<'a> {
     fn handle_depth(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == DEPTH {
             let bytes = BigUint::from(env.stack_size).to_bytes_be();
-            let offset = offset_by_size(bytes.len());
-            let slice = env.alloc(bytes.len() + offset);
-            write_size_into_slice!(bytes.len(), slice);
-            let mut i = offset;
-            for byte in bytes {
-                slice[i] = byte;
-                i += 1;
+            let slice = env.alloc(bytes.len());
+            for i in 0..bytes.len() {
+                slice[i] = bytes[i];
             }
             env.push(slice);
             Ok((env, None))
@@ -667,9 +663,9 @@ impl<'a> VM<'a> {
             let b1 = b.unwrap();
 
             if a1 == b1 {
-                env.push(TRUE);
+                env.push(STACK_TRUE);
             } else {
-                env.push(FALSE);
+                env.push(STACK_FALSE);
             }
 
             Ok((env, None))
@@ -692,9 +688,9 @@ impl<'a> VM<'a> {
             let b1 = b.unwrap();
 
             if b1 < a1 {
-                env.push(TRUE);
+                env.push(STACK_TRUE);
             } else {
-                env.push(FALSE);
+                env.push(STACK_FALSE);
             }
 
             Ok((env, None))
@@ -717,9 +713,9 @@ impl<'a> VM<'a> {
             let b1 = b.unwrap();
 
             if b1 > a1 {
-                env.push(TRUE);
+                env.push(STACK_TRUE);
             } else {
-                env.push(FALSE);
+                env.push(STACK_FALSE);
             }
 
             Ok((env, None))
@@ -741,20 +737,16 @@ impl<'a> VM<'a> {
             let a1 = a.unwrap();
             let b1 = b.unwrap();
 
-            let (a1_, size_a) = data!(a1);
-            let (b1_, size_b) = data!(b1);
+            let mut slice = env.alloc(a1.len() + b1.len());
 
-            let size = a1_.len() + b1_.len();
+            let mut offset = 0;
 
-            let mut slice = env.alloc(size + offset_by_size(size_a + size_b));
-            let mut offset = write_size_into_slice!(size, slice);
-
-            for byte in b1_ {
+            for byte in b1 {
                 slice[offset] = *byte;
                 offset += 1
             }
 
-            for byte in a1_ {
+            for byte in a1 {
                 slice[offset] = *byte;
                 offset += 1
             }
@@ -773,8 +765,7 @@ impl<'a> VM<'a> {
             match env.pop() {
                 None => return Err((env, Error::EmptyStack)),
                 Some(v) => {
-                    let (code, _) = data!(v);
-                    Ok((env, Some(Vec::from(code))))
+                    Ok((env, Some(Vec::from(v))))
                 }
             }
         } else {
@@ -790,8 +781,7 @@ impl<'a> VM<'a> {
                     None => return Err((env, Error::EmptyStack)),
                     Some(v) => {
                         validate_lockout!(env, self.db_write_txn, pid);
-                        let (code, _) = data!(v);
-                        let mut vec = Vec::from(code);
+                        let mut vec = Vec::from(v);
                         vec.extend_from_slice(WRITE_END); // transaction end marker
                         // prepare transaction
                         match lmdb::WriteTransaction::new(self.db_env) {
@@ -822,8 +812,7 @@ impl<'a> VM<'a> {
                     Some(v) => {
                         validate_lockout!(env, self.db_read_txn, pid);
                         validate_lockout!(env, self.db_write_txn, pid);
-                        let (code, _) = data!(v);
-                        let mut vec = Vec::from(code);
+                        let mut vec = Vec::from(v);
                         vec.extend_from_slice(READ_END); // transaction end marker
                         // prepare transaction
                         match lmdb::ReadTransaction::new(self.db_env) {
@@ -936,11 +925,11 @@ impl<'a> VM<'a> {
 
             match access.get::<[u8], [u8]>(self.db, key1).to_opt() {
                 Ok(Some(_)) => {
-                    env.push(TRUE);
+                    env.push(STACK_TRUE);
                     Ok((env, None))
                 }
                 Ok(None) => {
-                    env.push(FALSE);
+                    env.push(STACK_FALSE);
                     Ok((env, None))
                 }
                 Err(err) => Err((env, Error::DatabaseError(err))),
@@ -956,14 +945,31 @@ impl<'a> VM<'a> {
 #[allow(unused_variables, unused_must_use, unused_mut)]
 mod tests {
 
-    use script::{Env, VM, Error, RequestMessage, ResponseMessage, EnvId, parse};
+    use script::{Env, VM, Error, RequestMessage, ResponseMessage, EnvId, parse, offset_by_size};
     use std::sync::mpsc;
     use std::fs;
     use tempdir::TempDir;
     use lmdb;
     use crossbeam;
+    use super::binparser;
 
     const _EMPTY: &'static [u8] = b"";
+
+    macro_rules! data {
+    ($ptr:expr) => {
+        {
+          let (_, size) = binparser::data_size($ptr).unwrap();
+          &$ptr[offset_by_size(size)..$ptr.len()]
+        }
+    };
+    }
+
+    macro_rules! parsed_data {
+        ($s: expr) => {
+           data!(parse($s).unwrap().as_slice())
+        };
+    }
+
 
     #[test]
     fn env_stack_growth() {
@@ -1053,8 +1059,8 @@ mod tests {
     #[test]
     fn dup() {
         eval!("0x010203 DUP", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x010203").unwrap());
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x010203").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x010203"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x010203"));
             assert_eq!(env.pop(), None);
         });
 
@@ -1066,8 +1072,8 @@ mod tests {
     #[test]
     fn swap() {
         eval!("0x010203 0x030201 SWAP", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x010203").unwrap());
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x030201").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x010203"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x030201"));
             assert_eq!(env.pop(), None);
         });
 
@@ -1085,9 +1091,9 @@ mod tests {
     #[test]
     fn rot() {
         eval!("0x010203 0x030201 0x00 ROT", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x010203").unwrap());
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x00").unwrap());
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x030201").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x010203"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x030201"));
             assert_eq!(env.pop(), None);
         });
 
@@ -1108,9 +1114,9 @@ mod tests {
     #[test]
     fn over() {
         eval!("0x010203 0x00 OVER", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x010203").unwrap());
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x00").unwrap());
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x010203").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x010203"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x010203"));
         });
 
         eval!("0x00 OVER", env, result, {
@@ -1126,32 +1132,32 @@ mod tests {
     #[test]
     fn depth() {
         eval!("0x010203 0x00 \"Hello\" DEPTH", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("3").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("3"));
         });
     }
 
     #[test]
     fn equal() {
         eval!("0x10 0x20 EQUAL? 0x10 0x10 EQUAL?", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x00").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
             assert_eq!(env.pop(), None);
         });
     }
 
     #[test]
     fn ltgt() {
-        eval!("5000 7500 LT? 5000 5000 LT? 18000 300 LT?", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x00").unwrap());
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x00").unwrap());
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
+        eval!("\"a\" \"b\" LT? \"a\" \"a\" LT? \"b\" \"a\" LT?", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
             assert_eq!(env.pop(), None);
         });
 
-        eval!("3 99999 GT? 444 444 GT? 99434 234 GT?", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x00").unwrap());
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x00").unwrap());
+        eval!("\"a\" \"b\" GT? \"a\" \"a\" GT? \"b\" \"a\" GT?", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
             assert_eq!(env.pop(), None);
         });
 
@@ -1160,7 +1166,7 @@ mod tests {
     #[test]
     fn concat() {
         eval!("0x10 0x20 CONCAT", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x1020").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x1020"));
             assert_eq!(env.pop(), None);
         });
 
@@ -1176,8 +1182,8 @@ mod tests {
     #[test]
     fn eval() {
         eval!("[0x01 DUP [DUP] EVAL] EVAL DROP", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
             assert_eq!(env.pop(), None);
         });
 
@@ -1201,7 +1207,7 @@ mod tests {
               result,
               {
                   assert!(!result.is_err());
-                  assert_eq!(Vec::from(env.pop().unwrap()), parse("\"world\"").unwrap());
+                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("\"world\""));
               });
 
         // overwrite
@@ -1229,8 +1235,8 @@ mod tests {
               result,
               {
                   assert!(!result.is_err());
-                  assert_eq!(Vec::from(env.pop().unwrap()), parse("\"world\"").unwrap());
-                  assert_eq!(Vec::from(env.pop().unwrap()), parse("\"world\"").unwrap());
+                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("\"world\""));
+                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("\"world\""));
                   assert_eq!(env.pop(), None);
               });
     }
@@ -1242,9 +1248,9 @@ mod tests {
               result,
               {
                   assert!(!result.is_err());
-                  assert_eq!(Vec::from(env.pop().unwrap()), parse("0x00").unwrap());
-                  assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
-                  assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
+                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
+                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
               });
     }
 
