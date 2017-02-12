@@ -633,7 +633,7 @@ impl<'a> VM<'a> {
     #[inline]
     fn handle_depth(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == DEPTH {
-            let bytes = BigUint::from(env.stack_size).to_bytes_le();
+            let bytes = BigUint::from(env.stack_size).to_bytes_be();
             let offset = offset_by_size(bytes.len());
             let slice = env.alloc(bytes.len() + offset);
             write_size_into_slice!(bytes.len(), slice);

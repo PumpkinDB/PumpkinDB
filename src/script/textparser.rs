@@ -106,7 +106,7 @@ named!(uint<Vec<u8>>, do_parse!(
                      biguint: map_res!(
                                 map_res!(digit, str::from_utf8),
                                 BigUint::from_str)        >>
-                              (sized_vec(biguint.to_bytes_le()))));
+                              (sized_vec(biguint.to_bytes_be()))));
 named!(word<Vec<u8>>, do_parse!(
                         word: take_while1!(is_word_char)  >>
                               (prefix_word(word))));
@@ -135,7 +135,7 @@ named!(program<Vec<u8>>, do_parse!(
 ///
 /// * `0x<hexadecimal>` (hexadecimal form)
 /// * `"STRING"` (string form, no quoted characters support yet)
-/// * `integer` (integer form, will convert to a little endian big integer)
+/// * `integer` (integer form, will convert to a big endian big integer)
 ///
 /// The rest of the instructions considered to be words.
 ///
@@ -178,7 +178,7 @@ mod tests {
     #[test]
     fn test_uint() {
         let script = parse("1234567890").unwrap();
-        let mut bytes = BigUint::from_str("1234567890").unwrap().to_bytes_le();
+        let mut bytes = BigUint::from_str("1234567890").unwrap().to_bytes_be();
         let mut sized = Vec::new();
         sized.push(4);
         sized.append(&mut bytes);
