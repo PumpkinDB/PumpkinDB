@@ -103,7 +103,7 @@ word!(OVER, (a, b => a, b, a), b"\x84OVER");
 word!(DEPTH, b"\x85DEPTH");
 
 // Category: Byte arrays
-
+word!(EQUALP, (a, b => c), b"\x86EQUAL?");
 word!(CONCAT, (a, b => c), b"\x86CONCAT");
 
 // Category: Control flow
@@ -512,6 +512,7 @@ impl<'a> VM<'a> {
                            handle_rot,
                            handle_over,
                            handle_depth,
+                           handle_equal,
                            handle_concat,
                            handle_eval,
                            // storage
@@ -642,6 +643,31 @@ impl<'a> VM<'a> {
                 i += 1;
             }
             env.push(slice);
+            Ok((env, None))
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    fn handle_equal(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == EQUALP {
+            let a = env.pop();
+            let b = env.pop();
+
+            if a.is_none() || b.is_none() {
+                return Err((env, Error::EmptyStack));
+            }
+
+            let a1 = a.unwrap();
+            let b1 = b.unwrap();
+
+            if a1 == b1 {
+                env.push(TRUE);
+            } else {
+                env.push(FALSE);
+            }
+
             Ok((env, None))
         } else {
             Err((env, Error::UnknownWord))
@@ -1047,6 +1073,15 @@ mod tests {
     fn depth() {
         eval!("0x010203 0x00 \"Hello\" DEPTH", env, {
             assert_eq!(Vec::from(env.pop().unwrap()), parse("3").unwrap());
+        });
+    }
+
+    #[test]
+    fn equal() {
+        eval!("0x10 0x20 EQUAL? 0x10 0x10 EQUAL?", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x00").unwrap());
+            assert_eq!(env.pop(), None);
         });
     }
 
