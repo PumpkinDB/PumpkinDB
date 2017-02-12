@@ -6,7 +6,7 @@ Input stack: `a b`
 
 Output stack: `a`
 
-`LT?` will push `1` if `a` is strictly greater than `b`, `0` otherwise.
+`GT?` will push `1` if `a` is strictly greater than `b`, `0` otherwise.
 
 ## Allocation
 
