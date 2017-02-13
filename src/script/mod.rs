@@ -172,6 +172,9 @@ pub enum Error {
     /// An internal scheduler's error to indicate that currently
     /// executed environment should be rescheduled from the same point
     Reschedule,
+    // Unable to (re)allocate the heap so the returning slice points to
+    // unallocated memory.
+    HeapAllocFailed,
 }
 /// Parse-related error
 #[derive(Debug, PartialEq)]
@@ -183,7 +186,12 @@ pub enum ParseError {
     /// Unknown error
     UnknownErr,
 }
-
+/// Allocation-related outcomes
+/// #[derive(Debug, PartialEq)]
+enum AllocResult {
+    Ok,
+    Error
+}
 pub mod binparser;
 pub use self::binparser::parse as parse_bin;
 
@@ -226,12 +234,12 @@ use std::mem;
 
 impl<'a> Env<'a> {
     /// Creates an environment with [an empty stack of default size](constant.STACK_SIZE.html)
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, Error> {
         Env::new_with_stack_size(STACK_SIZE)
     }
 
     /// Creates an environment with an empty stack of specific size
-    pub fn new_with_stack_size(size: usize) -> Self {
+    pub fn new_with_stack_size(size: usize) -> Result<Self, Error> {
         Env::new_with_stack(vec![_EMPTY; size], 0)
     }
 
@@ -240,16 +248,20 @@ impl<'a> Env<'a> {
     ///
     /// This function is useful for working with result stacks received from
     /// [VM](struct.VM.html)
-    pub fn new_with_stack(stack: Vec<&'a [u8]>, stack_size: usize) -> Self {
-        Env {
-            stack: stack,
-            stack_size: stack_size,
-            heap: unsafe { heap::allocate(HEAP_SIZE, mem::align_of::<u8>()) },
-            heap_size: HEAP_SIZE,
-            heap_align: mem::align_of::<u8>(),
-            heap_ptr: 0,
-            dictionary: BTreeMap::new()
-        }
+    pub fn new_with_stack(stack: Vec<&'a [u8]>, stack_size: usize) -> Result<Self, Error> {
+        unsafe {
+            heap::allocate(HEAP_SIZE, mem::align_of::<u8>()).as_mut()
+        }.and_then(|heap| {
+                Some(Env {
+                    stack: stack,
+                    stack_size: stack_size,
+                    heap: heap,
+                    heap_size: HEAP_SIZE,
+                    heap_align: mem::align_of::<u8>(),
+                    heap_ptr: 0,
+                    dictionary: BTreeMap::new()
+                })
+        }).ok_or(Error::HeapAllocFailed)
     }
 
     /// Returns the entire stack
@@ -295,21 +307,26 @@ impl<'a> Env<'a> {
 
     /// Allocates a slice off the Env-specific heap. Will be collected
     /// once this Env is dropped.
-    pub fn alloc(&mut self, len: usize) -> &'a mut [u8] {
+    pub fn alloc(&mut self, len: usize) -> Result<&'a mut [u8], Error> {
         if self.heap_ptr + len >= self.heap_size {
             let increase = cmp::max(len, HEAP_SIZE);
             unsafe {
-                self.heap = heap::reallocate(self.heap,
+                heap::reallocate(self.heap,
                                  self.heap_size,
                                  self.heap_size + increase,
-                                 self.heap_align);
-            }
-            self.heap_size += increase;
-        }
-        let mut space = unsafe { slice::from_raw_parts_mut(self.heap, self.heap_size) };
-        let slice = &mut space[self.heap_ptr..self.heap_ptr + len];
-        self.heap_ptr += len;
-        slice
+                                 self.heap_align).as_mut()
+            }.and_then(|heap| {
+                self.heap = heap;
+                Some(AllocResult::Ok)
+            }).ok_or(AllocResult::Error)
+        } else {
+            Ok(AllocResult::Ok)
+        }.and_then(|_| {
+            let mut space = unsafe { slice::from_raw_parts_mut(self.heap, self.heap_size) };
+            let slice = &mut space[self.heap_ptr..self.heap_ptr + len];
+            self.heap_ptr += len;
+            Ok(slice)
+        }).or(Err(Error::HeapAllocFailed))
     }
 }
 
@@ -367,7 +384,7 @@ pub enum ResponseMessage<'a> {
     EnvTerminated(EnvId, Vec<&'a [u8]>, usize),
     /// Notifies of abnormal environment termination with
     /// an id, error, stack and top of the stack pointer.
-    EnvFailed(EnvId, Error, Vec<&'a [u8]>, usize),
+    EnvFailed(EnvId, Error, Option<Vec<&'a [u8]>>, Option<usize>),
 }
 
 pub type TrySendError<T> = std::sync::mpsc::TrySendError<T>;
@@ -459,17 +476,26 @@ impl<'a> VM<'a> {
                 Err(err) => panic!("error receiving: {:?}", err),
                 Ok(RequestMessage::Shutdown) => break,
                 Ok(RequestMessage::ScheduleEnv(pid, program, chan)) => {
-                    let env = Env::new();
-                    let _ = self.loopback
-                        .send(RequestMessage::RescheduleEnv(pid, program, env, chan));
+                    match Env::new() {
+                        Ok(env) => {
+                            let _ = self.loopback
+                                .send(RequestMessage::RescheduleEnv(pid, program, env, chan));
+                        }
+                        Err(err) => {
+                            let _ = chan.send(ResponseMessage::EnvFailed(pid,
+                                                                         err,
+                                                                         None,
+                                                                         None));
+                        }
+                    }
                 }
                 Ok(RequestMessage::RescheduleEnv(pid, mut program, env, chan)) => {
                     match self.pass(env, &mut program, pid.clone()) {
                         Err((env, err)) => {
                             let _ = chan.send(ResponseMessage::EnvFailed(pid,
                                                                          err,
-                                                                         Vec::from(env.stack()),
-                                                                         env.stack_size));
+                                                                         Some(Vec::from(env.stack())),
+                                                                         Some(env.stack_size)));
                         }
                         Ok((env, Some(program))) => {
                             let _ = self.loopback
@@ -487,7 +513,11 @@ impl<'a> VM<'a> {
     }
 
     fn pass(&mut self, mut env: Env<'a>, program: &mut Vec<u8>, pid: EnvId) -> PassResult<'a> {
-        let mut slice = env.alloc(program.len());
+        let slice0 = env.alloc(program.len());
+        if slice0.is_err() {
+            return Err((env, slice0.unwrap_err()));
+        }
+        let mut slice = slice0.unwrap();
         for i in 0..program.len() {
             slice[i] = program[i];
         }
@@ -643,7 +673,11 @@ impl<'a> VM<'a> {
     fn handle_depth(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == DEPTH {
             let bytes = BigUint::from(env.stack_size).to_bytes_be();
-            let slice = env.alloc(bytes.len());
+            let slice0 = env.alloc(bytes.len());
+            if slice0.is_err() {
+                return Err((env, slice0.unwrap_err()));
+            }
+            let mut slice = slice0.unwrap();
             for i in 0..bytes.len() {
                 slice[i] = bytes[i];
             }
@@ -742,8 +776,11 @@ impl<'a> VM<'a> {
             let a1 = a.unwrap();
             let b1 = b.unwrap();
 
-            let mut slice = env.alloc(a1.len() + b1.len());
-
+            let slice0 = env.alloc(a1.len() + b1.len());
+            if slice0.is_err() {
+                return Err((env, slice0.unwrap_err()));
+            }
+            let mut slice = slice0.unwrap();
             let mut offset = 0;
 
             for byte in b1 {
@@ -867,7 +904,11 @@ impl<'a> VM<'a> {
                     let word = &closure[0..closure.len()];
                     let offset = offset_by_size(val.len());
                     let sz = val.len() + offset;
-                    let mut slice = env.alloc(sz);
+                    let slice0 = env.alloc(sz);
+                    if slice0.is_err() {
+                        return Err((env, slice0.unwrap_err()))
+                    }
+                    let mut slice = slice0.unwrap();
                     write_size_into_slice!(val.len(), &mut slice);
                     let mut i = offset;
                     for b in val {
