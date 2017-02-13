@@ -172,6 +172,9 @@ pub enum Error {
     /// An internal scheduler's error to indicate that currently
     /// executed environment should be rescheduled from the same point
     Reschedule,
+    // Unable to (re)allocate the heap so the returning slice points to
+    // unallocated memory.
+    HeapAllocFailed,
 }
 /// Parse-related error
 #[derive(Debug, PartialEq)]
@@ -226,12 +229,12 @@ use std::mem;
 
 impl<'a> Env<'a> {
     /// Creates an environment with [an empty stack of default size](constant.STACK_SIZE.html)
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, Error> {
         Env::new_with_stack_size(STACK_SIZE)
     }
 
     /// Creates an environment with an empty stack of specific size
-    pub fn new_with_stack_size(size: usize) -> Self {
+    pub fn new_with_stack_size(size: usize) -> Result<Self, Error> {
         Env::new_with_stack(vec![_EMPTY; size], 0)
     }
 
@@ -240,16 +243,20 @@ impl<'a> Env<'a> {
     ///
     /// This function is useful for working with result stacks received from
     /// [VM](struct.VM.html)
-    pub fn new_with_stack(stack: Vec<&'a [u8]>, stack_size: usize) -> Self {
-        Env {
-            stack: stack,
-            stack_size: stack_size,
-            heap: unsafe { heap::allocate(HEAP_SIZE, mem::align_of::<u8>()) },
-            heap_size: HEAP_SIZE,
-            heap_align: mem::align_of::<u8>(),
-            heap_ptr: 0,
-            dictionary: BTreeMap::new()
-        }
+    pub fn new_with_stack(stack: Vec<&'a [u8]>, stack_size: usize) -> Result<Self, Error> {
+        unsafe {
+            heap::allocate(HEAP_SIZE, mem::align_of::<u8>()).as_mut()
+        }.and_then(|heap| {
+                Some(Env {
+                    stack: stack,
+                    stack_size: stack_size,
+                    heap: heap,
+                    heap_size: HEAP_SIZE,
+                    heap_align: mem::align_of::<u8>(),
+                    heap_ptr: 0,
+                    dictionary: BTreeMap::new()
+                })
+        }).ok_or(Error::HeapAllocFailed)
     }
 
     /// Returns the entire stack
@@ -367,7 +374,7 @@ pub enum ResponseMessage<'a> {
     EnvTerminated(EnvId, Vec<&'a [u8]>, usize),
     /// Notifies of abnormal environment termination with
     /// an id, error, stack and top of the stack pointer.
-    EnvFailed(EnvId, Error, Vec<&'a [u8]>, usize),
+    EnvFailed(EnvId, Error, Option<Vec<&'a [u8]>>, Option<usize>),
 }
 
 pub type TrySendError<T> = std::sync::mpsc::TrySendError<T>;
@@ -459,17 +466,26 @@ impl<'a> VM<'a> {
                 Err(err) => panic!("error receiving: {:?}", err),
                 Ok(RequestMessage::Shutdown) => break,
                 Ok(RequestMessage::ScheduleEnv(pid, program, chan)) => {
-                    let env = Env::new();
-                    let _ = self.loopback
-                        .send(RequestMessage::RescheduleEnv(pid, program, env, chan));
+                    match Env::new() {
+                        Ok(env) => {
+                            let _ = self.loopback
+                                .send(RequestMessage::RescheduleEnv(pid, program, env, chan));
+                        }
+                        Err(err) => {
+                            let _ = chan.send(ResponseMessage::EnvFailed(pid,
+                                                                         err,
+                                                                         None,
+                                                                         None));
+                        }
+                    }
                 }
                 Ok(RequestMessage::RescheduleEnv(pid, mut program, env, chan)) => {
                     match self.pass(env, &mut program, pid.clone()) {
                         Err((env, err)) => {
                             let _ = chan.send(ResponseMessage::EnvFailed(pid,
                                                                          err,
-                                                                         Vec::from(env.stack()),
-                                                                         env.stack_size));
+                                                                         Some(Vec::from(env.stack())),
+                                                                         Some(env.stack_size)));
                         }
                         Ok((env, Some(program))) => {
                             let _ = self.loopback
