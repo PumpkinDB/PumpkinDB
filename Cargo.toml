@@ -16,6 +16,8 @@ lazy_static = "0.2.2"
 num-bigint = "0.1.35"
 num-traits = "0.1.36"
 libc = "0.2.20"
+hybrid-clocks = "0.3.2"
+byteorder = "1.0.0"
 
 [dev-dependencies]
 quickcheck = "0.4.1"

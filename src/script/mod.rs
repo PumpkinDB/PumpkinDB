@@ -67,6 +67,11 @@ use std::cmp;
 
 use core::ops::Deref;
 
+use timestamp;
+use hlc;
+
+use byteorder::{BigEndian, WriteBytesExt};
+
 /// `word!` macro is used to define a built-in word, its signature (if applicable)
 /// and representation
 macro_rules! word {
@@ -123,6 +128,13 @@ word!(ASSOCQ, b"\x86ASSOC?");
 word!(RETR, b"\x84RETR");
 word!(COMMIT, b"\x86COMMIT");
 
+// Category: Timestamps
+word!(HLC, b"\x83HLC");
+word!(HLC_LC, b"\x86HLC/LC");
+word!(HLC_TICK, b"\x88HLC/TICK");
+word!(HLC_LTP, b"\x87HLC/LT?");
+word!(HLC_GTP, b"\x87HLC/GT?");
+
 /// # Data Representation
 ///
 /// In an effort to keep PumpkinScript dead simple, we are not introducing enums
@@ -173,6 +185,9 @@ pub enum Error {
     UnknownKey,
     /// No active transaction
     NoTransaction,
+    /// The item expected to be of a certain form,
+    /// size, or other condition
+    InvalidValue,
     /// An internal scheduler's error to indicate that currently
     /// executed environment should be rescheduled from the same point
     Reschedule,
@@ -525,7 +540,10 @@ impl<'a> VM<'a> {
                            handle_assoc,
                            handle_assocq,
                            handle_retr,
-                           handle_commit],
+                           handle_commit,
+                           // timestamping
+                           handle_hlc, handle_hlc_lc, handle_hlc_tick, handle_hlc_ltp, handle_hlc_gtp
+                           ],
                           {
                               let (env_, rest) = match res {
                                   (env_, Some(code_injection)) => {
@@ -938,6 +956,150 @@ impl<'a> VM<'a> {
             Err((env, Error::UnknownWord))
         }
     }
+
+
+    #[inline]
+    fn handle_hlc(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == HLC {
+            let now = timestamp::hlc();
+            let mut slice = env.alloc(16);
+            let _ = now.write_bytes(&mut slice[0..]).unwrap();
+            env.push(slice);
+            Ok((env, None))
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    fn handle_hlc_ltp(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == HLC_LTP {
+            let a = env.pop();
+            let b = env.pop();
+
+            if a.is_none() || b.is_none() {
+                return Err((env, Error::EmptyStack));
+            }
+
+            let mut a1 = a.unwrap();
+            let mut b1 = b.unwrap();
+
+            let t1_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut b1);
+            let t2_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut a1);
+
+            if t1_.is_err() || t2_.is_err() {
+                return Err((env, Error::InvalidValue))
+            }
+
+            let t1 = t1_.unwrap();
+            let t2 = t2_.unwrap();
+
+            if t1 < t2 {
+                env.push(STACK_TRUE);
+            } else {
+                env.push(STACK_FALSE);
+            }
+
+            Ok((env, None))
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    fn handle_hlc_gtp(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == HLC_GTP {
+            let a = env.pop();
+            let b = env.pop();
+
+            if a.is_none() || b.is_none() {
+                return Err((env, Error::EmptyStack));
+            }
+
+            let mut a1 = a.unwrap();
+            let mut b1 = b.unwrap();
+
+            let t1_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut b1);
+            let t2_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut a1);
+
+            if t1_.is_err() || t2_.is_err() {
+                return Err((env, Error::InvalidValue))
+            }
+
+            let t1 = t1_.unwrap();
+            let t2 = t2_.unwrap();
+
+            if t1 > t2 {
+                env.push(STACK_TRUE);
+            } else {
+                env.push(STACK_FALSE);
+            }
+
+            Ok((env, None))
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    fn handle_hlc_tick(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == HLC_TICK {
+            let a = env.pop();
+
+            if a.is_none() {
+                return Err((env, Error::EmptyStack));
+            }
+
+            let mut a1 = a.unwrap();
+
+            let t1_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut a1);
+
+            if t1_.is_err() {
+                return Err((env, Error::InvalidValue))
+            }
+
+            let mut t1 = t1_.unwrap();
+            t1.count += 1;
+
+            let mut slice = env.alloc(16);
+            let _ = t1.write_bytes(&mut slice[0..]).unwrap();
+            env.push(slice);
+
+            Ok((env, None))
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    fn handle_hlc_lc(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == HLC_LC {
+            let a = env.pop();
+
+            if a.is_none() {
+                return Err((env, Error::EmptyStack));
+            }
+
+            let mut a1 = a.unwrap();
+
+            let t1_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut a1);
+
+            if t1_.is_err() {
+                return Err((env, Error::InvalidValue))
+            }
+
+            let t1 = t1_.unwrap();
+
+            let mut slice = env.alloc(4);
+            let _ = (&mut slice[0..]).write_u32::<BigEndian>(t1.count);
+
+            env.push(slice);
+
+            Ok((env, None))
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
 }
 
 
@@ -1262,6 +1424,65 @@ mod tests {
               {
                   assert!(result.is_err());
               });
+    }
+
+    #[test]
+    fn hlc() {
+        eval!("HLC HLC HLC/LT? HLC HLC SWAP HLC/GT?",
+              env,
+              result,
+              {
+                  assert!(!result.is_err());
+                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+              });
+
+        eval!("1 2 HLC/LT?",
+              env,
+              result,
+              {
+                  assert!(result.is_err());
+              });
+
+        eval!("1 2 HLC/GT?",
+              env,
+              result,
+              {
+                  assert!(result.is_err());
+              });
+
+        eval!("HLC DUP HLC/TICK HLC/LT?",
+              env,
+              result,
+              {
+                  assert!(!result.is_err());
+                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+              });
+
+        eval!("1 HLC/TICK",
+              env,
+              result,
+              {
+                  assert!(result.is_err());
+              });
+
+
+        eval!("HLC DUP HLC/LC SWAP HLC/TICK HLC/LC",
+              env,
+              result,
+              {
+                  assert!(!result.is_err());
+                  assert_eq!(Vec::from(env.pop().unwrap()), vec![0, 0, 0, 1]);
+                  assert_eq!(Vec::from(env.pop().unwrap()), vec![0, 0, 0, 0]);
+              });
+
+        eval!("1 HLC/LC",
+              env,
+              result,
+              {
+                  assert!(result.is_err());
+              });
+
     }
 
 }

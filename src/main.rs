@@ -37,6 +37,10 @@ extern crate tokio_core;
 extern crate tokio_proto;
 extern crate tokio_service;
 
+extern crate hybrid_clocks as hlc;
+
+extern crate byteorder;
+
 extern crate config;
 
 #[macro_use]
@@ -44,6 +48,7 @@ extern crate lazy_static;
 
 pub mod script;
 pub mod server;
+pub mod timestamp;
 
 use std::thread;
 
