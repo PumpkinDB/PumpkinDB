@@ -211,7 +211,7 @@ impl<'a> Handler<'a> {
 }
 
 #[cfg(test)]
-#[allow(unused_variables, unused_must_use, unused_mut)]
+#[allow(unused_variables, unused_must_use, unused_mut, unused_imports)]
 mod tests {
     use script::{Env, VM, Error, RequestMessage, ResponseMessage, EnvId, parse, offset_by_size};
     use std::sync::mpsc;
@@ -285,6 +285,50 @@ mod tests {
               {
                   assert!(result.is_err());
               });
+    }
+
+    use test::Bencher;
+
+    #[bench]
+    // This test, even when executed under `cargo test`,
+    // is hanging on Travis CI. Unable to figure it out now,
+    // disabling it.
+    #[cfg(not(feature = "travis"))]
+    fn write_1000_kv_pairs_in_isolated_txns(b: &mut Bencher) {
+        let path = "pumpkindb-bench-write_1000_kv_pairs_in_isolated_txns";
+        fs::create_dir_all(path).expect("can't create directory");
+        let env = unsafe {
+            lmdb::EnvBuilder::new()
+                .expect("can't create env builder")
+                .open(path, lmdb::open::Flags::empty(), 0o600)
+                .expect("can't open env")
+        };
+
+        let db = lmdb::Database::open(&env,
+                                      None,
+                                      &lmdb::DatabaseOptions::new(lmdb::db::CREATE))
+            .expect("can't open database");
+        crossbeam::scope(|scope| {
+            let mut vm = VM::new(&env, &db);
+            let sender = vm.sender();
+            let handle = scope.spawn(move || {
+                vm.run();
+            });
+            let script = parse("[pair : HLC \"hello\"] SET [pair] 1000 TIMES [[ASSOC COMMIT] WRITE] 1000 TIMES").unwrap();
+            let sender_ = sender.clone();
+            b.iter(move || {
+                let (callback, receiver) = mpsc::channel::<ResponseMessage>();
+                let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(), script.clone(), callback));
+                match receiver.recv() {
+                    Ok(ResponseMessage::EnvTerminated(_, _, _)) => (),
+                    Ok(ResponseMessage::EnvFailed(_, err, _, _)) => panic!("error: {:?}", err),
+                    Err(err) => panic!("recv error: {:?}", err)
+                }
+            });
+            let _ = sender_.send(RequestMessage::Shutdown);
+            let _ = handle.join();
+        });
+        fs::remove_dir_all(path);
     }
 
 }
