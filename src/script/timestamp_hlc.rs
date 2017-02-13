@@ -36,7 +36,11 @@ impl<'a> Handler<'a> {
     pub fn handle_hlc(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == HLC {
             let now = timestamp::hlc();
-            let mut slice = env.alloc(16);
+            let slice0 = env.alloc(16);
+            if slice0.is_err() {
+                return Err((env, slice0.unwrap_err()));
+            }
+            let mut slice = slice0.unwrap();
             let _ = now.write_bytes(&mut slice[0..]).unwrap();
             env.push(slice);
             Ok((env, None))
@@ -135,7 +139,11 @@ impl<'a> Handler<'a> {
             let mut t1 = t1_.unwrap();
             t1.count += 1;
 
-            let mut slice = env.alloc(16);
+            let slice0 = env.alloc(16);
+            if slice0.is_err() {
+                return Err((env, slice0.unwrap_err()));
+            }
+            let slice = slice0.unwrap();
             let _ = t1.write_bytes(&mut slice[0..]).unwrap();
             env.push(slice);
 
@@ -164,7 +172,11 @@ impl<'a> Handler<'a> {
 
             let t1 = t1_.unwrap();
 
-            let mut slice = env.alloc(4);
+            let slice0 = env.alloc(4);
+            if slice0.is_err() {
+                return Err((env, slice0.unwrap_err()));
+            }
+            let slice = slice0.unwrap();
             let _ = (&mut slice[0..]).write_u32::<BigEndian>(t1.count);
 
             env.push(slice);

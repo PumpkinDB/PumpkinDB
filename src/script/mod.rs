@@ -513,7 +513,11 @@ impl<'a> VM<'a> {
     }
 
     fn pass(&mut self, mut env: Env<'a>, program: &mut Vec<u8>, pid: EnvId) -> PassResult<'a> {
-        let mut slice = env.alloc(program.len());
+        let slice0 = env.alloc(program.len());
+        if slice0.is_err() {
+            return Err((env, slice0.unwrap_err()));
+        }
+        let mut slice = slice0.unwrap();
         for i in 0..program.len() {
             slice[i] = program[i];
         }
@@ -669,7 +673,11 @@ impl<'a> VM<'a> {
     fn handle_depth(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == DEPTH {
             let bytes = BigUint::from(env.stack_size).to_bytes_be();
-            let slice = env.alloc(bytes.len());
+            let slice0 = env.alloc(bytes.len());
+            if slice0.is_err() {
+                return Err((env, slice0.unwrap_err()));
+            }
+            let mut slice = slice0.unwrap();
             for i in 0..bytes.len() {
                 slice[i] = bytes[i];
             }
@@ -768,8 +776,11 @@ impl<'a> VM<'a> {
             let a1 = a.unwrap();
             let b1 = b.unwrap();
 
-            let mut slice = env.alloc(a1.len() + b1.len());
-
+            let slice0 = env.alloc(a1.len() + b1.len());
+            if slice0.is_err() {
+                return Err((env, slice0.unwrap_err()));
+            }
+            let mut slice = slice0.unwrap();
             let mut offset = 0;
 
             for byte in b1 {
@@ -893,7 +904,11 @@ impl<'a> VM<'a> {
                     let word = &closure[0..closure.len()];
                     let offset = offset_by_size(val.len());
                     let sz = val.len() + offset;
-                    let mut slice = env.alloc(sz);
+                    let slice0 = env.alloc(sz);
+                    if slice0.is_err() {
+                        return Err((env, slice0.unwrap_err()))
+                    }
+                    let mut slice = slice0.unwrap();
                     write_size_into_slice!(val.len(), &mut slice);
                     let mut i = offset;
                     for b in val {

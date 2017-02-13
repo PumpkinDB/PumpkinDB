@@ -165,7 +165,11 @@ impl<'a> Handler<'a> {
 
             return match access.get::<[u8], [u8]>(self.db, key1).to_opt() {
                 Ok(Some(val)) => {
-                    let slice = env.alloc(val.len());
+                    let slice0 = env.alloc(val.len());
+                    if slice0.is_err() {
+                        return Err((env, slice0.unwrap_err()))
+                    }
+                    let mut slice = slice0.unwrap();
                     for i in 0..val.len() {
                         slice[i] = val[i];
                     }
