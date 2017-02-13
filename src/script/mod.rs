@@ -63,6 +63,8 @@
 use alloc::heap;
 
 use num_bigint::BigUint;
+use num_traits::{Zero, One};
+use core::ops::Sub;
 use std::cmp;
 
 /// `word!` macro is used to define a built-in word, its signature (if applicable)
@@ -106,6 +108,7 @@ word!(GTP, (a, b => c), b"\x83GT?");
 word!(CONCAT, (a, b => c), b"\x86CONCAT");
 
 // Category: Control flow
+word!(TIMES, b"\x85TIMES");
 word!(EVAL, b"\x84EVAL");
 word!(SET, b"\x83SET");
 word!(SET_IMM, b"\x84SET!"); // internal word
@@ -511,6 +514,7 @@ impl<'a> VM<'a> {
                            self => handle_gtp,
                            self => handle_equal,
                            self => handle_concat,
+                           self => handle_times,
                            self => handle_eval,
                            self => handle_set,
                            // storage
@@ -775,6 +779,51 @@ impl<'a> VM<'a> {
     }
 
     #[inline]
+    fn handle_times(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == TIMES {
+            let count_ = env.pop();
+
+            if count_.is_none() {
+                return Err((env, Error::EmptyStack));
+            }
+
+            let count = count_.unwrap();
+
+            match env.pop() {
+                None => return Err((env, Error::EmptyStack)),
+                Some(v) => {
+                    let counter = BigUint::from_bytes_be(count);
+                    if counter.is_zero() {
+                        Ok((env, None))
+                    } else {
+                        // inject the code itself
+                        let mut vec = Vec::from(v);
+                        if counter != BigUint::one() {
+                            // inject the prefix for the code
+                            let mut header = vec![0;offset_by_size(v.len())];
+                            write_size_into_slice!(v.len(), header.as_mut_slice());
+                            vec.append(&mut header);
+                            vec.extend_from_slice(v);
+                            // inject the decremented counter
+                            let counter = counter.sub(BigUint::one());
+                            let mut counter_bytes = counter.to_bytes_be();
+                            let mut header =  vec![0;offset_by_size(counter_bytes.len())];
+                            write_size_into_slice!(counter_bytes.len(), header.as_mut_slice());
+                            vec.append(&mut header);
+                            vec.append(&mut counter_bytes);
+                            // inject TIMES
+                            vec.extend_from_slice(TIMES);
+                        }
+                        Ok((env, Some(vec)))
+                    }
+                }
+            }
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
     fn handle_set(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == SET {
             match env.pop() {
@@ -1011,6 +1060,27 @@ mod tests {
         eval!("CONCAT", env, result, {
             assert!(matches!(result.err(), Some(Error::EmptyStack)));
         });
+    }
+
+    #[test]
+    fn times() {
+        eval!("0x01 [DUP] 4 TIMES", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("TIMES", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+
+        eval!("5 TIMES", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+
     }
 
     #[test]
