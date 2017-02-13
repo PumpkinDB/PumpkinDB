@@ -5,7 +5,7 @@ authors = ["Yurii Rashkovskii <yrashk@gmail.com>"]
 
 [dependencies]
 nom = "^2.1"
-snowflake = "1.2.0"
+snowflake = { git = "https://github.com/yrashk/snowflake.git", branch="pub-fields" }
 lmdb-zero = { git = "https://github.com/yrashk/lmdb-zero.git", branch="drop-accessor" }
 futures = "0.1.10"
 tokio-core = "0.1.4"
