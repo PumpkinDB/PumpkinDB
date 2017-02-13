@@ -803,8 +803,7 @@ impl<'a> VM<'a> {
         if word == SET {
             match env.pop() {
                 None => Err((env, Error::EmptyStack)),
-                Some(v) => {
-                    let (closure, _) = data!(v);
+                Some(closure) => {
                     match binparser::word(closure) {
                         nom::IResult::Done(&[0x81, b':', ref rest..], _) => {
                             let word = &closure[0..closure.len() - rest.len() - 2];
@@ -836,13 +835,21 @@ impl<'a> VM<'a> {
             if a.is_none() || b.is_none() {
                 return Err((env, Error::EmptyStack));
             }
-            let var = a.unwrap();
+            let closure = a.unwrap();
             let val = b.unwrap();
-            let (closure, _) = data!(var);
             match binparser::word(closure) {
                 nom::IResult::Done(_, _) => {
                     let word = &closure[0..closure.len()];
-                    env.dictionary.insert(word, val);
+                    let offset = offset_by_size(val.len());
+                    let sz = val.len() + offset;
+                    let mut slice = env.alloc(sz);
+                    write_size_into_slice!(val.len(), &mut slice);
+                    let mut i = offset;
+                    for b in val {
+                        slice[i] = *b;
+                        i += 1;
+                    }
+                    env.dictionary.insert(word, slice);
                     Ok((env, None))
                 },
                 _ => Err((env, Error::UnknownWord))
@@ -1425,16 +1432,16 @@ mod tests {
     #[test]
     fn set() {
         eval!("[mydup : DUP DUP] SET 1 mydup mydup", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
             assert_eq!(env.pop(), None);
         });
 
         eval!("1 [current_depth = DEPTH] SET 1 2 3 current_depth", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
         });
 
         eval!("[mydup DUP DUP] SET 1 mydup mydup", env, result, {
