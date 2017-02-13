@@ -89,7 +89,7 @@ fn sized_vec(s: Vec<u8>) -> Vec<u8> {
 
 fn is_word_char(s: u8) -> bool {
     (s >= b'a' && s <= b'z') || (s >= b'A' && s <= b'Z') || (s >= b'0' && s <= b'9') ||
-    s == b'_' || s == b':' || s == b'-' ||
+    s == b'_' || s == b':' || s == b'-' || s == b'=' ||
     s == b'!' || s == b'#' || s == b'$' || s == b'%' || s == b'@' || s == b'?' ||
     s == b'/'
 }

@@ -115,6 +115,8 @@ word!(CONCAT, (a, b => c), b"\x86CONCAT");
 
 // Category: Control flow
 word!(EVAL, b"\x84EVAL");
+word!(SET, b"\x83SET");
+word!(SET_IMM, b"\x84SET!"); // internal word
 
 // Category: Storage
 word!(WRITE, b"\x85WRITE");
@@ -214,6 +216,8 @@ pub const STACK_SIZE: usize = 32_768;
 /// Initial heap size
 pub const HEAP_SIZE: usize = 32_768;
 
+use std::collections::BTreeMap;
+
 /// Env is a representation of a stack and the heap.
 ///
 /// Doesn't need to be used directly as it's primarily
@@ -225,6 +229,7 @@ pub struct Env<'a> {
     heap_size: usize,
     heap_align: usize,
     heap_ptr: usize,
+    dictionary: BTreeMap<&'a [u8], &'a [u8]>
 }
 
 impl<'a> std::fmt::Debug for Env<'a> {
@@ -264,6 +269,7 @@ impl<'a> Env<'a> {
             heap_size: HEAP_SIZE,
             heap_align: mem::align_of::<u8>(),
             heap_ptr: 0,
+            dictionary: BTreeMap::new()
         }
     }
 
@@ -534,6 +540,7 @@ impl<'a> VM<'a> {
                            handle_equal,
                            handle_concat,
                            handle_eval,
+                           handle_set,
                            // storage
                            handle_write,
                            handle_read,
@@ -786,6 +793,67 @@ impl<'a> VM<'a> {
                     Ok((env, Some(Vec::from(v))))
                 }
             }
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    fn handle_set(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == SET {
+            match env.pop() {
+                None => Err((env, Error::EmptyStack)),
+                Some(v) => {
+                    let (closure, _) = data!(v);
+                    match binparser::word(closure) {
+                        nom::IResult::Done(&[0x81, b':', ref rest..], _) => {
+                            let word = &closure[0..closure.len() - rest.len() - 2];
+                            env.dictionary.insert(word, rest);
+                            Ok((env, None))
+                        },
+                        nom::IResult::Done(&[0x81, b'=', ref rest..], _) => {
+                            let word = &closure[0..closure.len() - rest.len() - 2];
+                            let mut vec = Vec::new();
+                            // inject the code
+                            vec.extend_from_slice(rest);
+                            // inject [word] \x00SET!
+                            let sz = word.len() as u8;
+                            if word.len() > 120 {
+                                vec.push(121);
+                            }
+                            vec.push(sz);
+                            vec.extend_from_slice(word);
+                            vec.extend_from_slice(SET_IMM);
+                            Ok((env, Some(vec)))
+                        },
+                        _ => Err((env, Error::UnknownWord))
+                    }
+                }
+            }
+        } else if word == SET_IMM {
+            let a = env.pop();
+            let b = env.pop();
+            if a.is_none() || b.is_none() {
+                return Err((env, Error::EmptyStack));
+            }
+            let var = a.unwrap();
+            let val = b.unwrap();
+            let (closure, _) = data!(var);
+            match binparser::word(closure) {
+                nom::IResult::Done(_, _) => {
+                    let word = &closure[0..closure.len()];
+                    env.dictionary.insert(word, val);
+                    Ok((env, None))
+                },
+                _ => Err((env, Error::UnknownWord))
+            }
+        } else if env.dictionary.contains_key(word) {
+            let mut vec = Vec::new();
+            {
+                let def = env.dictionary.get(word).unwrap();
+                vec.extend_from_slice(def);
+            }
+            Ok((env, Some(vec)))
         } else {
             Err((env, Error::UnknownWord))
         }
@@ -1352,6 +1420,31 @@ mod tests {
         eval!("EVAL", env, result, {
             assert!(matches!(result.err(), Some(Error::EmptyStack)));
         });
+    }
+
+    #[test]
+    fn set() {
+        eval!("[mydup : DUP DUP] SET 1 mydup mydup", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
+            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("1 [current_depth = DEPTH] SET 1 2 3 current_depth", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parse("0x01").unwrap());
+        });
+
+        eval!("[mydup DUP DUP] SET 1 mydup mydup", env, result, {
+            assert!(result.is_err());
+        });
+
+        eval!("SET", env, result, {
+            assert!(result.is_err());
+        });
+
     }
 
     #[test]
