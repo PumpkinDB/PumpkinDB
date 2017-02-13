@@ -65,13 +65,6 @@ use alloc::heap;
 use num_bigint::BigUint;
 use std::cmp;
 
-use core::ops::Deref;
-
-use timestamp;
-use hlc;
-
-use byteorder::{BigEndian, WriteBytesExt};
-
 /// `word!` macro is used to define a built-in word, its signature (if applicable)
 /// and representation
 macro_rules! word {
@@ -99,7 +92,6 @@ macro_rules! word {
 //    invocation in VM::pass
 
 // Category: Stack
-
 word!(DROP, (a => ), b"\x84DROP");
 word!(DUP, (a => a, a), b"\x83DUP");
 word!(SWAP, (a, b => b, a), b"\x84SWAP");
@@ -118,24 +110,8 @@ word!(EVAL, b"\x84EVAL");
 word!(SET, b"\x83SET");
 word!(SET_IMM, b"\x84SET!"); // internal word
 
-// Category: Storage
-word!(WRITE, b"\x85WRITE");
-word!(WRITE_END, b"\x80\x85WRITE"); // internal word
-
-word!(READ, b"\x84READ");
-word!(READ_END, b"\x80\x84READ"); // internal word
-
-word!(ASSOC, b"\x85ASSOC");
-word!(ASSOCQ, b"\x86ASSOC?");
-word!(RETR, b"\x84RETR");
-word!(COMMIT, b"\x86COMMIT");
-
-// Category: Timestamps
-word!(HLC, b"\x83HLC");
-word!(HLC_LC, b"\x86HLC/LC");
-word!(HLC_TICK, b"\x88HLC/TICK");
-word!(HLC_LTP, b"\x87HLC/LT?");
-word!(HLC_GTP, b"\x87HLC/GT?");
+// To add words that don't belong to a core set,
+// add a module with a handler, and reference it in the VM's pass
 
 /// # Data Representation
 ///
@@ -395,6 +371,9 @@ pub type TrySendError<T> = std::sync::mpsc::TrySendError<T>;
 
 use lmdb;
 
+pub mod storage;
+pub mod timestamp_hlc;
+
 /// VM is a PumpkinScript scheduler and interpreter. This is the
 /// most central part of this module.
 ///
@@ -430,10 +409,8 @@ pub struct VM<'a> {
     inbox: Receiver<RequestMessage<'a>>,
     sender: Sender<RequestMessage<'a>>,
     loopback: Sender<RequestMessage<'a>>,
-    db: &'a lmdb::Database<'a>,
-    db_env: &'a lmdb::Environment,
-    db_write_txn: Option<(EnvId, lmdb::WriteTransaction<'a>)>,
-    db_read_txn: Option<(EnvId, lmdb::ReadTransaction<'a>)>,
+    storage: storage::Handler<'a>,
+    hlc: timestamp_hlc::Handler<'a>,
 }
 
 unsafe impl<'a> Send for VM<'a> {}
@@ -442,8 +419,6 @@ type PassResult<'a> = Result<(Env<'a>, Option<Vec<u8>>), (Env<'a>, Error)>;
 
 const STACK_TRUE: &'static [u8] = b"\x01";
 const STACK_FALSE: &'static [u8] = b"\x00";
-
-use lmdb::traits::LmdbResultExt;
 
 impl<'a> VM<'a> {
     /// Creates an instance of VM with three communication channels:
@@ -457,10 +432,8 @@ impl<'a> VM<'a> {
             inbox: receiver,
             sender: sender.clone(),
             loopback: sender.clone(),
-            db_env: db_env,
-            db: db,
-            db_write_txn: None,
-            db_read_txn: None,
+            storage: storage::Handler::new(db_env, db),
+            hlc: timestamp_hlc::Handler::new(),
         }
     }
 
@@ -523,34 +496,37 @@ impl<'a> VM<'a> {
                 _ => (env, Some(rest)),
             });
         } else if let nom::IResult::Done(_, word) = binparser::word_or_internal_word(slice) {
-            handle_words!(self,
-                          env,
+            handle_words!(env,
                           program,
                           word,
                           res,
                           pid,
-                          [handle_drop,
-                           handle_dup,
-                           handle_swap,
-                           handle_rot,
-                           handle_over,
-                           handle_depth,
-                           handle_ltp,
-                           handle_gtp,
-                           handle_equal,
-                           handle_concat,
-                           handle_eval,
-                           handle_set,
+                          {self => handle_drop,
+                           self => handle_dup,
+                           self => handle_swap,
+                           self => handle_rot,
+                           self => handle_over,
+                           self => handle_depth,
+                           self => handle_ltp,
+                           self => handle_gtp,
+                           self => handle_equal,
+                           self => handle_concat,
+                           self => handle_eval,
+                           self => handle_set,
                            // storage
-                           handle_write,
-                           handle_read,
-                           handle_assoc,
-                           handle_assocq,
-                           handle_retr,
-                           handle_commit,
+                           self.storage => handle_write,
+                           self.storage => handle_read,
+                           self.storage => handle_assoc,
+                           self.storage => handle_assocq,
+                           self.storage => handle_retr,
+                           self.storage => handle_commit,
                            // timestamping
-                           handle_hlc, handle_hlc_lc, handle_hlc_tick, handle_hlc_ltp, handle_hlc_gtp
-                           ],
+                           self.hlc => handle_hlc,
+                           self.hlc => handle_hlc_lc,
+                           self.hlc => handle_hlc_tick,
+                           self.hlc => handle_hlc_ltp,
+                           self.hlc => handle_hlc_gtp
+                           },
                           {
                               let (env_, rest) = match res {
                                   (env_, Some(code_injection)) => {
@@ -865,316 +841,6 @@ impl<'a> VM<'a> {
             Err((env, Error::UnknownWord))
         }
     }
-
-    #[inline]
-    fn handle_write(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        match word {
-            WRITE => {
-                match env.pop() {
-                    None => return Err((env, Error::EmptyStack)),
-                    Some(v) => {
-                        validate_lockout!(env, self.db_write_txn, pid);
-                        let mut vec = Vec::from(v);
-                        vec.extend_from_slice(WRITE_END); // transaction end marker
-                        // prepare transaction
-                        match lmdb::WriteTransaction::new(self.db_env) {
-                            Err(e) => Err((env, Error::DatabaseError(e))),
-                            Ok(txn) => {
-                                self.db_write_txn = Some((pid, txn));
-                                Ok((env, Some(vec)))
-                            }
-                        }
-                    }
-                }
-            }
-            WRITE_END => {
-                validate_lockout!(env, self.db_write_txn, pid);
-                self.db_write_txn = None;
-                Ok((env, None))
-            }
-            _ => Err((env, Error::UnknownWord)),
-        }
-    }
-
-    #[inline]
-    fn handle_read(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        match word {
-            READ => {
-                match env.pop() {
-                    None => return Err((env, Error::EmptyStack)),
-                    Some(v) => {
-                        validate_lockout!(env, self.db_read_txn, pid);
-                        validate_lockout!(env, self.db_write_txn, pid);
-                        let mut vec = Vec::from(v);
-                        vec.extend_from_slice(READ_END); // transaction end marker
-                        // prepare transaction
-                        match lmdb::ReadTransaction::new(self.db_env) {
-                            Err(e) => Err((env, Error::DatabaseError(e))),
-                            Ok(txn) => {
-                                self.db_read_txn = Some((pid, txn));
-                                Ok((env, Some(vec)))
-                            }
-                        }
-                    }
-                }
-            }
-            READ_END => {
-                validate_lockout!(env, self.db_read_txn, pid);
-                validate_lockout!(env, self.db_write_txn, pid);
-                self.db_read_txn = None;
-                Ok((env, None))
-            }
-            _ => Err((env, Error::UnknownWord)),
-        }
-    }
-
-    #[inline]
-    fn handle_assoc(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == ASSOC {
-            validate_lockout!(env, self.db_write_txn, pid);
-            if let Some((_, ref txn)) = self.db_write_txn {
-                let value = env.pop();
-                let key = env.pop();
-
-                if value.is_none() || key.is_none() {
-                    return Err((env, Error::EmptyStack));
-                }
-
-                let value1 = value.unwrap();
-                let key1 = key.unwrap();
-
-                let mut access = txn.access();
-
-                match access.put(self.db, key1, value1, lmdb::put::NOOVERWRITE) {
-                    Ok(_) => Ok((env, None)),
-                    Err(lmdb::Error::ValRejected(_)) => Err((env, Error::DuplicateKey)),
-                    Err(err) => Err((env, Error::DatabaseError(err))),
-                }
-            } else {
-                Err((env, Error::NoTransaction))
-            }
-        } else {
-            Err((env, Error::UnknownWord))
-        }
-    }
-
-    #[inline]
-    fn handle_commit(&mut self, env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == COMMIT {
-            validate_lockout!(env, self.db_write_txn, pid);
-            if let Some((_, txn)) = mem::replace(&mut self.db_write_txn, None) {
-                let _ = txn.commit();
-                Ok((env, None))
-            } else {
-                Err((env, Error::NoTransaction))
-            }
-        } else {
-            Err((env, Error::UnknownWord))
-        }
-    }
-
-
-    #[inline]
-    fn handle_retr(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == RETR {
-            validate_lockout!(env, self.db_write_txn, pid);
-            validate_lockout!(env, self.db_read_txn, pid);
-            let key = env.pop();
-            if key.is_none() {
-                return Err((env, Error::EmptyStack));
-            }
-            let key1 = key.unwrap();
-            let txn = read_or_write_transaction!(self, env);
-            let access = txn.access();
-
-            return match access.get::<[u8], [u8]>(self.db, key1).to_opt() {
-                Ok(Some(val)) => {
-                    let slice = env.alloc(val.len());
-                    for i in 0..val.len() {
-                        slice[i] = val[i];
-                    }
-                    env.push(slice);
-                    Ok((env, None))
-                }
-                Ok(None) => Err((env, Error::UnknownKey)),
-                Err(err) => Err((env, Error::DatabaseError(err))),
-            }
-        } else {
-            Err((env, Error::UnknownWord))
-        }
-    }
-
-    #[inline]
-    fn handle_assocq(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == ASSOCQ {
-            validate_lockout!(env, self.db_write_txn, pid);
-            let key = env.pop();
-            if key.is_none() {
-                return Err((env, Error::EmptyStack));
-            }
-            let key1 = key.unwrap();
-            let txn = read_or_write_transaction!(self, env);
-            let access = txn.access();
-
-            match access.get::<[u8], [u8]>(self.db, key1).to_opt() {
-                Ok(Some(_)) => {
-                    env.push(STACK_TRUE);
-                    Ok((env, None))
-                }
-                Ok(None) => {
-                    env.push(STACK_FALSE);
-                    Ok((env, None))
-                }
-                Err(err) => Err((env, Error::DatabaseError(err))),
-            }
-        } else {
-            Err((env, Error::UnknownWord))
-        }
-    }
-
-
-    #[inline]
-    fn handle_hlc(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == HLC {
-            let now = timestamp::hlc();
-            let mut slice = env.alloc(16);
-            let _ = now.write_bytes(&mut slice[0..]).unwrap();
-            env.push(slice);
-            Ok((env, None))
-        } else {
-            Err((env, Error::UnknownWord))
-        }
-    }
-
-    #[inline]
-    fn handle_hlc_ltp(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == HLC_LTP {
-            let a = env.pop();
-            let b = env.pop();
-
-            if a.is_none() || b.is_none() {
-                return Err((env, Error::EmptyStack));
-            }
-
-            let mut a1 = a.unwrap();
-            let mut b1 = b.unwrap();
-
-            let t1_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut b1);
-            let t2_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut a1);
-
-            if t1_.is_err() || t2_.is_err() {
-                return Err((env, Error::InvalidValue))
-            }
-
-            let t1 = t1_.unwrap();
-            let t2 = t2_.unwrap();
-
-            if t1 < t2 {
-                env.push(STACK_TRUE);
-            } else {
-                env.push(STACK_FALSE);
-            }
-
-            Ok((env, None))
-        } else {
-            Err((env, Error::UnknownWord))
-        }
-    }
-
-    #[inline]
-    fn handle_hlc_gtp(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == HLC_GTP {
-            let a = env.pop();
-            let b = env.pop();
-
-            if a.is_none() || b.is_none() {
-                return Err((env, Error::EmptyStack));
-            }
-
-            let mut a1 = a.unwrap();
-            let mut b1 = b.unwrap();
-
-            let t1_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut b1);
-            let t2_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut a1);
-
-            if t1_.is_err() || t2_.is_err() {
-                return Err((env, Error::InvalidValue))
-            }
-
-            let t1 = t1_.unwrap();
-            let t2 = t2_.unwrap();
-
-            if t1 > t2 {
-                env.push(STACK_TRUE);
-            } else {
-                env.push(STACK_FALSE);
-            }
-
-            Ok((env, None))
-        } else {
-            Err((env, Error::UnknownWord))
-        }
-    }
-
-    #[inline]
-    fn handle_hlc_tick(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == HLC_TICK {
-            let a = env.pop();
-
-            if a.is_none() {
-                return Err((env, Error::EmptyStack));
-            }
-
-            let mut a1 = a.unwrap();
-
-            let t1_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut a1);
-
-            if t1_.is_err() {
-                return Err((env, Error::InvalidValue))
-            }
-
-            let mut t1 = t1_.unwrap();
-            t1.count += 1;
-
-            let mut slice = env.alloc(16);
-            let _ = t1.write_bytes(&mut slice[0..]).unwrap();
-            env.push(slice);
-
-            Ok((env, None))
-        } else {
-            Err((env, Error::UnknownWord))
-        }
-    }
-
-    #[inline]
-    fn handle_hlc_lc(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == HLC_LC {
-            let a = env.pop();
-
-            if a.is_none() {
-                return Err((env, Error::EmptyStack));
-            }
-
-            let mut a1 = a.unwrap();
-
-            let t1_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut a1);
-
-            if t1_.is_err() {
-                return Err((env, Error::InvalidValue))
-            }
-
-            let t1 = t1_.unwrap();
-
-            let mut slice = env.alloc(4);
-            let _ = (&mut slice[0..]).write_u32::<BigEndian>(t1.count);
-
-            env.push(slice);
-
-            Ok((env, None))
-        } else {
-            Err((env, Error::UnknownWord))
-        }
-    }
 }
 
 
@@ -1191,22 +857,6 @@ mod tests {
     use super::binparser;
 
     const _EMPTY: &'static [u8] = b"";
-
-    macro_rules! data {
-    ($ptr:expr) => {
-        {
-          let (_, size) = binparser::data_size($ptr).unwrap();
-          &$ptr[offset_by_size(size)..$ptr.len()]
-        }
-    };
-    }
-
-    macro_rules! parsed_data {
-        ($s: expr) => {
-           data!(parse($s).unwrap().as_slice())
-        };
-    }
-
 
     #[test]
     fn env_stack_growth() {
@@ -1226,59 +876,6 @@ mod tests {
             env.alloc(sz);
         }
         assert!(env.heap_size >= sz * 100);
-    }
-
-    macro_rules! eval {
-        ($script: expr, $env: ident, $expr: expr) => {
-           eval!($script, $env, _result, $expr);
-        };
-        ($script: expr, $env: ident, $result: pat, $expr: expr) => {
-          {
-            let dir = TempDir::new("pumpkindb").unwrap();
-            let path = dir.path().to_str().unwrap();
-            fs::create_dir_all(path).expect("can't create directory");
-            let env = unsafe {
-                lmdb::EnvBuilder::new()
-                    .expect("can't create env builder")
-                    .open(path, lmdb::open::Flags::empty(), 0o600)
-                    .expect("can't open env")
-            };
-
-            let db = lmdb::Database::open(&env,
-                                 None,
-                                 &lmdb::DatabaseOptions::new(lmdb::db::CREATE))
-                                 .expect("can't open database");
-            crossbeam::scope(|scope| {
-                let mut vm = VM::new(&env, &db);
-                let sender = vm.sender();
-                let handle = scope.spawn(move || {
-                    vm.run();
-                });
-                let script = parse($script).unwrap();
-                let (callback, receiver) = mpsc::channel::<ResponseMessage>();
-                let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(),
-                                    script.clone(), callback));
-                match receiver.recv() {
-                   Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
-                      let _ = sender.send(RequestMessage::Shutdown);
-                      let $result = Ok::<(), Error>(());
-                      let mut $env = Env::new_with_stack(stack, stack_size);
-                      $expr;
-                   }
-                   Ok(ResponseMessage::EnvFailed(_, err, stack, stack_size)) => {
-                      let _ = sender.send(RequestMessage::Shutdown);
-                      let $result = Err::<(), Error>(err);
-                      let mut $env = Env::new_with_stack(stack, stack_size);
-                      $expr;
-                   }
-                   Err(err) => {
-                      panic!("recv error: {:?}", err);
-                   }
-                }
-                let _ = handle.join();
-          });
-        };
-      }
     }
 
     #[test]
@@ -1460,129 +1057,6 @@ mod tests {
             assert!(result.is_err());
             assert!(matches!(result.err(), Some(Error::DecodingError)));
         });
-    }
-
-    #[test]
-    fn write() {
-        eval!("[\"Hello\" \"world\" ASSOC COMMIT] WRITE [\"Hello\" RETR] READ",
-              env,
-              result,
-              {
-                  assert!(!result.is_err());
-                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("\"world\""));
-              });
-
-        // overwrite
-        eval!("[\"Hello\" \"world\" ASSOC \"Hello\" \"world\" ASSOC COMMIT] WRITE",
-              env,
-              result,
-              {
-                  assert!(result.is_err());
-              });
-
-        // missing key
-        eval!("[\"Hello\" \"world\" ASSOC COMMIT] WRITE [\"world\" RETR] READ",
-              env,
-              result,
-              {
-                  assert!(result.is_err());
-              });
-
-    }
-
-    #[test]
-    fn retr() {
-        eval!("[\"Hello\" DUP DUP \"world\" ASSOC RETR COMMIT] WRITE SWAP [RETR] READ",
-              env,
-              result,
-              {
-                  assert!(!result.is_err());
-                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("\"world\""));
-                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("\"world\""));
-                  assert_eq!(env.pop(), None);
-              });
-    }
-
-    #[test]
-    fn assocq() {
-        eval!("[\"Hello\" DUP \"world\" ASSOC ASSOC? COMMIT] WRITE [\"Hello\" ASSOC? \"Bye\" ASSOC?] READ",
-              env,
-              result,
-              {
-                  assert!(!result.is_err());
-                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
-                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-              });
-    }
-
-    #[test]
-    fn commit() {
-        eval!("[\"Hey\" \"everybody\" ASSOC] WRITE [\"Hey\" RETR] READ",
-              env,
-              result,
-              {
-                  assert!(result.is_err());
-              });
-    }
-
-    #[test]
-    fn hlc() {
-        eval!("HLC HLC HLC/LT? HLC HLC SWAP HLC/GT?",
-              env,
-              result,
-              {
-                  assert!(!result.is_err());
-                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-              });
-
-        eval!("1 2 HLC/LT?",
-              env,
-              result,
-              {
-                  assert!(result.is_err());
-              });
-
-        eval!("1 2 HLC/GT?",
-              env,
-              result,
-              {
-                  assert!(result.is_err());
-              });
-
-        eval!("HLC DUP HLC/TICK HLC/LT?",
-              env,
-              result,
-              {
-                  assert!(!result.is_err());
-                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-              });
-
-        eval!("1 HLC/TICK",
-              env,
-              result,
-              {
-                  assert!(result.is_err());
-              });
-
-
-        eval!("HLC DUP HLC/LC SWAP HLC/TICK HLC/LC",
-              env,
-              result,
-              {
-                  assert!(!result.is_err());
-                  assert_eq!(Vec::from(env.pop().unwrap()), vec![0, 0, 0, 1]);
-                  assert_eq!(Vec::from(env.pop().unwrap()), vec![0, 0, 0, 0]);
-              });
-
-        eval!("1 HLC/LC",
-              env,
-              result,
-              {
-                  assert!(result.is_err());
-              });
-
     }
 
 }

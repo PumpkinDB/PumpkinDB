@@ -36,8 +36,8 @@ macro_rules! write_size_into_slice {
 }
 
 macro_rules! handle_words {
-    ($me: expr, $env: expr, $program: expr, $word: expr, $res: ident,
-     $pid: ident, [ $($name: ident),* ], $block: expr) => {
+    ($env: expr, $program: expr, $word: expr, $res: ident,
+     $pid: ident, { $($me: expr => $name: ident),* }, $block: expr) => {
     {
       let mut env = $env;
       $(
@@ -74,4 +74,76 @@ macro_rules! read_or_write_transaction {
             return Err(($env, Error::NoTransaction));
         };
     };
+}
+
+
+#[cfg(test)]
+macro_rules! eval {
+        ($script: expr, $env: ident, $expr: expr) => {
+           eval!($script, $env, _result, $expr);
+        };
+        ($script: expr, $env: ident, $result: pat, $expr: expr) => {
+          {
+            let dir = TempDir::new("pumpkindb").unwrap();
+            let path = dir.path().to_str().unwrap();
+            fs::create_dir_all(path).expect("can't create directory");
+            let env = unsafe {
+                lmdb::EnvBuilder::new()
+                    .expect("can't create env builder")
+                    .open(path, lmdb::open::Flags::empty(), 0o600)
+                    .expect("can't open env")
+            };
+
+            let db = lmdb::Database::open(&env,
+                                 None,
+                                 &lmdb::DatabaseOptions::new(lmdb::db::CREATE))
+                                 .expect("can't open database");
+            crossbeam::scope(|scope| {
+                let mut vm = VM::new(&env, &db);
+                let sender = vm.sender();
+                let handle = scope.spawn(move || {
+                    vm.run();
+                });
+                let script = parse($script).unwrap();
+                let (callback, receiver) = mpsc::channel::<ResponseMessage>();
+                let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(),
+                                    script.clone(), callback));
+                match receiver.recv() {
+                   Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
+                      let _ = sender.send(RequestMessage::Shutdown);
+                      let $result = Ok::<(), Error>(());
+                      let mut $env = Env::new_with_stack(stack, stack_size);
+                      $expr;
+                   }
+                   Ok(ResponseMessage::EnvFailed(_, err, stack, stack_size)) => {
+                      let _ = sender.send(RequestMessage::Shutdown);
+                      let $result = Err::<(), Error>(err);
+                      let mut $env = Env::new_with_stack(stack, stack_size);
+                      $expr;
+                   }
+                   Err(err) => {
+                      panic!("recv error: {:?}", err);
+                   }
+                }
+                let _ = handle.join();
+          });
+        };
+      }
+}
+
+#[cfg(test)]
+macro_rules! data {
+    ($ptr:expr) => {
+        {
+          let (_, size) = binparser::data_size($ptr).unwrap();
+          &$ptr[offset_by_size(size)..$ptr.len()]
+        }
+    };
+}
+
+#[cfg(test)]
+macro_rules! parsed_data {
+        ($s: expr) => {
+           data!(parse($s).unwrap().as_slice())
+        };
 }
