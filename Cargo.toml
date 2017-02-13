@@ -25,3 +25,6 @@ quickcheck_macros = "0.4.1"
 matches = "0.1.4"
 tempdir = "0.3.5"
 crossbeam = "0.2.10"
+
+[features]
+travis = []
