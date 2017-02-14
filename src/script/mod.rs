@@ -107,6 +107,7 @@ word!(DEPTH, b"\x85DEPTH");
 word!(EQUALP, (a, b => c), b"\x86EQUAL?");
 word!(LTP, (a, b => c), b"\x83LT?");
 word!(GTP, (a, b => c), b"\x83GT?");
+word!(LENGTH, (a => b), b"\x86LENGTH");
 word!(CONCAT, (a, b => c), b"\x86CONCAT");
 
 // Category: Control flow
@@ -569,6 +570,7 @@ impl<'a> VM<'a> {
                            self => handle_gtp,
                            self => handle_equal,
                            self => handle_concat,
+                           self => handle_length,
                            self => handle_times,
                            self => handle_eval,
                            self => handle_set,
@@ -933,6 +935,41 @@ impl<'a> VM<'a> {
 
             for byte in a1 {
                 slice[offset] = *byte;
+                offset += 1
+            }
+
+            env.push(slice);
+
+            Ok((env, None))
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    fn handle_length(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == LENGTH {
+            let a = env.pop();
+
+            if a.is_none() {
+                return Err((env, Error::EmptyStack));
+            }
+
+            let a1 = a.unwrap();
+
+            let len = BigUint::from(a1.len() as u64);
+            let len_bytes = len.to_bytes_be();
+
+            let slice0 = env.alloc(len_bytes.len());
+            if slice0.is_err() {
+                return Err((env, slice0.unwrap_err()));
+            }
+            let mut slice = slice0.unwrap();
+
+            let mut offset = 0;
+
+            for byte in len_bytes {
+                slice[offset] = byte;
                 offset += 1
             }
 
@@ -1320,6 +1357,19 @@ mod tests {
         });
 
         eval!("CONCAT", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+    }
+
+    #[test]
+    fn length() {
+        eval!("[] LENGTH 0x10 LENGTH", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("LENGTH", env, result, {
             assert!(matches!(result.err(), Some(Error::EmptyStack)));
         });
     }
