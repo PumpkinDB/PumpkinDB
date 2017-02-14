@@ -114,6 +114,7 @@ word!(TIMES, b"\x85TIMES");
 word!(EVAL, b"\x84EVAL");
 word!(SET, b"\x83SET");
 word!(SET_IMM, b"\x84SET!"); // internal word
+word!(IFELSE, b"\x86IFELSE");
 
 // Category: Logical operations
 word!(NOT, (a => c), b"\x83NOT");
@@ -570,6 +571,7 @@ impl<'a> VM<'a> {
                            self => handle_eval,
                            self => handle_set,
                            self => handle_not,
+                           self => handle_ifelse,
                            // storage
                            self.storage => handle_write,
                            self.storage => handle_read,
@@ -746,6 +748,7 @@ impl<'a> VM<'a> {
         }
     }
 
+    #[inline]
     fn handle_not(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == NOT {
             let a = env.pop();
@@ -765,6 +768,33 @@ impl<'a> VM<'a> {
             }
 
             Ok((env, None))
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    fn handle_ifelse(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == IFELSE {
+            let then = env.pop();
+            let else_ = env.pop();
+            let cond = env.pop();
+
+            if cond.is_none() || then.is_none() || else_.is_none() {
+                return Err((env, Error::EmptyStack));
+            }
+
+            let cond1 = cond.unwrap();
+            let then1 = then.unwrap();
+            let else1 = else_.unwrap();
+
+            if cond1 == STACK_TRUE {
+                Ok((env, Some(Vec::from(then1))))
+            } else if cond1 == STACK_FALSE {
+                Ok((env, Some(Vec::from(else1))))
+            } else {
+                Err((env, Error::InvalidValue))
+            }
         } else {
             Err((env, Error::UnknownWord))
         }
@@ -1181,6 +1211,14 @@ mod tests {
             assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
             assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
             assert_eq!(env.pop(), None);
+        });
+    }
+
+    #[test]
+    fn ifelse() {
+        eval!("0x01 [0x30] [0x20] IFELSE 0x00 [0x30] [0x20] IFELSE", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x30"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x20"));
         });
     }
 
