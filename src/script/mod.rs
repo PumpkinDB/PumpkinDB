@@ -119,6 +119,7 @@ word!(IFELSE, b"\x86IFELSE");
 // Category: Logical operations
 word!(NOT, (a => c), b"\x83NOT");
 word!(AND, (a, b => c), b"\x83AND");
+word!(OR, (a, b => c), b"\x82OR");
 
 use std::str;
 
@@ -573,6 +574,7 @@ impl<'a> VM<'a> {
                            self => handle_set,
                            self => handle_not,
                            self => handle_and,
+                           self => handle_or,
                            self => handle_ifelse,
                            // storage
                            self.storage => handle_write,
@@ -794,6 +796,31 @@ impl<'a> VM<'a> {
                 env.push(STACK_FALSE);
             } else {
                 return Err((env, Error::InvalidValue));
+            }
+
+            Ok((env, None))
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    fn handle_or(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == OR {
+            let a = env.pop();
+            let b = env.pop();
+
+            if a.is_none() || b.is_none() {
+                return Err((env, Error::EmptyStack));
+            }
+
+            let a1 = a.unwrap();
+            let b1 = b.unwrap();
+
+            if a1 == STACK_TRUE || b1 == STACK_TRUE {
+                env.push(STACK_TRUE);
+            } else {
+                env.push(STACK_FALSE);
             }
 
             Ok((env, None))
@@ -1257,6 +1284,17 @@ mod tests {
             assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
             assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
             assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(env.pop(), None);
+        });
+    }
+
+    #[test]
+    fn or() {
+        eval!("0x01 0x01 OR 0x00 0x01 OR 0x01 0x00 OR 0x00 0x00 OR", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
             assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
             assert_eq!(env.pop(), None);
         });
