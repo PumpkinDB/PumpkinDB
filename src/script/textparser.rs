@@ -115,6 +115,14 @@ fn space_or_end(i: &[u8]) -> IResult<&[u8], ()> {
     }
 }
 
+fn eof(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
+    if i.len() == 0 {
+        return IResult::Done(&i[0..], Vec::new())
+    } else {
+        IResult::Error(ErrorKind::Custom(1))
+    }
+}
+
 named!(uint<Vec<u8>>, do_parse!(
                      biguint: take_while1!(is_digit)      >>
                               space_or_end                >>
@@ -135,10 +143,14 @@ named!(code<Vec<u8>>, do_parse!(
                          prog: delimited!(char!('['), ws!(program), char!(']')) >>
                                (sized_vec(prog))));
 named!(item<Vec<u8>>, alt!(binary | string | uint | code | word));
-named!(program<Vec<u8>>, do_parse!(
+named!(program<Vec<u8>>, alt!(do_parse!(
+                               take_while!(is_space)                        >>
+                            v: eof                                          >>
+                               (v))
+                              | do_parse!(
                                take_while!(is_space)                        >>
                          item: separated_list!(take_while!(is_space), item) >>
-                               (flatten_program(item))));
+                               (flatten_program(item)))));
 named!(pub programs<Vec<Vec<u8>>>, do_parse!(
                          item: separated_list!(take_while!(is_crlf), program)   >>
                                (item)));
@@ -181,6 +193,14 @@ mod tests {
     use script::textparser::{parse, programs};
     use num_bigint::BigUint;
     use core::str::FromStr;
+
+    #[test]
+    fn test_empty() {
+        let script = parse("").unwrap();
+        assert_eq!(script, vec![]);
+        let script = parse("  ").unwrap();
+        assert_eq!(script, vec![]);
+    }
 
     #[test]
     fn test_one() {
