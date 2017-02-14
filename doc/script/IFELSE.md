@@ -1,14 +1,21 @@
 # IFELSE
 
+## Usage
+
+```
+BOOL [THEN] [ELSE] IFELSE
+```
+
 Provides conditional flow control executing different branches of
-code depending on a boolean value
+code depending on a boolean value.
 
 Input stack: `a [b] [c]`
 
 Output stack: maybe `b`, maybe `c`
 
-`IFELSE` will push the result of `[b]` to the stack if `a` is 0, or it
-will push `[c]` otherwise.
+`IFELSE` will push the result of `[c]` to the stack if `a` is 0, or it
+will push `[b]` otherwise.
+
 
 ## Allocation
 
