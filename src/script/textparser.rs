@@ -107,8 +107,8 @@ fn flatten_program(p: Vec<Vec<u8>>) -> Vec<u8> {
     vec
 }
 
-fn space_or_end(i: &[u8]) -> IResult<&[u8], ()> {
-    if i.len() == 0 || (i.len() >= 1 && i[0] == b' ') {
+fn delim_or_end(i: &[u8]) -> IResult<&[u8], ()> {
+    if i.len() == 0 || (i.len() >= 1 && (i[0] == b' ' || i[0] == b']')) {
         return IResult::Done(&i[0..], ())
     } else {
         IResult::Error(ErrorKind::Custom(0))
@@ -125,7 +125,7 @@ fn eof(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
 
 named!(uint<Vec<u8>>, do_parse!(
                      biguint: take_while1!(is_digit)      >>
-                              space_or_end                >>
+                              delim_or_end                >>
                               (sized_vec(BigUint::from_str(str::from_utf8(biguint).unwrap())
                                          .unwrap().to_bytes_be()))));
 named!(word<Vec<u8>>, do_parse!(
@@ -239,6 +239,12 @@ mod tests {
         vec.append(&mut bytes);
 
         assert_eq!(script, vec);
+    }
+
+    #[test]
+    fn test_uint_at_the_end_of_code() {
+        let script = parse("[1]").unwrap();
+        assert_eq!(script, parse("[0x01]").unwrap());
     }
 
 
