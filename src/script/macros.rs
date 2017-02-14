@@ -112,13 +112,13 @@ macro_rules! eval {
                    Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
                       let _ = sender.send(RequestMessage::Shutdown);
                       let $result = Ok::<(), Error>(());
-                      let mut $env = Env::new_with_stack(stack, stack_size);
+                      let mut $env = Env::new_with_stack(stack, stack_size).unwrap();
                       $expr;
                    }
                    Ok(ResponseMessage::EnvFailed(_, err, stack, stack_size)) => {
                       let _ = sender.send(RequestMessage::Shutdown);
                       let $result = Err::<(), Error>(err);
-                      let mut $env = Env::new_with_stack(stack, stack_size);
+                      let mut $env = Env::new_with_stack(stack.unwrap(), stack_size.unwrap()).unwrap();
                       $expr;
                    }
                    Err(err) => {

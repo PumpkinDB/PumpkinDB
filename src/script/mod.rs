@@ -950,7 +950,7 @@ mod tests {
 
     #[test]
     fn env_stack_growth() {
-        let mut env = Env::new();
+        let mut env = Env::new().unwrap();
         let target = env.stack.len() * 100;
         for i in 1..target {
             env.push(_EMPTY);
@@ -960,7 +960,7 @@ mod tests {
 
     #[test]
     fn env_heap_growth() {
-        let mut env = Env::new();
+        let mut env = Env::new().unwrap();
         let sz = env.heap_size;
         for i in 1..100 {
             env.alloc(sz);
