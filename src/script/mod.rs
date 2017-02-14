@@ -1110,6 +1110,14 @@ mod tests {
         });
     }
 
+    #[test]
+    fn if_() {
+        eval!("0x01 [0x20] IF 0x00 [0x20] IF", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x20"));
+            assert_eq!(env.pop(), None);
+            assert_eq!(env.pop(), None);
+        });
+    }
 
     #[test]
     fn swap() {
