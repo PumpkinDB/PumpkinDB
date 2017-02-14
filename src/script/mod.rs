@@ -186,12 +186,6 @@ pub enum ParseError {
     /// Unknown error
     UnknownErr,
 }
-/// Allocation-related outcomes
-/// #[derive(Debug, PartialEq)]
-enum AllocResult {
-    Ok,
-    Error
-}
 pub mod binparser;
 pub use self::binparser::parse as parse_bin;
 
@@ -310,24 +304,23 @@ impl<'a> Env<'a> {
     pub fn alloc(&mut self, len: usize) -> Result<&'a mut [u8], Error> {
         if self.heap_ptr + len >= self.heap_size {
             let increase = cmp::max(len, HEAP_SIZE);
-            unsafe {
+            match unsafe {
                 heap::reallocate(self.heap,
                                  self.heap_size,
                                  self.heap_size + increase,
                                  self.heap_align).as_mut()
-            }.and_then(|heap| {
-                self.heap = heap;
-                self.heap_size = self.heap_size + increase;
-                Some(AllocResult::Ok)
-            }).ok_or(AllocResult::Error)
-        } else {
-            Ok(AllocResult::Ok)
-        }.and_then(|_| {
-            let mut space = unsafe { slice::from_raw_parts_mut(self.heap, self.heap_size) };
-            let slice = &mut space[self.heap_ptr..self.heap_ptr + len];
-            self.heap_ptr += len;
-            Ok(slice)
-        }).or(Err(Error::HeapAllocFailed))
+            } {
+                Some(heap) => {
+                    self.heap = heap;
+                    self.heap_size = self.heap_size + increase;
+                }
+                None => return Err(Error::HeapAllocFailed)
+            }
+        }
+        let mut space = unsafe { slice::from_raw_parts_mut(self.heap, self.heap_size) };
+        let slice = &mut space[self.heap_ptr..self.heap_ptr + len];
+        self.heap_ptr += len;
+        Ok(slice)
     }
 }
 
