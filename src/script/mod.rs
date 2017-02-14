@@ -67,6 +67,8 @@ use num_traits::{Zero, One};
 use core::ops::Sub;
 use std::cmp;
 
+use std::collections::BTreeMap;
+
 /// `word!` macro is used to define a built-in word, its signature (if applicable)
 /// and representation
 macro_rules! word {
@@ -115,6 +117,30 @@ word!(SET_IMM, b"\x84SET!"); // internal word
 
 // Category: Logical operations
 word!(NOT, (a => c), b"\x83NOT");
+
+use std::str;
+
+// Builtin words that are implemented in PumpkinScript
+lazy_static! {
+  static ref BUILTIN_FILE: &'static [u8] = include_bytes!("builtins");
+
+  static ref BUILTIN_DEFS: Vec<Vec<u8>> = textparser::programs(*BUILTIN_FILE).unwrap().1;
+
+  static ref BUILTINS: BTreeMap<&'static [u8], Vec<u8>> = {
+      let mut map = BTreeMap::new();
+      let ref defs : Vec<Vec<u8>> = *BUILTIN_DEFS;
+      for definition in defs {
+          match binparser::word(definition.as_slice()) {
+              nom::IResult::Done(&[0x81, b':', ref rest..], _) => {
+                  let word = &definition[0..definition.len() - rest.len() - 2];
+                  map.insert(word, Vec::from(rest));
+              },
+              other => panic!("builtin definition parse error {:?}", other)
+          }
+      }
+      map
+  };
+}
 
 // To add words that don't belong to a core set,
 // add a module with a handler, and reference it in the VM's pass
@@ -199,8 +225,6 @@ pub use self::textparser::parse;
 pub const STACK_SIZE: usize = 32_768;
 /// Initial heap size
 pub const HEAP_SIZE: usize = 32_768;
-
-use std::collections::BTreeMap;
 
 /// Env is a representation of a stack and the heap.
 ///
@@ -531,7 +555,8 @@ impl<'a> VM<'a> {
                           word,
                           res,
                           pid,
-                          {self => handle_drop,
+                          {self => handle_builtins,
+                           self => handle_drop,
                            self => handle_dup,
                            self => handle_swap,
                            self => handle_rot,
@@ -576,6 +601,16 @@ impl<'a> VM<'a> {
                           });
         } else {
             return Err((env, Error::DecodingError));
+        }
+    }
+
+    #[inline]
+    fn handle_builtins(&mut self, env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if BUILTINS.contains_key(word) {
+            let vec = BUILTINS.get(word).unwrap().clone();
+            Ok((env, Some(vec)))
+        } else {
+            Err((env, Error::UnknownWord))
         }
     }
 
@@ -1014,6 +1049,37 @@ mod tests {
             assert!(matches!(result.err(), Some(Error::EmptyStack)));
         });
     }
+
+    #[test]
+    fn _2dup() {
+        eval!("1 2 2DUP", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("2"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("1"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("2"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("1"));
+            assert_eq!(env.pop(), None);
+        });
+        eval!("2 2DUP", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+        eval!("2DUP", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+    }
+
+    #[test]
+    fn _2drop() {
+        eval!("1 2 2DROP", env, {
+            assert_eq!(env.pop(), None);
+        });
+        eval!("2 2DROP", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+        eval!("2DROP", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+    }
+
 
     #[test]
     fn swap() {

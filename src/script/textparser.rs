@@ -5,7 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use nom::{IResult, ErrorKind};
-use nom::{is_hex_digit, is_space, digit};
+use nom::{is_hex_digit, is_space, is_digit};
 
 use num_bigint::BigUint;
 use core::str::FromStr;
@@ -94,6 +94,11 @@ fn is_word_char(s: u8) -> bool {
     s == b'/'
 }
 
+
+fn is_crlf(s: u8) -> bool {
+    s == 10 || s == 13
+}
+
 fn flatten_program(p: Vec<Vec<u8>>) -> Vec<u8> {
     let mut vec = Vec::new();
     for mut item in p {
@@ -102,11 +107,19 @@ fn flatten_program(p: Vec<Vec<u8>>) -> Vec<u8> {
     vec
 }
 
+fn space_or_end(i: &[u8]) -> IResult<&[u8], ()> {
+    if i.len() == 0 || (i.len() >= 1 && i[0] == b' ') {
+        return IResult::Done(&i[0..], ())
+    } else {
+        IResult::Error(ErrorKind::Custom(0))
+    }
+}
+
 named!(uint<Vec<u8>>, do_parse!(
-                     biguint: map_res!(
-                                map_res!(digit, str::from_utf8),
-                                BigUint::from_str)        >>
-                              (sized_vec(biguint.to_bytes_be()))));
+                     biguint: take_while1!(is_digit)      >>
+                              space_or_end                >>
+                              (sized_vec(BigUint::from_str(str::from_utf8(biguint).unwrap())
+                                         .unwrap().to_bytes_be()))));
 named!(word<Vec<u8>>, do_parse!(
                         word: take_while1!(is_word_char)  >>
                               (prefix_word(word))));
@@ -123,10 +136,12 @@ named!(code<Vec<u8>>, do_parse!(
                                (sized_vec(prog))));
 named!(item<Vec<u8>>, alt!(binary | string | uint | code | word));
 named!(program<Vec<u8>>, do_parse!(
-                               take_while!(is_space)                            >>
-                         item: separated_list!(take_while!(is_space), item)     >>
-                               take_while!(is_space)                            >>
+                               take_while!(is_space)                        >>
+                         item: separated_list!(take_while!(is_space), item) >>
                                (flatten_program(item))));
+named!(pub programs<Vec<Vec<u8>>>, do_parse!(
+                         item: separated_list!(take_while!(is_crlf), program)   >>
+                               (item)));
 
 /// Parses human-readable PumpkinScript
 ///
@@ -163,7 +178,7 @@ pub fn parse(script: &str) -> Result<Program, ParseError> {
 
 #[cfg(test)]
 mod tests {
-    use script::textparser::parse;
+    use script::textparser::{parse, programs};
     use num_bigint::BigUint;
     use core::str::FromStr;
 
@@ -186,6 +201,34 @@ mod tests {
     }
 
     #[test]
+    fn test_many_uint() {
+        let script = parse("1 2 3").unwrap();
+
+        let mut vec = Vec::new();
+
+        let mut bytes = BigUint::from_str("1").unwrap().to_bytes_be();
+        vec.push(1);
+        vec.append(&mut bytes);
+
+        let mut bytes = BigUint::from_str("2").unwrap().to_bytes_be();
+        vec.push(1);
+        vec.append(&mut bytes);
+
+        let mut bytes = BigUint::from_str("3").unwrap().to_bytes_be();
+        vec.push(1);
+        vec.append(&mut bytes);
+
+        assert_eq!(script, vec);
+    }
+
+
+    #[test]
+    fn test_number_prefixed_word() {
+        let script = parse("2DUP").unwrap();
+        assert_eq!(script, b"\x842DUP");
+    }
+
+    #[test]
     fn test_extra_spaces() {
         let script = parse(" 0xAABB  \"Hi\" ").unwrap();
         assert_eq!(script, vec![2, 0xaa,0xbb, 2, b'H', b'i']);
@@ -205,6 +248,19 @@ mod tests {
         let script_spaced = parse("[ DUP ]").unwrap();
         assert_eq!(script, vec![4, 0x83, b'D', b'U', b'P']);
         assert_eq!(script_spaced, vec![4, 0x83, b'D', b'U', b'P']);
+    }
+
+    #[test]
+    fn test_programs() {
+        let str = "SOMETHING : BURP DURP\nBURP : DURP";
+        let (_, mut progs) = programs(str.as_bytes()).unwrap();
+        assert_eq!(Vec::from(progs.pop().unwrap()), parse("BURP : DURP").unwrap());
+        assert_eq!(Vec::from(progs.pop().unwrap()), parse("SOMETHING : BURP DURP").unwrap());
+
+        let str = "SOMETHING : BURP DURP\nBURP : DURP";
+        let (_, mut progs) = programs(str.as_bytes()).unwrap();
+        assert_eq!(Vec::from(progs.pop().unwrap()), parse("BURP : DURP").unwrap());
+        assert_eq!(Vec::from(progs.pop().unwrap()), parse("SOMETHING : BURP DURP").unwrap());
     }
 
 }
