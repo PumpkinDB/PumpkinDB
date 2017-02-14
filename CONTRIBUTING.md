@@ -57,5 +57,8 @@ Solution: explanation of the solution to the problem. Could
 be longer than one line.
 ```
 
-Also, please run `rustfmt` (`cargo fmt`) over your patch before committing.
-This will make everybody's life easier!  
+Also, please don't run `rustfmt` (`cargo fmt`) over your patch before committing, unless
+you are absolutely sure to include formatting changes that only apply to your actual patch.
+Otherwise, it'll make this patch unnecessarily long and might interfere with currently
+outstanding PRs or other items in progress. We will run `rustfmt` regularly when nothing
+is outstanding to make the code prettier.  This will make everybody's life easier!  
