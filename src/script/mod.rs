@@ -113,6 +113,9 @@ word!(EVAL, b"\x84EVAL");
 word!(SET, b"\x83SET");
 word!(SET_IMM, b"\x84SET!"); // internal word
 
+// Category: Logical operations
+word!(NOT, (a => c), b"\x83NOT");
+
 // To add words that don't belong to a core set,
 // add a module with a handler, and reference it in the VM's pass
 
@@ -541,6 +544,7 @@ impl<'a> VM<'a> {
                            self => handle_times,
                            self => handle_eval,
                            self => handle_set,
+                           self => handle_not,
                            // storage
                            self.storage => handle_write,
                            self.storage => handle_read,
@@ -699,6 +703,30 @@ impl<'a> VM<'a> {
                 env.push(STACK_TRUE);
             } else {
                 env.push(STACK_FALSE);
+            }
+
+            Ok((env, None))
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    fn handle_not(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == NOT {
+            let a = env.pop();
+
+            if a.is_none() {
+                return Err((env, Error::EmptyStack));
+            }
+
+            let a1 = a.unwrap();
+
+            if a1 == STACK_TRUE {
+                env.push(STACK_FALSE);
+            } else if a1 == STACK_FALSE {
+                env.push(STACK_TRUE);
+            } else {
+                return Err((env, Error::InvalidValue));
             }
 
             Ok((env, None))
@@ -1079,6 +1107,15 @@ mod tests {
             assert_eq!(env.pop(), None);
         });
 
+    }
+
+    #[test]
+    fn not() {
+        eval!("0x10 0x20 EQUAL? NOT 0x10 0x10 EQUAL? NOT", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(env.pop(), None);
+        });
     }
 
     #[test]
