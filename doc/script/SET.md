@@ -52,11 +52,13 @@ defined.
 ## Examples
 
 ```
-[key : "MyKey"] SET [key "value" ASSOC COMMIT] WRITE [key RETR] READ => "value"
+[assoc_and_commit : ASSOC COMMIT] SET ["key" "value" assoc_and_commit] WRITE ["key" RETR] READ => "value"
+[[c = CURSOR] SET c CURSOR/FIRST c CURSOR/NEXT] READ => <key> <val> <key> <val>
 ```
 
 ## Tests
 
 ```
-[key : "MyKey"] key => "MyKey"
+[dup : DUP DUP] SET "MyKey" key => "MyKey" "MyKey" "MyKey"
+[depth = DEPTH] SET 1 2 3 depth => 0
 ```
