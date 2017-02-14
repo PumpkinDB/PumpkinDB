@@ -317,6 +317,7 @@ impl<'a> Env<'a> {
                                  self.heap_align).as_mut()
             }.and_then(|heap| {
                 self.heap = heap;
+                self.heap_size = self.heap_size + increase;
                 Some(AllocResult::Ok)
             }).ok_or(AllocResult::Error)
         } else {
