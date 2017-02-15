@@ -112,10 +112,12 @@ word!(LENGTH, (a => b), b"\x86LENGTH");
 word!(CONCAT, (a, b => c), b"\x86CONCAT");
 
 // Category: Control flow
+word!(DOWHILE, b"\x87DOWHILE");
 word!(TIMES, b"\x85TIMES");
 word!(EVAL, b"\x84EVAL");
 word!(SET, b"\x83SET");
 word!(SET_IMM, b"\x84SET!"); // internal word
+word!(IF, b"\x82IF"); // for reference, implemented in builtins
 word!(IFELSE, b"\x86IFELSE");
 
 // Category: Logical operations
@@ -580,6 +582,7 @@ impl<'a> VM<'a> {
                            self => handle_equal,
                            self => handle_concat,
                            self => handle_length,
+                           self => handle_dowhile,
                            self => handle_times,
                            self => handle_eval,
                            self => handle_unwrap,
@@ -946,6 +949,37 @@ impl<'a> VM<'a> {
                 }
             }
             Ok((env, None))
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    fn handle_dowhile(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == DOWHILE {
+
+            let v = stack_pop!(env);
+
+            // inject the code itself
+            let mut vec = Vec::from(v);
+
+            let mut header = vec![0;offset_by_size(v.len() + DOWHILE.len() + offset_by_size(v.len()))];
+            write_size_into_slice!(offset_by_size(v.len()) + v.len() + DOWHILE.len(), header.as_mut_slice());
+            vec.append(&mut header);
+
+            // inject code closure size
+            let mut header = vec![0;offset_by_size(v.len())];
+            write_size_into_slice!(v.len(), header.as_mut_slice());
+            vec.append(&mut header);
+
+            // inject code closure
+            vec.extend_from_slice(v);
+            // inject DOWHILE
+            vec.extend_from_slice(DOWHILE);
+            // inject IF
+            vec.extend_from_slice(IF);
+
+            Ok((env, Some(vec)))
         } else {
             Err((env, Error::UnknownWord))
         }
@@ -1362,6 +1396,34 @@ mod tests {
 
         eval!("5 TIMES", env, result, {
             assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+
+    }
+
+    #[test]
+    fn dowhile() {
+        eval!("1 2 3 [1 EQUAL? NOT] DOWHILE DEPTH", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("1 2 3 [1 EQUAL?] DOWHILE DEPTH", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x02"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x02"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("[0] DOWHILE", env, {
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("DOWHILE", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+
+        eval!("[100] DOWHILE", env, result, {
+            assert!(matches!(result.err(), Some(Error::InvalidValue)));
         });
 
     }
