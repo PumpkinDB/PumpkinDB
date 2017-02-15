@@ -64,6 +64,7 @@ use alloc::heap;
 
 use num_bigint::BigUint;
 use num_traits::{Zero, One};
+use num_traits::ToPrimitive;
 use core::ops::Sub;
 use std::cmp;
 
@@ -110,6 +111,7 @@ word!(LTP, (a, b => c), b"\x83LT?");
 word!(GTP, (a, b => c), b"\x83GT?");
 word!(LENGTH, (a => b), b"\x86LENGTH");
 word!(CONCAT, (a, b => c), b"\x86CONCAT");
+word!(SLICE, (a, b, c => d), b"\x85SLICE");
 
 // Category: Control flow
 word!(DOWHILE, b"\x87DOWHILE");
@@ -581,6 +583,7 @@ impl<'a> VM<'a> {
                            self => handle_gtp,
                            self => handle_equal,
                            self => handle_concat,
+                           self => handle_slice,
                            self => handle_length,
                            self => handle_dowhile,
                            self => handle_times,
@@ -889,6 +892,37 @@ impl<'a> VM<'a> {
             }
 
             env.push(slice);
+
+            Ok((env, None))
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    fn handle_slice(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == SLICE {
+            let end = stack_pop!(env);
+            let start = stack_pop!(env);
+            let slice = stack_pop!(env);
+
+            let start_int = BigUint::from_bytes_be(start).to_u64().unwrap() as usize;
+            let end_int = BigUint::from_bytes_be(end).to_u64().unwrap() as usize;
+
+            // range conditions
+            if start_int > end_int {
+                return Err((env, Error::InvalidValue));
+            }
+
+            if start_int > slice.len() - 1 {
+                return Err((env, Error::InvalidValue));
+            }
+
+            if end_int > slice.len() {
+                return Err((env, Error::InvalidValue));
+            }
+
+            env.push(&slice[start_int..end_int]);
 
             Ok((env, None))
         } else {
@@ -1364,6 +1398,50 @@ mod tests {
         eval!("CONCAT", env, result, {
             assert!(matches!(result.err(), Some(Error::EmptyStack)));
         });
+    }
+
+    #[test]
+    fn slice() {
+        eval!("\"Hello\" 0 5 SLICE", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("\"Hello\""));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("\"Hello\" 1 4 SLICE", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("\"ell\""));
+            assert_eq!(env.pop(), None);
+        });
+
+
+        eval!("\"Hello\" 0 0 SLICE", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("\"\""));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("\"Hello\" 4 2 SLICE", env, result, {
+            assert!(matches!(result.err(), Some(Error::InvalidValue)));
+        });
+
+        eval!("\"Hello\" 5 7 SLICE", env, result, {
+            assert!(matches!(result.err(), Some(Error::InvalidValue)));
+        });
+
+        eval!("\"Hello\" 1 7 SLICE", env, result, {
+            assert!(matches!(result.err(), Some(Error::InvalidValue)));
+        });
+
+        eval!("0 1 SLICE", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+
+        eval!("1 SLICE", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+
+        eval!("SLICE", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+
     }
 
     #[test]

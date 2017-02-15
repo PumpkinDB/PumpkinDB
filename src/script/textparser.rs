@@ -136,9 +136,10 @@ named!(binary<Vec<u8>>, do_parse!(
                          hex: take_while1!(is_hex_digit)  >>
                               (bin(hex))
 ));
-named!(string<Vec<u8>>, do_parse!(
+named!(string<Vec<u8>>,  alt!(do_parse!(tag!(b"\"\"") >> (vec![0])) |
+                         do_parse!(
                          str: delimited!(char!('"'), is_not!("\""), char!('"')) >>
-                              (string_to_vec(str))));
+                              (string_to_vec(str)))));
 named!(code<Vec<u8>>, do_parse!(
                          prog: delimited!(char!('['), ws!(program), char!(']')) >>
                                (sized_vec(prog))));
@@ -266,6 +267,14 @@ mod tests {
 
         assert_eq!(script, vec![0x02, 0xAA, 0xBB, 0x83, b'D', b'U', b'P',
                                 0x03, 0xFF, 0x00, 0xCC, 0x05, b'H', b'e', b'l', b'l', b'o']);
+    }
+
+
+    #[test]
+    fn test_empty_string() {
+        let script = parse("\"\"").unwrap();
+
+        assert_eq!(script, vec![0]);
     }
 
     #[test]
