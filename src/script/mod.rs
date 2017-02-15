@@ -102,6 +102,7 @@ word!(SWAP, (a, b => b, a), b"\x84SWAP");
 word!(ROT, (a, b, c  => b, c, a), b"\x83ROT");
 word!(OVER, (a, b => a, b, a), b"\x84OVER");
 word!(DEPTH, b"\x85DEPTH");
+word!(UNWRAP, b"\x86UNWRAP");
 
 // Category: Byte arrays
 word!(EQUALP, (a, b => c), b"\x86EQUAL?");
@@ -573,6 +574,7 @@ impl<'a> VM<'a> {
                            self => handle_length,
                            self => handle_times,
                            self => handle_eval,
+                           self => handle_unwrap,
                            self => handle_set,
                            self => handle_not,
                            self => handle_and,
@@ -996,6 +998,30 @@ impl<'a> VM<'a> {
     }
 
     #[inline]
+    fn handle_unwrap(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == UNWRAP {
+            match env.pop() {
+                None => return Err((env, Error::EmptyStack)),
+                Some(v) => {
+                    let mut current = v;
+                    while current.len() > 0 {
+                        match binparser::data(current) {
+                            nom::IResult::Done(rest, val) => {
+                                env.push(&val[offset_by_size(val.len())..]);
+                                current = rest
+                            },
+                            _ => return Err((env, Error::InvalidValue))
+                        }
+                    }
+                    Ok((env, None))
+                }
+            }
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
     fn handle_times(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == TIMES {
             let count_ = env.pop();
@@ -1404,6 +1430,61 @@ mod tests {
         });
 
         eval!("EVAL", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+    }
+
+    #[test]
+    fn unwrap() {
+        eval!("[1 2] UNWRAP", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x02"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("[] UNWRAP", env, {
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("[1 DUP] UNWRAP", env, result, {
+            assert!(matches!(result.err(), Some(Error::InvalidValue)));
+        });
+
+        eval!("UNWRAP", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+    }
+
+    #[test]
+    fn someq() {
+        eval!("[1 2] SOME?", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("[] SOME?", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("SOME?", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+    }
+
+    #[test]
+    fn noneq() {
+        eval!("[1 2] NONE?", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("[] NONE?", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("NONE?", env, result, {
             assert!(matches!(result.err(), Some(Error::EmptyStack)));
         });
     }
