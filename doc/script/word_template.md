@@ -39,7 +39,7 @@ in the file system. Below is the table for transliterating them:
 
 | Character | Replacement |
 |-----------|-------------|
-| ?         |  Q          |
+| ?         |  P          |
 | :         |  _          |
 | !         |  B          |
 | #         |  _          |

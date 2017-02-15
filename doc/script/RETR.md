@@ -21,7 +21,7 @@ EmptyStack error if there are less than two items on the stack
 
 NoTransaction error if there's no current write transaction
 
-UnknownKey error if there is no such key. See [ASSOC?](ASSOCQ.md)
+UnknownKey error if there is no such key. See [ASSOC?](ASSOCP.md)
 for mediating this problem
 
 ## Examples
