@@ -205,6 +205,7 @@ mod tests {
     use lmdb;
     use crossbeam;
     use script::binparser;
+    use pubsub;
 
     const _EMPTY: &'static [u8] = b"";
 
@@ -294,7 +295,9 @@ mod tests {
                                       &lmdb::DatabaseOptions::new(lmdb::db::CREATE))
             .expect("can't open database");
         crossbeam::scope(|scope| {
-            let mut vm = VM::new(&env, &db);
+            let publisher = pubsub::Publisher::new();
+            let publisher_accessor = publisher.accessor();
+            let mut vm = VM::new(&env, &db, publisher_accessor.clone());
             let sender = vm.sender();
             let handle = scope.spawn(move || {
                 vm.run();

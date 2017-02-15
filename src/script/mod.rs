@@ -123,6 +123,9 @@ word!(NOT, (a => c), b"\x83NOT");
 word!(AND, (a, b => c), b"\x83AND");
 word!(OR, (a, b => c), b"\x82OR");
 
+// Category: pubsub
+word!(SEND, (a => ), b"\x84SEND");
+
 use std::str;
 
 // Builtin words that are implemented in PumpkinScript
@@ -417,6 +420,8 @@ pub type TrySendError<T> = std::sync::mpsc::TrySendError<T>;
 
 use lmdb;
 
+use pubsub;
+
 pub mod storage;
 pub mod timestamp_hlc;
 
@@ -455,6 +460,7 @@ pub struct VM<'a> {
     inbox: Receiver<RequestMessage<'a>>,
     sender: Sender<RequestMessage<'a>>,
     loopback: Sender<RequestMessage<'a>>,
+    publisher: pubsub::PublisherAccessor<Vec<u8>>,
     storage: storage::Handler<'a>,
     hlc: timestamp_hlc::Handler<'a>,
 }
@@ -472,12 +478,14 @@ impl<'a> VM<'a> {
     /// * Response sender
     /// * Internal sender
     /// * Request receiver
-    pub fn new(db_env: &'a lmdb::Environment, db: &'a lmdb::Database<'a>) -> Self {
+    pub fn new(db_env: &'a lmdb::Environment, db: &'a lmdb::Database<'a>,
+               publisher: pubsub::PublisherAccessor<Vec<u8>>) -> Self {
         let (sender, receiver) = mpsc::channel::<RequestMessage<'a>>();
         VM {
             inbox: receiver,
             sender: sender.clone(),
             loopback: sender.clone(),
+            publisher: publisher,
             storage: storage::Handler::new(db_env, db),
             hlc: timestamp_hlc::Handler::new(),
         }
@@ -592,7 +600,9 @@ impl<'a> VM<'a> {
                            self.hlc => handle_hlc_lc,
                            self.hlc => handle_hlc_tick,
                            self.hlc => handle_hlc_ltp,
-                           self.hlc => handle_hlc_gtp
+                           self.hlc => handle_hlc_gtp,
+                           // pubsub
+                           self => handle_send
                            },
                           {
                               let (env_, rest) = match res {
@@ -1033,6 +1043,20 @@ impl<'a> VM<'a> {
             Err((env, Error::UnknownWord))
         }
     }
+
+    #[inline]
+    fn handle_send(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == SEND {
+            let topic = stack_pop!(env);
+            let data = stack_pop!(env);
+
+            self.publisher.send(Vec::from(topic), Vec::from(data));
+
+            Ok((env, None))
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
 }
 
 
@@ -1047,6 +1071,7 @@ mod tests {
     use lmdb;
     use crossbeam;
     use super::binparser;
+    use pubsub;
 
     const _EMPTY: &'static [u8] = b"";
 
@@ -1415,6 +1440,39 @@ mod tests {
         eval!("0x10 EVAL", env, result, {
             assert!(result.is_err());
             assert!(matches!(result.err(), Some(Error::DecodingError)));
+        });
+    }
+
+    use std::time::Duration;
+
+    #[test]
+    fn send() {
+        eval!("\"Hello\" \"Topic\" SEND", env, result, publisher_accessor, {
+            let (sender1, receiver1) = mpsc::channel();
+            publisher_accessor.subscribe(Vec::from("Topic"), sender1);
+            let (sender2, receiver2) = mpsc::channel();
+            publisher_accessor.subscribe(Vec::from("Topic"), sender2);
+
+        }, {
+            assert!(!result.is_err());
+            assert_eq!(receiver1.recv_timeout(Duration::from_secs(1)).unwrap(), (Vec::from("Topic"), Vec::from("Hello")));
+            assert_eq!(receiver2.recv_timeout(Duration::from_secs(1)).unwrap(), (Vec::from("Topic"), Vec::from("Hello")));
+        });
+
+        eval!("\"Hello\" \"Topic1\" SEND", env, result, publisher_accessor, {
+            let (sender, receiver) = mpsc::channel();
+            publisher_accessor.subscribe(Vec::from("Topic"), sender);
+        }, {
+            assert!(!result.is_err());
+            assert!(receiver.recv_timeout(Duration::from_secs(1)).is_err());
+        });
+
+        eval!("\"Topic\" SEND", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+
+        eval!("SEND", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
         });
     }
 
