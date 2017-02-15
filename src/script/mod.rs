@@ -103,6 +103,7 @@ word!(ROT, (a, b, c  => b, c, a), b"\x83ROT");
 word!(OVER, (a, b => a, b, a), b"\x84OVER");
 word!(DEPTH, b"\x85DEPTH");
 word!(UNWRAP, b"\x86UNWRAP");
+word!(STACK, b"\x85STACK");
 
 // Category: Byte arrays
 word!(EQUALP, (a, b => c), b"\x86EQUAL?");
@@ -575,6 +576,7 @@ impl<'a> VM<'a> {
                            self => handle_rot,
                            self => handle_over,
                            self => handle_depth,
+                           self => handle_stack,
                            self => handle_ltp,
                            self => handle_gtp,
                            self => handle_equal,
@@ -726,6 +728,39 @@ impl<'a> VM<'a> {
                 slice[i] = bytes[i];
             }
             env.push(slice);
+            Ok((env, None))
+        } else {
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    fn handle_stack(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == STACK {
+
+            let mut vec = Vec::new();
+            while env.stack_top().is_some() {
+                vec.insert(0, env.pop().unwrap());
+            }
+
+            let size = vec.clone().into_iter()
+                .fold(0, |a, item| a + item.len() + offset_by_size(item.len()));
+
+            match env.alloc(size) {
+                Ok(mut slice) => {
+                    let mut offset = 0;
+                    for item in vec {
+                        write_size_into_slice!(item.len(), &mut slice[offset..]);
+                        offset += offset_by_size(item.len());
+                        for b in item {
+                            slice[offset] = *b;
+                            offset += 1;
+                        }
+                    }
+                    env.push(slice);
+                }
+                Err(err) => return Err((env, err))
+            }
             Ok((env, None))
         } else {
             Err((env, Error::UnknownWord))
@@ -1397,6 +1432,24 @@ mod tests {
 
         eval!("UNWRAP", env, result, {
             assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+    }
+
+    #[test]
+    fn stack() {
+        eval!("1 2 3 STACK", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[1 2 3]"));
+            assert_eq!(env.pop(), None);
+        });
+        eval!("1 2 3 STACK UNWRAP", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("3"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("2"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("1"));
+            assert_eq!(env.pop(), None);
+        });
+        eval!("STACK", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[]"));
+            assert_eq!(env.pop(), None);
         });
     }
 
