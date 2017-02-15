@@ -595,6 +595,13 @@ impl<'a> VM<'a> {
                            self.storage => handle_assocq,
                            self.storage => handle_retr,
                            self.storage => handle_commit,
+                           self.storage => handle_cursor,
+                           self.storage => handle_cursor_first,
+                           self.storage => handle_cursor_next,
+                           self.storage => handle_cursor_prev,
+                           self.storage => handle_cursor_last,
+                           self.storage => handle_cursor_seek,
+                           self.storage => handle_cursor_cur,
                            // timestamping
                            self.hlc => handle_hlc,
                            self.hlc => handle_hlc_lc,
