@@ -199,6 +199,7 @@ mod tests {
     use lmdb;
     use crossbeam;
     use script::binparser;
+    use pubsub;
 
     const _EMPTY: &'static [u8] = b"";
 

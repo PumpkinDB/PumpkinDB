@@ -94,7 +94,10 @@ macro_rules! eval {
         ($script: expr, $env: ident, $expr: expr) => {
            eval!($script, $env, _result, $expr);
         };
-        ($script: expr, $env: ident, $result: pat, $expr: expr) => {
+        ($script: expr, $env: ident, $result: ident, $expr: expr) => {
+           eval!($script, $env, $result, publisher_accessor, {}, $expr);
+        };
+        ($script: expr, $env: ident, $result: ident, $publisher_accessor: ident, {$($init: tt)*}, $expr: expr) => {
           {
             let dir = TempDir::new("pumpkindb").unwrap();
             let path = dir.path().to_str().unwrap();
@@ -111,7 +114,11 @@ macro_rules! eval {
                                  &lmdb::DatabaseOptions::new(lmdb::db::CREATE))
                                  .expect("can't open database");
             crossbeam::scope(|scope| {
-                let mut vm = VM::new(&env, &db);
+                let mut publisher = pubsub::Publisher::new();
+                let $publisher_accessor = publisher.accessor();
+                let publisher_thread = scope.spawn(move || publisher.run());
+                $($init)*
+                let mut vm = VM::new(&env, &db, $publisher_accessor.clone());
                 let sender = vm.sender();
                 let handle = scope.spawn(move || {
                     vm.run();
@@ -138,6 +145,8 @@ macro_rules! eval {
                    }
                 }
                 let _ = handle.join();
+                $publisher_accessor.shutdown();
+                let _ = publisher_thread.join();
           });
         };
       }

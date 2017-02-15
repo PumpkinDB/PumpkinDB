@@ -50,6 +50,7 @@ extern crate lazy_static;
 pub mod script;
 pub mod server;
 pub mod timestamp;
+pub mod pubsub;
 
 use std::thread;
 
@@ -61,6 +62,8 @@ use libc::statvfs;
 
 use alloc::heap;
 use core::mem::size_of;
+
+use std::sync::Mutex;
 
 lazy_static! {
  static ref ENV: lmdb::Environment = {
@@ -100,6 +103,12 @@ lazy_static! {
                               &lmdb::DatabaseOptions::new(lmdb::db::CREATE))
                               .expect("can't open database");
 
+ static ref PUBLISHER: Mutex<pubsub::PublisherAccessor<Vec<u8>>> = {
+     let mut publisher = pubsub::Publisher::new();
+     let publisher_accessor = publisher.accessor();
+     let _ = thread::spawn(move || publisher.run());
+     Mutex::new(publisher_accessor)
+ };
 
 }
 
@@ -110,8 +119,7 @@ fn main() {
     let _ = config::set_default("binary-server.port", 9980);
     let _ = config::set_default("text-server.port", 9981);
 
-
-    let mut vm = script::VM::new(&ENV, &DB);
+    let mut vm = script::VM::new(&ENV, &DB, PUBLISHER.lock().unwrap().clone());
     let sender = vm.sender();
 
     thread::spawn(move || vm.run());
