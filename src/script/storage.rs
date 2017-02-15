@@ -46,20 +46,17 @@ impl<'a> Handler<'a> {
     pub fn handle_write(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         match word {
             WRITE => {
-                match env.pop() {
-                    None => return Err((env, Error::EmptyStack)),
-                    Some(v) => {
-                        validate_lockout!(env, self.db_write_txn, pid);
-                        let mut vec = Vec::from(v);
-                        vec.extend_from_slice(WRITE_END); // transaction end marker
-                        // prepare transaction
-                        match lmdb::WriteTransaction::new(self.db_env) {
-                            Err(e) => Err((env, Error::DatabaseError(e))),
-                            Ok(txn) => {
-                                self.db_write_txn = Some((pid, txn));
-                                Ok((env, Some(vec)))
-                            }
-                        }
+                let v = stack_pop!(env);
+
+                validate_lockout!(env, self.db_write_txn, pid);
+                let mut vec = Vec::from(v);
+                vec.extend_from_slice(WRITE_END); // transaction end marker
+                // prepare transaction
+                match lmdb::WriteTransaction::new(self.db_env) {
+                    Err(e) => Err((env, Error::DatabaseError(e))),
+                    Ok(txn) => {
+                        self.db_write_txn = Some((pid, txn));
+                        Ok((env, Some(vec)))
                     }
                 }
             }
@@ -76,21 +73,18 @@ impl<'a> Handler<'a> {
     pub fn handle_read(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         match word {
             READ => {
-                match env.pop() {
-                    None => return Err((env, Error::EmptyStack)),
-                    Some(v) => {
-                        validate_lockout!(env, self.db_read_txn, pid);
-                        validate_lockout!(env, self.db_write_txn, pid);
-                        let mut vec = Vec::from(v);
-                        vec.extend_from_slice(READ_END); // transaction end marker
-                        // prepare transaction
-                        match lmdb::ReadTransaction::new(self.db_env) {
-                            Err(e) => Err((env, Error::DatabaseError(e))),
-                            Ok(txn) => {
-                                self.db_read_txn = Some((pid, txn));
-                                Ok((env, Some(vec)))
-                            }
-                        }
+                let v = stack_pop!(env);
+
+                validate_lockout!(env, self.db_read_txn, pid);
+                validate_lockout!(env, self.db_write_txn, pid);
+                let mut vec = Vec::from(v);
+                vec.extend_from_slice(READ_END); // transaction end marker
+                // prepare transaction
+                match lmdb::ReadTransaction::new(self.db_env) {
+                    Err(e) => Err((env, Error::DatabaseError(e))),
+                    Ok(txn) => {
+                        self.db_read_txn = Some((pid, txn));
+                        Ok((env, Some(vec)))
                     }
                 }
             }
@@ -109,19 +103,12 @@ impl<'a> Handler<'a> {
         if word == ASSOC {
             validate_lockout!(env, self.db_write_txn, pid);
             if let Some((_, ref txn)) = self.db_write_txn {
-                let value = env.pop();
-                let key = env.pop();
-
-                if value.is_none() || key.is_none() {
-                    return Err((env, Error::EmptyStack));
-                }
-
-                let value1 = value.unwrap();
-                let key1 = key.unwrap();
+                let value = stack_pop!(env);
+                let key = stack_pop!(env);
 
                 let mut access = txn.access();
 
-                match access.put(self.db, key1, value1, lmdb::put::NOOVERWRITE) {
+                match access.put(self.db, key, value, lmdb::put::NOOVERWRITE) {
                     Ok(_) => Ok((env, None)),
                     Err(lmdb::Error::ValRejected(_)) => Err((env, Error::DuplicateKey)),
                     Err(err) => Err((env, Error::DatabaseError(err))),
@@ -155,15 +142,12 @@ impl<'a> Handler<'a> {
         if word == RETR {
             validate_lockout!(env, self.db_write_txn, pid);
             validate_lockout!(env, self.db_read_txn, pid);
-            let key = env.pop();
-            if key.is_none() {
-                return Err((env, Error::EmptyStack));
-            }
-            let key1 = key.unwrap();
+            let key = stack_pop!(env);
+
             let txn = read_or_write_transaction!(self, env);
             let access = txn.access();
 
-            return match access.get::<[u8], [u8]>(self.db, key1).to_opt() {
+            return match access.get::<[u8], [u8]>(self.db, key).to_opt() {
                 Ok(Some(val)) => {
                     let slice0 = env.alloc(val.len());
                     if slice0.is_err() {
@@ -188,15 +172,12 @@ impl<'a> Handler<'a> {
     pub fn handle_assocq(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         if word == ASSOCQ {
             validate_lockout!(env, self.db_write_txn, pid);
-            let key = env.pop();
-            if key.is_none() {
-                return Err((env, Error::EmptyStack));
-            }
-            let key1 = key.unwrap();
+            let key = stack_pop!(env);
+
             let txn = read_or_write_transaction!(self, env);
             let access = txn.access();
 
-            match access.get::<[u8], [u8]>(self.db, key1).to_opt() {
+            match access.get::<[u8], [u8]>(self.db, key).to_opt() {
                 Ok(Some(_)) => {
                     env.push(STACK_TRUE);
                     Ok((env, None))

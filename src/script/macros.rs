@@ -76,6 +76,18 @@ macro_rules! read_or_write_transaction {
     };
 }
 
+macro_rules! stack_pop {
+    ($env: expr) => {
+        match $env.pop() {
+            None => {
+                return Err(($env, Error::EmptyStack))
+            }
+            Some(e) => {
+                e
+            }
+        }
+    }
+}
 
 #[cfg(test)]
 macro_rules! eval {
