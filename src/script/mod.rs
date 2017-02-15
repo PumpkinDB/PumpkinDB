@@ -104,7 +104,7 @@ word!(ROT, (a, b, c  => b, c, a), b"\x83ROT");
 word!(OVER, (a, b => a, b, a), b"\x84OVER");
 word!(DEPTH, b"\x85DEPTH");
 word!(UNWRAP, b"\x86UNWRAP");
-word!(STACK, b"\x85STACK");
+word!(WRAP, b"\x84WRAP");
 
 // Category: Byte arrays
 word!(EQUALP, (a, b => c), b"\x86EQUAL?");
@@ -580,7 +580,7 @@ impl<'a> VM<'a> {
                            self => handle_rot,
                            self => handle_over,
                            self => handle_depth,
-                           self => handle_stack,
+                           self => handle_wrap,
                            self => handle_ltp,
                            self => handle_gtp,
                            self => handle_equal,
@@ -741,12 +741,19 @@ impl<'a> VM<'a> {
     }
 
     #[inline]
-    fn handle_stack(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == STACK {
+    fn handle_wrap(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if word == WRAP {
+
+            let n = stack_pop!(env);
+
+            let mut n_int = BigUint::from_bytes_be(n).to_u64().unwrap() as usize;
 
             let mut vec = Vec::new();
-            while env.stack_top().is_some() {
-                vec.insert(0, env.pop().unwrap());
+
+            while n_int > 0 {
+                let item = stack_pop!(env);
+                vec.insert(0, item);
+                n_int -= 1;
             }
 
             let size = vec.clone().into_iter()
@@ -1590,6 +1597,28 @@ mod tests {
         eval!("STACK", env, {
             assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[]"));
             assert_eq!(env.pop(), None);
+        });
+    }
+
+    #[test]
+    fn wrap() {
+        eval!("1 2 3 2 WRAP", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[2 3]"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("1"));
+            assert_eq!(env.pop(), None);
+        });
+        eval!("1 2 3 2 WRAP UNWRAP", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("3"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("2"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("1"));
+            assert_eq!(env.pop(), None);
+        });
+        eval!("1 2 WRAP", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+
+        eval!("WRAP", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
         });
     }
 
