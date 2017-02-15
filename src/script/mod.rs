@@ -803,8 +803,8 @@ impl<'a> VM<'a> {
     #[inline]
     fn handle_ifelse(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == IFELSE {
-            let then = stack_pop!(env);
             let else_ = stack_pop!(env);
+            let then = stack_pop!(env);
             let cond = stack_pop!(env);
 
             if cond == STACK_TRUE {
@@ -1152,7 +1152,7 @@ mod tests {
 
     #[test]
     fn if_() {
-        eval!("0x01 [0x20] IF 0x00 [0x20] IF", env, {
+        eval!("0x01 [0x20] IF 0x00 [0x30] IF", env, {
             assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x20"));
             assert_eq!(env.pop(), None);
             assert_eq!(env.pop(), None);
@@ -1286,9 +1286,26 @@ mod tests {
 
     #[test]
     fn ifelse() {
-        eval!("0x01 [0x30] [0x20] IFELSE 0x00 [0x30] [0x20] IFELSE", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x30"));
+        eval!("0x01 [0x10] [0x20] IFELSE 0x00 [0x10] [0x20] IFELSE", env, {
             assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x20"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x10"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("0x10 [0x10] [0x20] IFELSE", env, result, {
+            assert!(matches!(result.err(), Some(Error::InvalidValue)));
+        });
+
+        eval!("[0x10] [0x20] IFELSE", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+
+        eval!("[0x20] IFELSE", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+
+        eval!("IFELSE", env, result, {
+            assert!(matches!(result.err(), Some(Error::EmptyStack)));
         });
     }
 
