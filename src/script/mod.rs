@@ -552,6 +552,9 @@ impl<'a> VM<'a> {
     }
 
     fn pass(&mut self, mut env: Env<'a>, program: &mut Vec<u8>, pid: EnvId) -> PassResult<'a> {
+        if program.len() == 0 {
+            return Ok((env, None));
+        }
         let slice0 = env.alloc(program.len());
         if slice0.is_err() {
             return Err((env, slice0.unwrap_err()));
@@ -1719,6 +1722,13 @@ mod tests {
 
         eval!("SEND", env, result, {
             assert!(matches!(result.err(), Some(Error::EmptyStack)));
+        });
+    }
+
+    #[test]
+    fn nothing() {
+        eval!("", env, {
+            assert_eq!(env.pop(), None);
         });
     }
 
