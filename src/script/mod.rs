@@ -119,7 +119,7 @@ word!(DOWHILE, b"\x87DOWHILE");
 word!(TIMES, b"\x85TIMES");
 word!(EVAL, b"\x84EVAL");
 word!(SET, b"\x83SET");
-word!(SET_IMM, b"\x84SET!"); // internal word
+word!(DEF, b"\x83DEF");
 word!(IF, b"\x82IF"); // for reference, implemented in builtins
 word!(IFELSE, b"\x86IFELSE");
 
@@ -537,8 +537,8 @@ impl<'a> VM<'a> {
                         }
                         Ok((env, None)) => {
                             let _ = chan.send(ResponseMessage::EnvTerminated(pid,
-                                                                     Vec::from(env.stack()),
-                                                                     env.stack_size));
+                                                                             Vec::from(env.stack()),
+                                                                             env.stack_size));
                         }
                     };
                 }
@@ -590,8 +590,7 @@ impl<'a> VM<'a> {
                            self => handle_eval,
                            self => handle_unwrap,
                            self => handle_set,
-                           self => handle_set_imm,
-                           self => handle_set_lookup,
+                           self => handle_def,
                            self => handle_not,
                            self => handle_and,
                            self => handle_or,
@@ -617,7 +616,9 @@ impl<'a> VM<'a> {
                            self.hlc => handle_hlc_ltp,
                            self.hlc => handle_hlc_gtp,
                            // pubsub
-                           self => handle_send
+                           self => handle_send,
+                           // catch-all (NB: keep it last)
+                           self => handle_dictionary
                            },
                           {
                               let (env_, rest) = match res {
@@ -1049,63 +1050,55 @@ impl<'a> VM<'a> {
     #[inline]
     fn handle_set(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         word_is!(env, word, SET);
-        let closure = stack_pop!(env);
-        match binparser::word(closure) {
-            nom::IResult::Done(&[0x81, b':', ref rest..], _) => {
-                let word = &closure[0..closure.len() - rest.len() - 2];
-                env.dictionary.insert(word, rest);
-                Ok((env, None))
-            },
-            nom::IResult::Done(&[0x81, b'=', ref rest..], _) => {
-                let word = &closure[0..closure.len() - rest.len() - 2];
-                let mut vec = Vec::new();
-                // inject the code
-                vec.extend_from_slice(rest);
-                // inject [word] \x00SET!
-                let sz = word.len() as u8;
-                if word.len() > 120 {
-                    vec.push(121);
-                }
-                vec.push(sz);
-                vec.extend_from_slice(word);
-                vec.extend_from_slice(SET_IMM);
-                Ok((env, Some(vec)))
-            },
-            _ => Err((env, Error::UnknownWord))
-        }
-    }
-
-    #[inline]
-    fn handle_set_imm(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, SET_IMM);
-        let closure = stack_pop!(env);
-        let val = stack_pop!(env);
-
-        match binparser::word(closure) {
+        let word = stack_pop!(env);
+        let value = stack_pop!(env);
+        match binparser::word(word) {
             nom::IResult::Done(_, _) => {
-                let word = &closure[0..closure.len()];
-                let offset = offset_by_size(val.len());
-                let sz = val.len() + offset;
-                let slice0 = env.alloc(sz);
-                if slice0.is_err() {
-                    return Err((env, slice0.unwrap_err()))
+                match env.alloc(value.len() + offset_by_size(value.len())) {
+                    Ok(mut slice) => {
+                        write_size_into_slice!(value.len(), slice);
+                        let mut offset = offset_by_size(value.len());
+                        for b in value {
+                            slice[offset] = *b;
+                            offset += 1;
+                        }
+                        env.dictionary.insert(word, slice);
+                        Ok((env, None))
+                    }
+                    Err(err) => return Err((env, err))
                 }
-                let mut slice = slice0.unwrap();
-                write_size_into_slice!(val.len(), &mut slice);
-                let mut i = offset;
-                for b in val {
-                    slice[i] = *b;
-                    i += 1;
-                }
-                env.dictionary.insert(word, slice);
-                Ok((env, None))
             },
-            _ => Err((env, Error::UnknownWord))
+            _ => Err((env, error_invalid_value!(word)))
         }
     }
 
+    fn handle_def(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, DEF);
+        let word = stack_pop!(env);
+        let value = stack_pop!(env);
+        match binparser::word(word) {
+            nom::IResult::Done(_, _) => {
+                env.dictionary.insert(word, value);
+                Ok((env, None))
+            },
+            _ => Err((env, error_invalid_value!(word)))
+        }
+    }
+
+
     #[inline]
-    fn handle_set_lookup(&mut self, env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_send(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, SEND);
+        let topic = stack_pop!(env);
+        let data = stack_pop!(env);
+
+        self.publisher.send(Vec::from(topic), Vec::from(data));
+
+        Ok((env, None))
+    }
+
+    #[inline]
+    fn handle_dictionary(&mut self, env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if env.dictionary.contains_key(word) {
             let mut vec = Vec::new();
             {
@@ -1118,16 +1111,6 @@ impl<'a> VM<'a> {
         }
     }
 
-    #[inline]
-    fn handle_send(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, SEND);
-        let topic = stack_pop!(env);
-        let data = stack_pop!(env);
-
-        self.publisher.send(Vec::from(topic), Vec::from(data));
-
-        Ok((env, None))
-    }
 }
 
 #[cfg(test)]
@@ -1611,7 +1594,32 @@ mod tests {
 
     #[test]
     fn set() {
-        eval!("[mydup : DUP DUP] SET 1 mydup mydup", env, {
+        eval!("1 DEPTH 'current_depth SET 1 2 3 current_depth", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+        });
+
+        eval!("[DUP DUP] 'mydup SET mydup", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[DUP DUP]"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("0 0 SET", env, result, {
+            assert_error!(result, "[\"Invalid value\" [0] 3]");
+        });
+
+        eval!("'a SET", env, result, {
+            assert_error!(result, "[\"Empty stack\" [] 4]");
+        });
+
+        eval!("SET", env, result, {
+            assert_error!(result, "[\"Empty stack\" [] 4]");
+        });
+
+    }
+
+    #[test]
+    fn def() {
+        eval!("[DUP DUP] 'mydup DEF 1 mydup mydup", env, {
             assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
             assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
             assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
@@ -1620,16 +1628,16 @@ mod tests {
             assert_eq!(env.pop(), None);
         });
 
-        eval!("1 [current_depth = DEPTH] SET 1 2 3 current_depth", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+        eval!("[DUP DUP] 0 DEF 1 mydup mydup", env, result, {
+            assert_error!(result, "[\"Invalid value\" [0] 3]");
         });
 
-        eval!("[mydup DUP DUP] SET 1 mydup mydup", env, result, {
-            assert!(result.is_err());
+        eval!("'a DEF", env, result, {
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
-        eval!("SET", env, result, {
-            assert!(result.is_err());
+        eval!("DEF", env, result, {
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
     }

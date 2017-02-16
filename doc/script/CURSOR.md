@@ -23,7 +23,7 @@ NoTransaction error if there's no current write transaction
 ## Examples
 
 ```
-[[c = CURSOR] SET ...] READ
+[CURSOR 'c SET ...] READ
 ```
 
 ## Tests

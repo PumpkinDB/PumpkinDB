@@ -29,6 +29,7 @@ with binaries represented as:
 * `0x<hexadecimal>` (hexadecimal form)
 * `"STRING"` (string form, no quoted characters support yet)
 * `integer` (integer form, will convert to a big endian big integer)
+* `'word` (word in a binary form)
 
 The rest of the instructions considered to be words.
 

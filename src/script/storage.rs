@@ -545,19 +545,19 @@ mod tests {
              assert!(result.is_err());
         });
 
-        eval!("[[c = CURSOR] SET] READ [c CURSOR/FIRST] READ", env, result, {
+        eval!("[CURSOR 'c SET] READ [c CURSOR/FIRST] READ", env, result, {
              assert!(result.is_err());
         });
-        eval!("[[c = CURSOR] SET] READ [c CURSOR/LAST] READ", env, result, {
+        eval!("[CURSOR 'c SET] READ [c CURSOR/LAST] READ", env, result, {
              assert!(result.is_err());
         });
-        eval!("[[c = CURSOR] SET] READ [c CURSOR/NEXT] READ", env, result, {
+        eval!("[CURSOR 'c SET] READ [c CURSOR/NEXT] READ", env, result, {
              assert!(result.is_err());
         });
-        eval!("[[c = CURSOR] SET] READ [c CURSOR/PREV] READ", env, result, {
+        eval!("[CURSOR 'c SET] READ [c CURSOR/PREV] READ", env, result, {
              assert!(result.is_err());
         });
-        eval!("[[c = CURSOR] SET] READ [1 c CURSOR/SEEK] READ", env, result, {
+        eval!("[CURSOR 'c SET] READ [1 c CURSOR/SEEK] READ", env, result, {
              assert!(result.is_err());
         });
 
@@ -580,19 +580,19 @@ mod tests {
              assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
         });
 
-        eval!("[1 2 ASSOC COMMIT] WRITE [[c = CURSOR] SET c CURSOR/FIRST? DROP c CURSOR/NEXT?] READ", env, result, {
+        eval!("[1 2 ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/FIRST? DROP c CURSOR/NEXT?] READ", env, result, {
              assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
         });
 
-        eval!("[1 2 ASSOC 2 2 ASSOC COMMIT] WRITE [[c = CURSOR] SET c CURSOR/FIRST? DROP c CURSOR/NEXT?] READ", env, result, {
+        eval!("[1 2 ASSOC 2 2 ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/FIRST? DROP c CURSOR/NEXT?] READ", env, result, {
              assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
         });
 
-        eval!("[1 2 ASSOC COMMIT] WRITE [[c = CURSOR] SET c CURSOR/LAST? DROP c CURSOR/PREV?] READ", env, result, {
+        eval!("[1 2 ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/LAST? DROP c CURSOR/PREV?] READ", env, result, {
              assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
         });
 
-        eval!("[1 2 ASSOC 2 2 ASSOC COMMIT] WRITE [[c = CURSOR] SET c CURSOR/LAST? DROP c CURSOR/LAST?] READ", env, result, {
+        eval!("[1 2 ASSOC 2 2 ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/LAST? DROP c CURSOR/LAST?] READ", env, result, {
              assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
         });
 
@@ -608,11 +608,11 @@ mod tests {
 
     #[test]
     fn cursor_cur() {
-        eval!("[1 2 ASSOC COMMIT] WRITE [[c = CURSOR] SET c CURSOR/FIRST? [c CURSOR/CUR UNWRAP] IF] READ", env, result, {
+        eval!("[1 2 ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/FIRST? [c CURSOR/CUR UNWRAP] IF] READ", env, result, {
              assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x02"));
              assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
         });
-        eval!("[1 2 ASSOC COMMIT] WRITE [[c = CURSOR] SET c CURSOR/FIRST? [c CURSOR/CUR?] IF] READ", env, result, {
+        eval!("[1 2 ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/FIRST? [c CURSOR/CUR?] IF] READ", env, result, {
              assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
         });
     }
@@ -625,7 +625,7 @@ mod tests {
         eval!("CURSOR/NEXT", env, result, {
              assert!(result.is_err());
         });
-        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC COMMIT] WRITE [[c = CURSOR] SET c CURSOR/FIRST UNWRAP c CURSOR/NEXT UNWRAP] READ",
+        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/FIRST UNWRAP c CURSOR/NEXT UNWRAP] READ",
               env,
               result,
               {
@@ -636,7 +636,7 @@ mod tests {
                   assert_eq!(env.pop(), None);
               });
         // empty db => no first
-        eval!("[[c = CURSOR] SET c CURSOR/FIRST SOME?] READ",
+        eval!("[CURSOR 'c SET c CURSOR/FIRST SOME?] READ",
               env,
               result,
               {
@@ -644,7 +644,7 @@ mod tests {
                   assert_eq!(env.pop(), None);
               });
 
-        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC [c = CURSOR] SET c CURSOR/FIRST UNWRAP c CURSOR/NEXT UNWRAP] WRITE",
+        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC CURSOR 'c SET c CURSOR/FIRST UNWRAP c CURSOR/NEXT UNWRAP] WRITE",
               env,
               result,
               {
@@ -662,7 +662,7 @@ mod tests {
         eval!("CURSOR/LAST", env, result, {
              assert!(result.is_err());
         });
-        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC COMMIT] WRITE [[c = CURSOR] SET c CURSOR/LAST UNWRAP] READ",
+        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/LAST UNWRAP] READ",
               env,
               result,
               {
@@ -672,7 +672,7 @@ mod tests {
               });
 
         // empty db => no last
-        eval!("[[c = CURSOR] SET c CURSOR/LAST SOME?] READ",
+        eval!("[CURSOR 'c SET c CURSOR/LAST SOME?] READ",
               env,
               result,
               {
@@ -681,7 +681,7 @@ mod tests {
               });
 
         // next after last is none
-        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC COMMIT] WRITE [[c = CURSOR] SET c CURSOR/LAST DROP c CURSOR/NEXT NONE?] READ",
+        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/LAST DROP c CURSOR/NEXT NONE?] READ",
               env,
               result,
               {
@@ -689,7 +689,7 @@ mod tests {
                   assert_eq!(env.pop(), None);
               });
 
-        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC [c = CURSOR] SET c CURSOR/LAST UNWRAP] WRITE",
+        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC CURSOR 'c SET c CURSOR/LAST UNWRAP] WRITE",
               env,
               result,
               {
@@ -705,7 +705,7 @@ mod tests {
         eval!("CURSOR/SEEK", env, result, {
              assert!(result.is_err());
         });
-        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC COMMIT] WRITE [[c = CURSOR] SET c \"Hallo\" CURSOR/SEEK UNWRAP] READ",
+        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC COMMIT] WRITE [CURSOR 'c SET c \"Hallo\" CURSOR/SEEK UNWRAP] READ",
               env,
               result,
               {
@@ -714,7 +714,7 @@ mod tests {
                   assert_eq!(env.pop(), None);
               });
 
-        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC [c = CURSOR] SET c \"Hallo\" CURSOR/SEEK UNWRAP] WRITE",
+        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC CURSOR 'c SET c \"Hallo\" CURSOR/SEEK UNWRAP] WRITE",
               env,
               result,
               {
@@ -729,7 +729,7 @@ mod tests {
         eval!("CURSOR/PREV", env, result, {
              assert!(result.is_err());
         });
-        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC COMMIT] WRITE [[c = CURSOR] SET c CURSOR/FIRST UNWRAP c CURSOR/NEXT UNWRAP c CURSOR/PREV UNWRAP] READ",
+        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/FIRST UNWRAP c CURSOR/NEXT UNWRAP c CURSOR/PREV UNWRAP] READ",
               env,
               result,
               {
@@ -741,7 +741,7 @@ mod tests {
                   assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("\"Goodbye\""));
                   assert_eq!(env.pop(), None);
               });
-        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC [c = CURSOR] SET c CURSOR/FIRST UNWRAP c CURSOR/NEXT UNWRAP c CURSOR/PREV UNWRAP] WRITE",
+        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC CURSOR 'c SET c CURSOR/FIRST UNWRAP c CURSOR/NEXT UNWRAP c CURSOR/PREV UNWRAP] WRITE",
               env,
               result,
               {
@@ -754,7 +754,7 @@ mod tests {
                   assert_eq!(env.pop(), None);
               });
         // prev before first is none
-        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC COMMIT] WRITE [[c = CURSOR] SET c CURSOR/FIRST DROP c CURSOR/PREV NONE?] READ",
+        eval!("[\"Hello\" \"world\" ASSOC \"Goodbye\" \"world\" ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/FIRST DROP c CURSOR/PREV NONE?] READ",
               env,
               result,
               {
@@ -802,7 +802,7 @@ mod tests {
             let handle = scope.spawn(move || {
                 vm.run();
             });
-            let script = parse("[pair : HLC \"Hello\"] SET [pair] 1000 TIMES [[ASSOC COMMIT] WRITE] 1000 TIMES").unwrap();
+            let script = parse("[HLC \"Hello\"] 1000 TIMES [[ASSOC COMMIT] WRITE] 1000 TIMES").unwrap();
             let sender_ = sender.clone();
             b.iter(move || {
                 let (callback, receiver) = mpsc::channel::<ResponseMessage>();
