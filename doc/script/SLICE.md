@@ -16,13 +16,13 @@ array is zero-copy.
 
 ## Errors
 
-EmptyStack error if there are less than three items on the stack
+[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than three items on the stack
 
-InvalidValue error if `start` is larger than data length.
+[InvalidValue](./ERRORS/InvalidValue.md) error if `start` is larger than data length.
 
-InvalidValue error if `start` is lesser than `end`.
+[InvalidValue](./ERRORS/InvalidValue.md) error if `start` is lesser than `end`.
 
-InvalidValue error if `end` is larger than data length.
+[InvalidValue](./ERRORS/InvalidValue.md) error if `end` is larger than data length.
  
 
 ## Examples

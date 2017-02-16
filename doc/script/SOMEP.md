@@ -17,7 +17,7 @@ None
 
 ## Errors
 
-EmptyStack error if there is less than one items on the stack
+[EmptyStack](./ERRORS/EmptyStack.md) error if there is less than one items on the stack
 
 ## Examples
 

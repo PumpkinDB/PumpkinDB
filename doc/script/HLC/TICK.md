@@ -15,7 +15,7 @@ Allocates for the new timestamp to be pushed on stack.
 
 ## Errors
 
-EmptyStack error if there are less than one item on the stack
+[EmptyStack](../ERRORS/EmptyStack.md) error if there are less than one item on the stack
 
 It will fail if the item is not an HLC timestamp.
 

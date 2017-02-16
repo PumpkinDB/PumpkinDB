@@ -49,7 +49,7 @@ macro_rules! handle_words {
           Ok($res) => $block
         };
       )*
-      return Err((env, Error::UnknownWord))
+      return Err((env, error_unknown_word!($word)))
     }
     };
 }
@@ -71,7 +71,7 @@ macro_rules! read_or_write_transaction {
         } else if let Some((_, ref txn)) = $me.db_read_txn {
             txn.deref()
         } else {
-            return Err(($env, Error::NoTransaction));
+            return Err(($env, error_no_transaction!()));
         };
     };
 }
@@ -80,7 +80,7 @@ macro_rules! stack_pop {
     ($env: expr) => {
         match $env.pop() {
             None => {
-                return Err(($env, Error::EmptyStack))
+                return Err(($env, error_empty_stack!()))
             }
             Some(e) => {
                 e
@@ -95,6 +95,143 @@ macro_rules! word_is {
             return Err(($env, Error::UnknownWord))
         }
     };
+}
+
+macro_rules! error_program {
+    ($desc: expr, $details: expr, $code: expr) => {{
+        let mut error = Vec::new();
+
+        write_size_header!($desc, error);
+        error.extend_from_slice($desc);
+
+        write_size_header!($details, error);
+        error.extend_from_slice($details);
+
+        error.extend_from_slice($code);
+
+        let mut outer = Vec::new();
+        write_size_header!(error, outer);
+        outer.append(&mut error);
+
+        Error::ProgramError(outer)
+    }}
+}
+
+macro_rules! error_database {
+    ($err: expr) => {{
+        let vec = Vec::new();
+
+        error_program!(
+            $err.description().as_bytes(),
+            &vec,
+            ERROR_DATABASE
+        )
+    }}
+}
+
+macro_rules! error_no_transaction {
+    () => {{
+        let vec = Vec::new();
+        error_program!(
+            "No transaction".as_bytes(),
+            &vec,
+            ERROR_NO_TX
+        )
+    }}
+}
+
+macro_rules! error_unknown_key {
+    ($key: expr) => {{
+        error_program!(
+            "Unknown key".as_bytes(),
+            $key,
+            ERROR_UNKNOWN_KEY
+        )
+    }}
+}
+
+macro_rules! error_duplicate_key {
+    ($key: expr) => {{
+        error_program!(
+            "Duplicate key".as_bytes(),
+            $key,
+            ERROR_DUPLICATE_KEY
+        )
+    }}
+}
+
+macro_rules! error_decoding {
+    () => {{
+        let vec = Vec::new();
+        error_program!(
+            "Decoding error".as_bytes(),
+            &vec,
+            ERROR_DECODING
+        )
+    }}
+}
+
+macro_rules! error_empty_stack {
+    () => {{
+        let vec = Vec::new();
+        error_program!(
+            "Empty stack".as_bytes(),
+            &vec,
+            ERROR_EMPTY_STACK
+        )
+    }}
+}
+
+macro_rules! error_invalid_value_word {
+    ($value: expr) => {{
+        error_program!(
+            "Invalid value".as_bytes(),
+            $value,
+            ERROR_INVALID_VALUE
+        )
+    }}
+}
+
+macro_rules! error_invalid_value {
+    ($value: expr) => {{
+        let mut details = Vec::new();
+        write_size_header!($value, details);
+        details.extend_from_slice($value);
+
+        error_program!(
+            "Invalid value".as_bytes(),
+            &details,
+            ERROR_INVALID_VALUE
+        )
+    }}
+}
+
+macro_rules! error_unknown_word {
+    ($word: expr) => { {
+        let (_, w) = binparser::word($word).unwrap();
+
+        let word = match str::from_utf8(&w[1..]) {
+            Ok(word) => word,
+            Err(_) => "Error parsing word"
+        };
+
+        let desc = format!("Unknown word: {}", word);
+        let desc_bytes = desc.as_bytes();
+
+        error_program!(
+            desc_bytes,
+            $word,
+            ERROR_UNKNOWN_WORD
+        )
+    } }
+}
+
+macro_rules! write_size_header {
+    ($bytes: expr, $vec: expr) => {{
+        let mut header = vec![0;offset_by_size($bytes.len())];
+        write_size_into_slice!($bytes.len(), header.as_mut_slice());
+        $vec.append(&mut header);
+    }};
 }
 
 #[cfg(test)]
@@ -175,4 +312,18 @@ macro_rules! parsed_data {
         ($s: expr) => {
            data!(parse($s).unwrap().as_slice())
         };
+}
+
+#[cfg(test)]
+macro_rules! assert_error {
+    ($result: expr, $expected: expr) => {{
+        assert!($result.is_err());
+        let error = $result.err().unwrap();
+        assert!(matches!(error, Error::ProgramError(_)));
+        if let Error::ProgramError(inner) = error {
+                assert_eq!(inner, parse($expected).unwrap());
+            } else {
+
+            }
+    }};
 }

@@ -14,7 +14,7 @@ during the runtime.
 
 ## Errors
 
-EmptyStack error if there is less than one item on the stack
+[EmptyStack](./ERRORS/EmptyStack.md) error if there is less than one item on the stack
 
 ## Examples
 

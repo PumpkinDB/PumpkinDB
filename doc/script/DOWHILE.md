@@ -12,9 +12,9 @@ Runtime allocation for code generation
 
 ## Errors
 
-EmptyStack error if there are less than one item on the stack
+[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than one item on the stack
 
-InvalidValue error if the value being checked for truth is not a boolean.
+[InvalidValue](./ERRORS/InvalidValue.md) error if the value being checked for truth is not a boolean.
 
 ## Examples
 

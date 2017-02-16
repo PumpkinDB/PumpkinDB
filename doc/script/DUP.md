@@ -12,7 +12,7 @@ None
 
 ## Errors
 
-EmptyStack error if nothing is available on the stack
+[EmptyStack](./ERRORS/EmptyStack.md) error if nothing is available on the stack
 
 ## Examples
 

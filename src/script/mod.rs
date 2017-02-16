@@ -193,27 +193,13 @@ pub type Program = Vec<u8>;
 /// `Error` represents an enumeration of possible `Executor` errors.
 #[derive(Debug, PartialEq, Clone)]
 pub enum Error {
-    /// An attempt to get a value off the top of the stack was made,
-    /// but the stack was empty.
-    EmptyStack,
     /// Word is unknown
     UnknownWord,
-    /// Binary format decoding failed
-    DecodingError,
-    /// Database Error
-    DatabaseError(lmdb::Error),
-    /// Duplicate key
-    DuplicateKey,
-    /// Key not found
-    UnknownKey,
-    /// No active transaction
-    NoTransaction,
-    /// The item expected to be of a certain form,
-    /// size, or other condition
-    InvalidValue,
     /// An internal scheduler's error to indicate that currently
     /// executed environment should be rescheduled from the same point
     Reschedule,
+    /// Program Error
+    ProgramError(Vec<u8>),
     /// Unable to (re)allocate the heap so the returning slice points to
     /// unallocated memory.
     HeapAllocFailed,
@@ -477,6 +463,15 @@ type PassResult<'a> = Result<(Env<'a>, Option<Vec<u8>>), (Env<'a>, Error)>;
 const STACK_TRUE: &'static [u8] = b"\x01";
 const STACK_FALSE: &'static [u8] = b"\x00";
 
+const ERROR_UNKNOWN_WORD: &'static [u8] = b"\x01\x02";
+const ERROR_INVALID_VALUE: &'static [u8] = b"\x01\x03";
+const ERROR_EMPTY_STACK: &'static [u8] = b"\x01\x04";
+const ERROR_DECODING: &'static [u8] = b"\x01\x05";
+const ERROR_DUPLICATE_KEY: &'static [u8] = b"\x01\x06";
+const ERROR_UNKNOWN_KEY: &'static [u8] = b"\x01\x07";
+const ERROR_NO_TX: &'static [u8] = b"\x01\x08";
+const ERROR_DATABASE: &'static [u8] = b"\x01\x09";
+
 impl<'a> VM<'a> {
     /// Creates an instance of VM with three communication channels:
     ///
@@ -637,7 +632,7 @@ impl<'a> VM<'a> {
                               });
                           });
         } else {
-            return Err((env, Error::DecodingError));
+            return Err((env, error_decoding!()));
         }
     }
 
@@ -785,7 +780,7 @@ impl<'a> VM<'a> {
         } else if a == STACK_FALSE {
             env.push(STACK_TRUE);
         } else {
-            return Err((env, Error::InvalidValue));
+            return Err((env, error_invalid_value!(a)));
         }
 
         Ok((env, None))
@@ -797,12 +792,17 @@ impl<'a> VM<'a> {
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
+        if !(a == STACK_TRUE || a == STACK_FALSE) {
+            return Err((env, error_invalid_value!(a)));
+        }
+        if !(b == STACK_TRUE || b == STACK_FALSE) {
+            return Err((env, error_invalid_value!(b)));
+        }
+
         if a == STACK_TRUE && b == STACK_TRUE {
             env.push(STACK_TRUE);
         } else if a == STACK_FALSE || b == STACK_FALSE {
             env.push(STACK_FALSE);
-        } else {
-            return Err((env, Error::InvalidValue));
         }
 
         Ok((env, None))
@@ -813,6 +813,13 @@ impl<'a> VM<'a> {
         word_is!(env, word, OR);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
+
+        if !(a == STACK_TRUE || a == STACK_FALSE) {
+            return Err((env, error_invalid_value!(a)));
+        }
+        if !(b == STACK_TRUE || b == STACK_FALSE) {
+            return Err((env, error_invalid_value!(b)));
+        }
 
         if a == STACK_TRUE || b == STACK_TRUE {
             env.push(STACK_TRUE);
@@ -835,7 +842,7 @@ impl<'a> VM<'a> {
         } else if cond == STACK_FALSE {
             Ok((env, Some(Vec::from(else_))))
         } else {
-            Err((env, Error::InvalidValue))
+            Err((env, error_invalid_value!(cond)))
         }
     }
 
@@ -909,15 +916,15 @@ impl<'a> VM<'a> {
 
         // range conditions
         if start_int > end_int {
-            return Err((env, Error::InvalidValue));
+            return Err((env, error_invalid_value!(start)));
         }
 
         if start_int > slice.len() - 1 {
-            return Err((env, Error::InvalidValue));
+            return Err((env, error_invalid_value!(start)));
         }
 
         if end_int > slice.len() {
-            return Err((env, Error::InvalidValue));
+            return Err((env, error_invalid_value!(end)));
         }
 
         env.push(&slice[start_int..end_int]);
@@ -968,7 +975,9 @@ impl<'a> VM<'a> {
                     env.push(&val[offset_by_size(val.len())..]);
                     current = rest
                 },
-                _ => return Err((env, Error::InvalidValue))
+                _ => {
+                    return Err((env, error_invalid_value_word!(current)))
+                }
             }
         }
         Ok((env, None))
@@ -1118,7 +1127,6 @@ impl<'a> VM<'a> {
     }
 }
 
-
 #[cfg(test)]
 #[allow(unused_variables, unused_must_use, unused_mut)]
 mod tests {
@@ -1161,7 +1169,7 @@ mod tests {
         });
 
         eval!("DROP", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
     }
@@ -1175,7 +1183,7 @@ mod tests {
         });
 
         eval!("DUP", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
     }
 
@@ -1189,10 +1197,10 @@ mod tests {
             assert_eq!(env.pop(), None);
         });
         eval!("2 2DUP", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
         eval!("2DUP", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
     }
 
@@ -1202,10 +1210,10 @@ mod tests {
             assert_eq!(env.pop(), None);
         });
         eval!("2 2DROP", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
         eval!("2DROP", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
     }
 
@@ -1227,11 +1235,11 @@ mod tests {
         });
 
         eval!("SWAP", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
         eval!("0x10 SWAP", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
     }
@@ -1247,15 +1255,15 @@ mod tests {
         });
 
         eval!("0x010203 0x030201 ROT", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
         eval!("0x010203 ROT", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
         eval!("ROT", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
     }
@@ -1269,11 +1277,11 @@ mod tests {
         });
 
         eval!("0x00 OVER", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
         eval!("OVER", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
     }
@@ -1352,19 +1360,19 @@ mod tests {
         });
 
         eval!("0x10 [0x10] [0x20] IFELSE", env, result, {
-            assert!(matches!(result.err(), Some(Error::InvalidValue)));
+            assert_error!(result, "[\"Invalid value\" [16] 3]");
         });
 
         eval!("[0x10] [0x20] IFELSE", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
         eval!("[0x20] IFELSE", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
         eval!("IFELSE", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
     }
 
@@ -1376,11 +1384,11 @@ mod tests {
         });
 
         eval!("0x20 CONCAT", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
         eval!("CONCAT", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
     }
 
@@ -1403,27 +1411,27 @@ mod tests {
         });
 
         eval!("\"Hello\" 4 2 SLICE", env, result, {
-            assert!(matches!(result.err(), Some(Error::InvalidValue)));
+            assert_error!(result, "[\"Invalid value\" [4] 3]");
         });
 
         eval!("\"Hello\" 5 7 SLICE", env, result, {
-            assert!(matches!(result.err(), Some(Error::InvalidValue)));
+            assert_error!(result, "[\"Invalid value\" [5] 3]");
         });
 
         eval!("\"Hello\" 1 7 SLICE", env, result, {
-            assert!(matches!(result.err(), Some(Error::InvalidValue)));
+            assert_error!(result, "[\"Invalid value\" [7] 3]");
         });
 
         eval!("0 1 SLICE", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
         eval!("1 SLICE", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
         eval!("SLICE", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
     }
@@ -1437,7 +1445,7 @@ mod tests {
         });
 
         eval!("LENGTH", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
     }
 
@@ -1453,11 +1461,11 @@ mod tests {
         });
 
         eval!("TIMES", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
         eval!("5 TIMES", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
     }
@@ -1481,11 +1489,11 @@ mod tests {
         });
 
         eval!("DOWHILE", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
         eval!("[100] DOWHILE", env, result, {
-            assert!(matches!(result.err(), Some(Error::InvalidValue)));
+            assert_error!(result, "[\"Invalid value\" [100] 3]");
         });
 
     }
@@ -1499,7 +1507,7 @@ mod tests {
         });
 
         eval!("EVAL", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
     }
 
@@ -1516,11 +1524,11 @@ mod tests {
         });
 
         eval!("[1 DUP] UNWRAP", env, result, {
-            assert!(matches!(result.err(), Some(Error::InvalidValue)));
+            assert_error!(result, "[\"Invalid value\" [DUP] 3]");
         });
 
         eval!("UNWRAP", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
     }
 
@@ -1556,11 +1564,11 @@ mod tests {
             assert_eq!(env.pop(), None);
         });
         eval!("1 2 WRAP", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
         eval!("WRAP", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
     }
 
@@ -1577,7 +1585,7 @@ mod tests {
         });
 
         eval!("SOME?", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
     }
 
@@ -1594,7 +1602,7 @@ mod tests {
         });
 
         eval!("NONE?", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
     }
 
@@ -1626,8 +1634,7 @@ mod tests {
     #[test]
     fn invalid_eval() {
         eval!("0x10 EVAL", env, result, {
-            assert!(result.is_err());
-            assert!(matches!(result.err(), Some(Error::DecodingError)));
+            assert_error!(result, "[\"Decoding error\" [] 5]");
         });
     }
 
@@ -1656,11 +1663,23 @@ mod tests {
         });
 
         eval!("\"Topic\" SEND", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
         eval!("SEND", env, result, {
-            assert!(matches!(result.err(), Some(Error::EmptyStack)));
+            assert_error!(result, "[\"Empty stack\" [] 4]");
+        });
+    }
+
+    #[test]
+    fn unknown_word() {
+        eval!("NOTAWORD", env, result, {
+            assert!(result.is_err());
+            let error = result.err().unwrap();
+            assert!(matches!(error, Error::ProgramError(_)));
+            if let Error::ProgramError(inner) = error {
+                assert_eq!(inner, parse("[\"Unknown word: NOTAWORD\" [NOTAWORD] 2]").unwrap());
+            }
         });
     }
 

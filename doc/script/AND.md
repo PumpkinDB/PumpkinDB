@@ -13,7 +13,7 @@ None
 
 ## Errors
 
-InvalidValue error if the both values are not booleans.
+[InvalidValue](./ERRORS/InvalidValue.md) error if the both values are not booleans.
 
 ## Examples
 

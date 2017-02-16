@@ -15,11 +15,11 @@ None
 
 ## Errors
 
-EmptyStack error if there are less than two items on the stack
+[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than two items on the stack
 
-NoTransaction error if there's no current write transaction
+[NoTransaction](./ERRORS/NoTransaction.md) error if there's no current write transaction
 
-DuplicateKey error if the key has been already used.
+[DuplicateKey](./ERRORS/DuplicateKey.md) error if the key has been already used.
 
 ## Examples
 
