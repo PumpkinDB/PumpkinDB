@@ -118,6 +118,8 @@ word!(SLICE, (a, b, c => d), b"\x85SLICE");
 word!(DOWHILE, b"\x87DOWHILE");
 word!(TIMES, b"\x85TIMES");
 word!(EVAL, b"\x84EVAL");
+word!(TRY, b"\x83TRY");
+word!(TRY_END, b"\x80\x83TRY"); // internal word
 word!(SET, b"\x83SET");
 word!(DEF, b"\x83DEF");
 word!(IF, b"\x82IF"); // for reference, implemented in builtins
@@ -236,7 +238,10 @@ pub struct Env<'a> {
     heap_size: usize,
     heap_align: usize,
     heap_ptr: usize,
-    dictionary: BTreeMap<&'a [u8], &'a [u8]>
+    dictionary: BTreeMap<&'a [u8], &'a [u8]>,
+    // current TRY status
+    tracking_errors: usize,
+    aborting_try: Vec<Error>
 }
 
 impl<'a> std::fmt::Debug for Env<'a> {
@@ -279,7 +284,9 @@ impl<'a> Env<'a> {
                     heap_size: HEAP_SIZE,
                     heap_align: mem::align_of::<u8>(),
                     heap_ptr: 0,
-                    dictionary: BTreeMap::new()
+                    dictionary: BTreeMap::new(),
+                    tracking_errors: 0,
+                    aborting_try: Vec::new()
                 })
         }).ok_or(Error::HeapAllocFailed)
     }
@@ -559,7 +566,9 @@ impl<'a> VM<'a> {
             slice[i] = program[i];
         }
         if let nom::IResult::Done(_, data) = binparser::data(slice) {
-            env.push(&data[offset_by_size(data.len())..]);
+            if env.aborting_try.is_empty() {
+                env.push(&data[offset_by_size(data.len())..]);
+            }
             let rest = program.split_off(data.len());
             return Ok(match rest.len() {
                 0 => (env, None),
@@ -588,6 +597,8 @@ impl<'a> VM<'a> {
                            self => handle_dowhile,
                            self => handle_times,
                            self => handle_eval,
+                           self => handle_try,
+                           self => handle_try_end,
                            self => handle_unwrap,
                            self => handle_set,
                            self => handle_def,
@@ -967,6 +978,42 @@ impl<'a> VM<'a> {
         word_is!(env, word, EVAL);
         let a = stack_pop!(env);
         Ok((env, Some(Vec::from(a))))
+    }
+
+    #[inline]
+    fn handle_try(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, TRY);
+        let v = stack_pop!(env);
+        env.tracking_errors += 1;
+        let mut vec = Vec::from(v);
+        vec.extend_from_slice(TRY_END);
+        Ok((env, Some(vec)))
+    }
+
+    #[inline]
+    fn handle_try_end(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, TRY_END);
+        env.tracking_errors -= 1;
+        if env.aborting_try.is_empty() {
+            env.push(_EMPTY);
+            Ok((env, None))
+        } else if let Some(Error::ProgramError(err)) = env.aborting_try.pop() {
+            match env.alloc(err.len()) {
+                Ok(slice) => {
+                    let mut i = 0;
+                    for byte in err {
+                        slice[i] = byte;
+                        i += 1;
+                    }
+                    env.push(slice);
+                    Ok((env, None))
+                }
+                Err(err) => Err((env, err))
+            }
+        } else {
+            env.push(_EMPTY);
+            Ok((env, None))
+        }
     }
 
     #[inline]
@@ -1685,12 +1732,7 @@ mod tests {
     #[test]
     fn unknown_word() {
         eval!("NOTAWORD", env, result, {
-            assert!(result.is_err());
-            let error = result.err().unwrap();
-            assert!(matches!(error, Error::ProgramError(_)));
-            if let Error::ProgramError(inner) = error {
-                assert_eq!(inner, parse("[\"Unknown word: NOTAWORD\" [NOTAWORD] 2]").unwrap());
-            }
+            assert_error!(result, "[\"Unknown word: NOTAWORD\" [NOTAWORD] 2]");
         });
     }
 
@@ -1699,6 +1741,43 @@ mod tests {
         eval!("", env, {
             assert_eq!(env.pop(), None);
         });
+    }
+
+    #[test]
+    fn try() {
+        eval!("[1 DUP] TRY", env, result, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[]"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("[DUP] TRY", env, result, {
+            assert!(!result.is_err());
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Empty stack\" [] 4]"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("[NOTAWORD] TRY", env, result, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Unknown word: NOTAWORD\" [NOTAWORD] 2]"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("[[DUP] TRY 0x20 NOT] TRY", env, result, {
+            assert!(!result.is_err());
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Invalid value\" [0x20] 3]"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Empty stack\" [] 4]"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("[1 DUP] TRY STACK DROP DUP", env, result, {
+            assert!(result.is_err());
+        });
+
+        eval!("[DUP] TRY STACK DROP DUP", env, result, {
+            assert!(result.is_err());
+        });
+
     }
 
 }
