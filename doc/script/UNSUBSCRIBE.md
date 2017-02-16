@@ -1,4 +1,4 @@
-# SUBSCRIBE
+# UNSUBSCRIBE
 
 Unsubscribes the connection from a topic
 
