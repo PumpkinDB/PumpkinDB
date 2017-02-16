@@ -40,16 +40,36 @@ macro_rules! handle_words {
      $pid: ident, { $($me: expr => $name: ident),* }, $block: expr) => {
     {
       let mut env = $env;
-      $(
-       env =
-        match $me.$name(env, $word, $pid) {
-          Err((env, Error::Reschedule)) => return Ok((env, Some($program.clone()))),
-          Err((env, Error::UnknownWord)) => env,
-          Err((env, err)) => return Err((env, err)),
-          Ok($res) => $block
-        };
-      )*
-      return Err((env, error_unknown_word!($word)))
+      if $word != TRY_END && !env.aborting_try.is_empty() {
+        let $res : (Env<'a>, Option<Vec<u8>>) = (env, None);
+        $block
+      } else {
+          $(
+           env =
+            match $me.$name(env, $word, $pid) {
+              Err((env, Error::Reschedule)) => return Ok((env, Some($program.clone()))),
+              Err((env, Error::UnknownWord)) => env,
+              Err((mut env, err @ Error::ProgramError(_))) => {
+                if env.tracking_errors > 0 {
+                   env.aborting_try.push(err);
+                   let $res : (Env<'a>, Option<Vec<u8>>) = (env, None);
+                   $block
+                } else {
+                   return Err((env, err))
+                }
+              },
+              Err((env, err)) => return Err((env, err)),
+              Ok($res) => $block
+            };
+          )*
+          if env.tracking_errors > 0 {
+             env.aborting_try.push(error_unknown_word!($word));
+             let $res : (Env<'a>, Option<Vec<u8>>) = (env, None);
+             $block
+          } else {
+             return Err((env, error_unknown_word!($word)))
+          }
+      }
     }
     };
 }
@@ -109,11 +129,7 @@ macro_rules! error_program {
 
         error.extend_from_slice($code);
 
-        let mut outer = Vec::new();
-        write_size_header!(error, outer);
-        outer.append(&mut error);
-
-        Error::ProgramError(outer)
+        Error::ProgramError(error)
     }}
 }
 
@@ -321,9 +337,8 @@ macro_rules! assert_error {
         let error = $result.err().unwrap();
         assert!(matches!(error, Error::ProgramError(_)));
         if let Error::ProgramError(inner) = error {
-                assert_eq!(inner, parse($expected).unwrap());
-            } else {
-
-            }
+            assert_eq!(inner, parsed_data!($expected));
+        } else {
+        }
     }};
 }
