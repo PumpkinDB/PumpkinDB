@@ -23,11 +23,11 @@ InvalidValue error if the cursor identifier is incorrect or expired
 ## Examples
 
 ```
-["1" "2" ASSOC "2" "2" ASSOC COMMIT] WRITE [[c = CURSOR] SET c CURSOR/LAST DROP c CURSOR/PREV] READ UNWRAP => "1" "2"
+["1" "2" ASSOC "2" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/LAST DROP c CURSOR/PREV] READ UNWRAP => "1" "2"
 ```
 
 ## Tests
 
 ```
-["1" "2" ASSOC "2" "2" ASSOC COMMIT] WRITE [[c = CURSOR] SET c CURSOR/LAST DROP c CURSOR/PREV] READ UNWRAP => "1" "2"
+["1" "2" ASSOC "2" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/LAST DROP c CURSOR/PREV] READ UNWRAP => "1" "2"
 ```

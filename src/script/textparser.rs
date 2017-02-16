@@ -131,6 +131,7 @@ named!(uint<Vec<u8>>, do_parse!(
 named!(word<Vec<u8>>, do_parse!(
                         word: take_while1!(is_word_char)  >>
                               (prefix_word(word))));
+named!(wordref<Vec<u8>>, do_parse!(tag!(b"'") >> w: word >> (sized_vec(w))));
 named!(binary<Vec<u8>>, do_parse!(
                               tag!(b"0x")                 >>
                          hex: take_while1!(is_hex_digit)  >>
@@ -143,7 +144,7 @@ named!(string<Vec<u8>>,  alt!(do_parse!(tag!(b"\"\"") >> (vec![0])) |
 named!(code<Vec<u8>>, do_parse!(
                          prog: delimited!(char!('['), ws!(program), char!(']')) >>
                                (sized_vec(prog))));
-named!(item<Vec<u8>>, alt!(binary | string | uint | code | word));
+named!(item<Vec<u8>>, alt!(binary | string | uint | code | wordref | word));
 named!(program<Vec<u8>>, alt!(do_parse!(
                                take_while!(is_space)                        >>
                             v: eof                                          >>
@@ -164,6 +165,7 @@ named!(pub programs<Vec<Vec<u8>>>, do_parse!(
 /// * `0x<hexadecimal>` (hexadecimal form)
 /// * `"STRING"` (string form, no quoted characters support yet)
 /// * `integer` (integer form, will convert to a big endian big integer)
+/// * `'word` (word in a binary form)
 ///
 /// The rest of the instructions considered to be words.
 ///
@@ -201,6 +203,12 @@ mod tests {
         assert_eq!(script, vec![]);
         let script = parse("  ").unwrap();
         assert_eq!(script, vec![]);
+    }
+
+    #[test]
+    fn test_wordref() {
+        let script = parse("'HELLO").unwrap();
+        assert_eq!(script, vec![0x06, 0x85, b'H', b'E', b'L', b'L', b'O']);
     }
 
     #[test]
