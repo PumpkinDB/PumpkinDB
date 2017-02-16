@@ -59,28 +59,23 @@ So what **is** PumpkinDB?
 There are no releases at this time. You are welcome to clone the repository and run
 
 ```
-$ cargo run
-   ...
-    Finished dev [unoptimized + debuginfo] target(s) in 4.25 secs
-     Running `target/debug/pumpkindb`
-Listening (text form) on 0.0.0.0:9981
+$ cargo run --bin pumpkindb
+...
+Listening on 0.0.0.0:9981
 ```
 
-When you connect to `0.0.0.0:9981` you can communicate with the server using a text
-form of PumpkinScript. Try something simple first:
+You can connect to it using `pumpkindb-term`:
 
 ```
-✗ telnet localhost 9981
-Trying 127.0.0.1...
-Connected to localhost.
-Escape character is '^]'.
-["Test" "passed" ASSOC COMMIT] WRITE ["Test" RETR] READ
-0x706173736564
-"passed"
-0x706173736564
+$ cargo run --bin pumpkindb-term
+...
+PumpkinDB> ["Hello" "world" ASSOC COMMIT] WRITE
+PumpkinDB> ["Hello" RETR] READ
+"world"
+PumpkinDB>
 ```
 
-(The above example stores key/value pair of "Test" and "passed" and
+(The above example stores key/value pair of "Hello" and "world" and
 then retrieves the value associated with that key.)
 
 You can change some of the server's parameters by creating `pumpkindb.toml`:
@@ -89,7 +84,7 @@ You can change some of the server's parameters by creating `pumpkindb.toml`:
 [storage]
 path = "path/to/db"
 
-[text-server]
+[server]
 port = 9981
 ```
 

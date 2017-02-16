@@ -17,7 +17,7 @@ use std::sync::mpsc;
 use std::collections::BTreeMap;
 
 pub type Topic = Vec<u8>;
-pub type SubscriberSender<T> = mpsc::Sender<(Topic, T)>;
+pub type SubscriberSender<T> = mpsc::Sender<(Topic, T, mpsc::Sender<()>)>;
 pub type SubscriberReceiver<T> = mpsc::Receiver<(Topic, T)>;
 
 
@@ -31,7 +31,7 @@ pub struct Publisher<T : Sized + Clone> {
 /// Message types supported by the publisher
 enum PublisherMessage<T : Sized + Clone> {
     Subscribe(Topic, SubscriberSender<T>),
-    Send(Topic, T),
+    Send(Topic, T, mpsc::Sender<()>),
     Shutdown
 }
 
@@ -62,18 +62,24 @@ impl<T : Sized + Clone> Publisher<T> {
                     }
                     self.subscribers.get_mut(&topic).unwrap().push(chan);
                 },
-                Ok(PublisherMessage::Send(topic, data)) => {
+                Ok(PublisherMessage::Send(topic, data, callback)) => {
                     if self.subscribers.contains_key(&topic) {
                         let subscribers = self.subscribers.remove(&topic).unwrap();
                         let new_subscribers =
                         subscribers.into_iter().filter(|subscriber| {
-                            match (*subscriber).send((topic.clone(), data.clone())) {
-                                Ok(_) => true,
+                            let (s, r) = mpsc::channel();
+                            let res = match (*subscriber).send((topic.clone(), data.clone(), s)) {
+                                Ok(_) => {
+                                    let _ = r.recv();
+                                    true
+                                },
                                 // Remove senders that failed
                                 Err(mpsc::SendError(_)) => false
-                            }
+                            };
+                            res
                         }).collect::<Vec<_>>();
-                        self.subscribers.insert(topic, new_subscribers);
+                        self.subscribers.insert(topic.clone(), new_subscribers);
+                        let _ = callback.send(());
                     }
                 },
                 Err(_) => ()
@@ -98,8 +104,10 @@ impl<T : Sized + Clone> PublisherAccessor<T> {
         let _ = self.sender.send(PublisherMessage::Subscribe(topic, chan));
     }
 
-        pub fn send(&self, topic: Topic, data: T) {
-        let _ = self.sender.send(PublisherMessage::Send(topic, data));
+    pub fn send(&self, topic: Topic, data: T) {
+        let (s, r) = mpsc::channel();
+        let _ = self.sender.send(PublisherMessage::Send(topic, data, s));
+        let _ = r.recv();
     }
 
     /// Shutdown publisher
@@ -127,15 +135,20 @@ mod tests {
         let (sender1, receiver1) = mpsc::channel();
         accessor.subscribe(Vec::from("test1"), sender1);
 
-        accessor.send(Vec::from("test"), "test");
+        let accessor_ = accessor.clone();
+        thread::spawn(move || accessor_.send(Vec::from("test"), "test"));
         let result = receiver.recv().unwrap();
-        assert_eq!(result, (Vec::from("test"), "test"));
+        let _ = result.2.send(());
+        assert_eq!((result.0, result.1), (Vec::from("test"), "test"));
 
-        accessor.send(Vec::from("test1"), "test");
+        let accessor_ = accessor.clone();
+        thread::spawn(move || accessor_.send(Vec::from("test1"), "test"));
         let result = receiver.recv_timeout(Duration::from_secs(1));
         assert!(result.is_err());
+
         let result = receiver1.recv().unwrap();
-        assert_eq!(result, (Vec::from("test1"), "test"));
+        let _ = result.2.send(());
+        assert_eq!((result.0, result.1), (Vec::from("test1"), "test"));
 
 
         accessor.shutdown();

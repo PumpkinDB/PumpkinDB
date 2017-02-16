@@ -176,7 +176,7 @@ named!(pub programs<Vec<Vec<u8>>>, do_parse!(
 ///
 /// # Example
 ///
-/// ```
+/// ```norun
 /// parse("0xABCD DUP DROP DROP")
 /// ```
 ///

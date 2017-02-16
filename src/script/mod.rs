@@ -428,7 +428,7 @@ pub mod timestamp_hlc;
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```norun
 /// let mut vm = VM::new(&env, &db); // lmdb comes from outside
 ///
 /// let sender = vm.sender();
@@ -1167,6 +1167,7 @@ mod tests {
     use script::{Env, VM, Error, RequestMessage, ResponseMessage, EnvId, parse, offset_by_size};
     use std::sync::mpsc;
     use std::fs;
+    use std::thread;
     use tempdir::TempDir;
     use lmdb;
     use crossbeam;
@@ -1703,13 +1704,24 @@ mod tests {
         eval!("\"Hello\" \"Topic\" SEND", env, result, publisher_accessor, {
             let (sender1, receiver1) = mpsc::channel();
             publisher_accessor.subscribe(Vec::from("Topic"), sender1);
-            let (sender2, receiver2) = mpsc::channel();
-            publisher_accessor.subscribe(Vec::from("Topic"), sender2);
+
+            let (sender0, receiver0) = mpsc::channel();
+            thread::spawn(move ||  {
+               match receiver1.recv() {
+                  Ok((topic, message, callback)) => {
+                     callback.send(());
+                     sender0.send((topic, message));
+                  },
+                  e => panic!("unexpected result {:?}", e)
+               };
+
+            });
 
         }, {
             assert!(!result.is_err());
-            assert_eq!(receiver1.recv_timeout(Duration::from_secs(1)).unwrap(), (Vec::from("Topic"), Vec::from("Hello")));
-            assert_eq!(receiver2.recv_timeout(Duration::from_secs(1)).unwrap(), (Vec::from("Topic"), Vec::from("Hello")));
+
+            let result = receiver0.recv_timeout(Duration::from_secs(1)).unwrap();
+            assert_eq!(result, (Vec::from("Topic"), Vec::from("Hello")));
         });
 
         eval!("\"Hello\" \"Topic1\" SEND", env, result, publisher_accessor, {
