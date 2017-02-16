@@ -214,8 +214,8 @@ pub enum Error {
     /// An internal scheduler's error to indicate that currently
     /// executed environment should be rescheduled from the same point
     Reschedule,
-    // Unable to (re)allocate the heap so the returning slice points to
-    // unallocated memory.
+    /// Unable to (re)allocate the heap so the returning slice points to
+    /// unallocated memory.
     HeapAllocFailed,
 }
 /// Parse-related error
@@ -592,6 +592,8 @@ impl<'a> VM<'a> {
                            self => handle_eval,
                            self => handle_unwrap,
                            self => handle_set,
+                           self => handle_set_imm,
+                           self => handle_set_lookup,
                            self => handle_not,
                            self => handle_and,
                            self => handle_or,
@@ -651,505 +653,448 @@ impl<'a> VM<'a> {
 
     #[inline]
     fn handle_dup(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == DUP {
-            let v = stack_pop!(env);
+        word_is!(env, word, DUP);
+        let v = stack_pop!(env);
 
-            env.push(v);
-            env.push(v);
-            Ok((env, None))
-        } else {
-            Err((env, Error::UnknownWord))
-        }
+        env.push(v);
+        env.push(v);
+        Ok((env, None))
     }
 
     #[inline]
     fn handle_swap(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == SWAP {
-            let a = stack_pop!(env);
-            let b = stack_pop!(env);
+        word_is!(env, word, SWAP);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
 
-            env.push(a);
-            env.push(b);
+        env.push(a);
+        env.push(b);
 
-            Ok((env, None))
-        } else {
-            Err((env, Error::UnknownWord))
-        }
+        Ok((env, None))
     }
 
     #[inline]
     fn handle_over(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == OVER {
-            let a = stack_pop!(env);
-            let b = stack_pop!(env);
+        word_is!(env, word, OVER);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
 
-            env.push(b);
-            env.push(a);
-            env.push(b);
+        env.push(b);
+        env.push(a);
+        env.push(b);
 
-            Ok((env, None))
-        } else {
-            Err((env, Error::UnknownWord))
-        }
+        Ok((env, None))
     }
 
     #[inline]
     fn handle_rot(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == ROT {
-            let a = stack_pop!(env);
-            let b = stack_pop!(env);
-            let c = stack_pop!(env);
+        word_is!(env, word, ROT);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+        let c = stack_pop!(env);
 
-            env.push(b);
-            env.push(a);
-            env.push(c);
+        env.push(b);
+        env.push(a);
+        env.push(c);
 
-            Ok((env, None))
-        } else {
-            Err((env, Error::UnknownWord))
-        }
+        Ok((env, None))
     }
 
     #[inline]
     fn handle_drop(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == DROP {
-            let _ = stack_pop!(env);
+        word_is!(env, word, DROP);
+        let _ = stack_pop!(env);
 
-            Ok((env, None))
-        } else {
-            Err((env, Error::UnknownWord))
-        }
+        Ok((env, None))
     }
 
     #[inline]
     fn handle_depth(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == DEPTH {
-            let bytes = BigUint::from(env.stack_size).to_bytes_be();
-            let slice0 = env.alloc(bytes.len());
-            if slice0.is_err() {
-                return Err((env, slice0.unwrap_err()));
-            }
-            let mut slice = slice0.unwrap();
-            for i in 0..bytes.len() {
-                slice[i] = bytes[i];
-            }
-            env.push(slice);
-            Ok((env, None))
-        } else {
-            Err((env, Error::UnknownWord))
+        word_is!(env, word, DEPTH);
+        let bytes = BigUint::from(env.stack_size).to_bytes_be();
+        let slice0 = env.alloc(bytes.len());
+        if slice0.is_err() {
+            return Err((env, slice0.unwrap_err()));
         }
+        let mut slice = slice0.unwrap();
+        for i in 0..bytes.len() {
+            slice[i] = bytes[i];
+        }
+        env.push(slice);
+        Ok((env, None))
     }
 
     #[inline]
     fn handle_wrap(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == WRAP {
+        word_is!(env, word, WRAP);
+        let n = stack_pop!(env);
 
-            let n = stack_pop!(env);
+        let mut n_int = BigUint::from_bytes_be(n).to_u64().unwrap() as usize;
 
-            let mut n_int = BigUint::from_bytes_be(n).to_u64().unwrap() as usize;
+        let mut vec = Vec::new();
 
-            let mut vec = Vec::new();
-
-            while n_int > 0 {
-                let item = stack_pop!(env);
-                vec.insert(0, item);
-                n_int -= 1;
-            }
-
-            let size = vec.clone().into_iter()
-                .fold(0, |a, item| a + item.len() + offset_by_size(item.len()));
-
-            match env.alloc(size) {
-                Ok(mut slice) => {
-                    let mut offset = 0;
-                    for item in vec {
-                        write_size_into_slice!(item.len(), &mut slice[offset..]);
-                        offset += offset_by_size(item.len());
-                        for b in item {
-                            slice[offset] = *b;
-                            offset += 1;
-                        }
-                    }
-                    env.push(slice);
-                }
-                Err(err) => return Err((env, err))
-            }
-            Ok((env, None))
-        } else {
-            Err((env, Error::UnknownWord))
+        while n_int > 0 {
+            let item = stack_pop!(env);
+            vec.insert(0, item);
+            n_int -= 1;
         }
+
+        let size = vec.clone().into_iter()
+            .fold(0, |a, item| a + item.len() + offset_by_size(item.len()));
+
+        match env.alloc(size) {
+            Ok(mut slice) => {
+                let mut offset = 0;
+                for item in vec {
+                    write_size_into_slice!(item.len(), &mut slice[offset..]);
+                    offset += offset_by_size(item.len());
+                    for b in item {
+                        slice[offset] = *b;
+                        offset += 1;
+                    }
+                }
+                env.push(slice);
+            }
+            Err(err) => return Err((env, err))
+        }
+        Ok((env, None))
     }
 
     #[inline]
     fn handle_equal(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == EQUALP {
-            let a = stack_pop!(env);
-            let b = stack_pop!(env);
+        word_is!(env, word, EQUALP);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
 
-            if a == b {
-                env.push(STACK_TRUE);
-            } else {
-                env.push(STACK_FALSE);
-            }
-
-            Ok((env, None))
+        if a == b {
+            env.push(STACK_TRUE);
         } else {
-            Err((env, Error::UnknownWord))
+            env.push(STACK_FALSE);
         }
+
+        Ok((env, None))
     }
 
     #[inline]
     fn handle_not(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == NOT {
-            let a = stack_pop!(env);
+        word_is!(env, word, NOT);
+        let a = stack_pop!(env);
 
-            if a == STACK_TRUE {
-                env.push(STACK_FALSE);
-            } else if a == STACK_FALSE {
-                env.push(STACK_TRUE);
-            } else {
-                return Err((env, Error::InvalidValue));
-            }
-
-            Ok((env, None))
+        if a == STACK_TRUE {
+            env.push(STACK_FALSE);
+        } else if a == STACK_FALSE {
+            env.push(STACK_TRUE);
         } else {
-            Err((env, Error::UnknownWord))
+            return Err((env, Error::InvalidValue));
         }
+
+        Ok((env, None))
     }
 
     #[inline]
     fn handle_and(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == AND {
-            let a = stack_pop!(env);
-            let b = stack_pop!(env);
+        word_is!(env, word, AND);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
 
-            if a == STACK_TRUE && b == STACK_TRUE {
-                env.push(STACK_TRUE);
-            } else if a == STACK_FALSE || b == STACK_FALSE {
-                env.push(STACK_FALSE);
-            } else {
-                return Err((env, Error::InvalidValue));
-            }
-
-            Ok((env, None))
+        if a == STACK_TRUE && b == STACK_TRUE {
+            env.push(STACK_TRUE);
+        } else if a == STACK_FALSE || b == STACK_FALSE {
+            env.push(STACK_FALSE);
         } else {
-            Err((env, Error::UnknownWord))
+            return Err((env, Error::InvalidValue));
         }
+
+        Ok((env, None))
     }
 
     #[inline]
     fn handle_or(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == OR {
-            let a = stack_pop!(env);
-            let b = stack_pop!(env);
+        word_is!(env, word, OR);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
 
-            if a == STACK_TRUE || b == STACK_TRUE {
-                env.push(STACK_TRUE);
-            } else {
-                env.push(STACK_FALSE);
-            }
-
-            Ok((env, None))
+        if a == STACK_TRUE || b == STACK_TRUE {
+            env.push(STACK_TRUE);
         } else {
-            Err((env, Error::UnknownWord))
+            env.push(STACK_FALSE);
         }
+
+        Ok((env, None))
     }
 
     #[inline]
     fn handle_ifelse(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == IFELSE {
-            let else_ = stack_pop!(env);
-            let then = stack_pop!(env);
-            let cond = stack_pop!(env);
+        word_is!(env, word, IFELSE);
+        let else_ = stack_pop!(env);
+        let then = stack_pop!(env);
+        let cond = stack_pop!(env);
 
-            if cond == STACK_TRUE {
-                Ok((env, Some(Vec::from(then))))
-            } else if cond == STACK_FALSE {
-                Ok((env, Some(Vec::from(else_))))
-            } else {
-                Err((env, Error::InvalidValue))
-            }
+        if cond == STACK_TRUE {
+            Ok((env, Some(Vec::from(then))))
+        } else if cond == STACK_FALSE {
+            Ok((env, Some(Vec::from(else_))))
         } else {
-            Err((env, Error::UnknownWord))
+            Err((env, Error::InvalidValue))
         }
     }
 
     #[inline]
     fn handle_ltp(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == LTP {
-            let a = stack_pop!(env);
-            let b = stack_pop!(env);
+        word_is!(env, word, LTP);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
 
-            if b < a {
-                env.push(STACK_TRUE);
-            } else {
-                env.push(STACK_FALSE);
-            }
-
-            Ok((env, None))
+        if b < a {
+            env.push(STACK_TRUE);
         } else {
-            Err((env, Error::UnknownWord))
+            env.push(STACK_FALSE);
         }
+
+        Ok((env, None))
     }
 
     #[inline]
     fn handle_gtp(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == GTP {
-            let a = stack_pop!(env);
-            let b = stack_pop!(env);
+        word_is!(env, word, GTP);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
 
-            if b > a {
-                env.push(STACK_TRUE);
-            } else {
-                env.push(STACK_FALSE);
-            }
-
-            Ok((env, None))
+        if b > a {
+            env.push(STACK_TRUE);
         } else {
-            Err((env, Error::UnknownWord))
+            env.push(STACK_FALSE);
         }
+
+        Ok((env, None))
     }
 
     #[inline]
     fn handle_concat(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == CONCAT {
-            let a = stack_pop!(env);
-            let b = stack_pop!(env);
+        word_is!(env, word, CONCAT);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
 
-            let slice0 = env.alloc(a.len() + b.len());
-            if slice0.is_err() {
-                return Err((env, slice0.unwrap_err()));
-            }
-            let mut slice = slice0.unwrap();
-            let mut offset = 0;
-
-            for byte in b {
-                slice[offset] = *byte;
-                offset += 1
-            }
-
-            for byte in a {
-                slice[offset] = *byte;
-                offset += 1
-            }
-
-            env.push(slice);
-
-            Ok((env, None))
-        } else {
-            Err((env, Error::UnknownWord))
+        let slice0 = env.alloc(a.len() + b.len());
+        if slice0.is_err() {
+            return Err((env, slice0.unwrap_err()));
         }
+        let mut slice = slice0.unwrap();
+        let mut offset = 0;
+
+        for byte in b {
+            slice[offset] = *byte;
+            offset += 1
+        }
+
+        for byte in a {
+            slice[offset] = *byte;
+            offset += 1
+        }
+
+        env.push(slice);
+
+        Ok((env, None))
     }
 
     #[inline]
     fn handle_slice(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == SLICE {
-            let end = stack_pop!(env);
-            let start = stack_pop!(env);
-            let slice = stack_pop!(env);
+        word_is!(env, word, SLICE);
+        let end = stack_pop!(env);
+        let start = stack_pop!(env);
+        let slice = stack_pop!(env);
 
-            let start_int = BigUint::from_bytes_be(start).to_u64().unwrap() as usize;
-            let end_int = BigUint::from_bytes_be(end).to_u64().unwrap() as usize;
+        let start_int = BigUint::from_bytes_be(start).to_u64().unwrap() as usize;
+        let end_int = BigUint::from_bytes_be(end).to_u64().unwrap() as usize;
 
-            // range conditions
-            if start_int > end_int {
-                return Err((env, Error::InvalidValue));
-            }
-
-            if start_int > slice.len() - 1 {
-                return Err((env, Error::InvalidValue));
-            }
-
-            if end_int > slice.len() {
-                return Err((env, Error::InvalidValue));
-            }
-
-            env.push(&slice[start_int..end_int]);
-
-            Ok((env, None))
-        } else {
-            Err((env, Error::UnknownWord))
+        // range conditions
+        if start_int > end_int {
+            return Err((env, Error::InvalidValue));
         }
+
+        if start_int > slice.len() - 1 {
+            return Err((env, Error::InvalidValue));
+        }
+
+        if end_int > slice.len() {
+            return Err((env, Error::InvalidValue));
+        }
+
+        env.push(&slice[start_int..end_int]);
+
+        Ok((env, None))
     }
 
     #[inline]
     fn handle_length(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == LENGTH {
-            let a = stack_pop!(env);
+        word_is!(env, word, LENGTH);
+        let a = stack_pop!(env);
 
-            let len = BigUint::from(a.len() as u64);
-            let len_bytes = len.to_bytes_be();
+        let len = BigUint::from(a.len() as u64);
+        let len_bytes = len.to_bytes_be();
 
-            let slice0 = env.alloc(len_bytes.len());
-            if slice0.is_err() {
-                return Err((env, slice0.unwrap_err()));
-            }
-            let mut slice = slice0.unwrap();
-
-            let mut offset = 0;
-
-            for byte in len_bytes {
-                slice[offset] = byte;
-                offset += 1
-            }
-
-            env.push(slice);
-
-            Ok((env, None))
-        } else {
-            Err((env, Error::UnknownWord))
+        let slice0 = env.alloc(len_bytes.len());
+        if slice0.is_err() {
+            return Err((env, slice0.unwrap_err()));
         }
+        let mut slice = slice0.unwrap();
+
+        let mut offset = 0;
+
+        for byte in len_bytes {
+            slice[offset] = byte;
+            offset += 1
+        }
+
+        env.push(slice);
+
+        Ok((env, None))
     }
 
     #[inline]
     fn handle_eval(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == EVAL {
-            let a = stack_pop!(env);
-            Ok((env, Some(Vec::from(a))))
-        } else {
-            Err((env, Error::UnknownWord))
-        }
+        word_is!(env, word, EVAL);
+        let a = stack_pop!(env);
+        Ok((env, Some(Vec::from(a))))
     }
 
     #[inline]
     fn handle_unwrap(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == UNWRAP {
-            let mut current = stack_pop!(env);
-            while current.len() > 0 {
-                match binparser::data(current) {
-                    nom::IResult::Done(rest, val) => {
-                        env.push(&val[offset_by_size(val.len())..]);
-                        current = rest
-                    },
-                    _ => return Err((env, Error::InvalidValue))
-                }
+        word_is!(env, word, UNWRAP);
+        let mut current = stack_pop!(env);
+        while current.len() > 0 {
+            match binparser::data(current) {
+                nom::IResult::Done(rest, val) => {
+                    env.push(&val[offset_by_size(val.len())..]);
+                    current = rest
+                },
+                _ => return Err((env, Error::InvalidValue))
             }
-            Ok((env, None))
-        } else {
-            Err((env, Error::UnknownWord))
         }
+        Ok((env, None))
     }
 
     #[inline]
     fn handle_dowhile(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == DOWHILE {
+        word_is!(env, word, DOWHILE);
+        let v = stack_pop!(env);
 
-            let v = stack_pop!(env);
+        // inject the code itself
+        let mut vec = Vec::from(v);
 
-            // inject the code itself
-            let mut vec = Vec::from(v);
+        let mut header = vec![0;offset_by_size(v.len() + DOWHILE.len() + offset_by_size(v.len()))];
+        write_size_into_slice!(offset_by_size(v.len()) + v.len() + DOWHILE.len(), header.as_mut_slice());
+        vec.append(&mut header);
 
-            let mut header = vec![0;offset_by_size(v.len() + DOWHILE.len() + offset_by_size(v.len()))];
-            write_size_into_slice!(offset_by_size(v.len()) + v.len() + DOWHILE.len(), header.as_mut_slice());
-            vec.append(&mut header);
+        // inject code closure size
+        let mut header = vec![0;offset_by_size(v.len())];
+        write_size_into_slice!(v.len(), header.as_mut_slice());
+        vec.append(&mut header);
 
-            // inject code closure size
-            let mut header = vec![0;offset_by_size(v.len())];
-            write_size_into_slice!(v.len(), header.as_mut_slice());
-            vec.append(&mut header);
+        // inject code closure
+        vec.extend_from_slice(v);
+        // inject DOWHILE
+        vec.extend_from_slice(DOWHILE);
+        // inject IF
+        vec.extend_from_slice(IF);
 
-            // inject code closure
-            vec.extend_from_slice(v);
-            // inject DOWHILE
-            vec.extend_from_slice(DOWHILE);
-            // inject IF
-            vec.extend_from_slice(IF);
-
-            Ok((env, Some(vec)))
-        } else {
-            Err((env, Error::UnknownWord))
-        }
+        Ok((env, Some(vec)))
     }
 
     #[inline]
     fn handle_times(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == TIMES {
-            let count = stack_pop!(env);
+        word_is!(env, word, TIMES);
+        let count = stack_pop!(env);
 
-            let v = stack_pop!(env);
+        let v = stack_pop!(env);
 
-            let counter = BigUint::from_bytes_be(count);
-            if counter.is_zero() {
-                Ok((env, None))
-            } else {
-                // inject the code itself
-                let mut vec = Vec::from(v);
-                if counter != BigUint::one() {
-                    // inject the prefix for the code
-                    let mut header = vec![0;offset_by_size(v.len())];
-                    write_size_into_slice!(v.len(), header.as_mut_slice());
-                    vec.append(&mut header);
-                    vec.extend_from_slice(v);
-                    // inject the decremented counter
-                    let counter = counter.sub(BigUint::one());
-                    let mut counter_bytes = counter.to_bytes_be();
-                    let mut header =  vec![0;offset_by_size(counter_bytes.len())];
-                    write_size_into_slice!(counter_bytes.len(), header.as_mut_slice());
-                    vec.append(&mut header);
-                    vec.append(&mut counter_bytes);
-                    // inject TIMES
-                    vec.extend_from_slice(TIMES);
-                }
-                Ok((env, Some(vec)))
-            }
+        let counter = BigUint::from_bytes_be(count);
+        if counter.is_zero() {
+            Ok((env, None))
         } else {
-            Err((env, Error::UnknownWord))
+            // inject the code itself
+            let mut vec = Vec::from(v);
+            if counter != BigUint::one() {
+                // inject the prefix for the code
+                let mut header = vec![0;offset_by_size(v.len())];
+                write_size_into_slice!(v.len(), header.as_mut_slice());
+                vec.append(&mut header);
+                vec.extend_from_slice(v);
+                // inject the decremented counter
+                let counter = counter.sub(BigUint::one());
+                let mut counter_bytes = counter.to_bytes_be();
+                let mut header =  vec![0;offset_by_size(counter_bytes.len())];
+                write_size_into_slice!(counter_bytes.len(), header.as_mut_slice());
+                vec.append(&mut header);
+                vec.append(&mut counter_bytes);
+                // inject TIMES
+                vec.extend_from_slice(TIMES);
+            }
+            Ok((env, Some(vec)))
         }
     }
 
     #[inline]
     fn handle_set(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == SET {
-            let closure = stack_pop!(env);
-            match binparser::word(closure) {
-                nom::IResult::Done(&[0x81, b':', ref rest..], _) => {
-                    let word = &closure[0..closure.len() - rest.len() - 2];
-                    env.dictionary.insert(word, rest);
-                    Ok((env, None))
-                },
-                nom::IResult::Done(&[0x81, b'=', ref rest..], _) => {
-                    let word = &closure[0..closure.len() - rest.len() - 2];
-                    let mut vec = Vec::new();
-                    // inject the code
-                    vec.extend_from_slice(rest);
-                    // inject [word] \x00SET!
-                    let sz = word.len() as u8;
-                    if word.len() > 120 {
-                        vec.push(121);
-                    }
-                    vec.push(sz);
-                    vec.extend_from_slice(word);
-                    vec.extend_from_slice(SET_IMM);
-                    Ok((env, Some(vec)))
-                },
-                _ => Err((env, Error::UnknownWord))
-            }
-        } else if word == SET_IMM {
-            let closure = stack_pop!(env);
-            let val = stack_pop!(env);
+        word_is!(env, word, SET);
+        let closure = stack_pop!(env);
+        match binparser::word(closure) {
+            nom::IResult::Done(&[0x81, b':', ref rest..], _) => {
+                let word = &closure[0..closure.len() - rest.len() - 2];
+                env.dictionary.insert(word, rest);
+                Ok((env, None))
+            },
+            nom::IResult::Done(&[0x81, b'=', ref rest..], _) => {
+                let word = &closure[0..closure.len() - rest.len() - 2];
+                let mut vec = Vec::new();
+                // inject the code
+                vec.extend_from_slice(rest);
+                // inject [word] \x00SET!
+                let sz = word.len() as u8;
+                if word.len() > 120 {
+                    vec.push(121);
+                }
+                vec.push(sz);
+                vec.extend_from_slice(word);
+                vec.extend_from_slice(SET_IMM);
+                Ok((env, Some(vec)))
+            },
+            _ => Err((env, Error::UnknownWord))
+        }
+    }
 
-            match binparser::word(closure) {
-                nom::IResult::Done(_, _) => {
-                    let word = &closure[0..closure.len()];
-                    let offset = offset_by_size(val.len());
-                    let sz = val.len() + offset;
-                    let slice0 = env.alloc(sz);
-                    if slice0.is_err() {
-                        return Err((env, slice0.unwrap_err()))
-                    }
-                    let mut slice = slice0.unwrap();
-                    write_size_into_slice!(val.len(), &mut slice);
-                    let mut i = offset;
-                    for b in val {
-                        slice[i] = *b;
-                        i += 1;
-                    }
-                    env.dictionary.insert(word, slice);
-                    Ok((env, None))
-                },
-                _ => Err((env, Error::UnknownWord))
-            }
-        } else if env.dictionary.contains_key(word) {
+    #[inline]
+    fn handle_set_imm(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, SET_IMM);
+        let closure = stack_pop!(env);
+        let val = stack_pop!(env);
+
+        match binparser::word(closure) {
+            nom::IResult::Done(_, _) => {
+                let word = &closure[0..closure.len()];
+                let offset = offset_by_size(val.len());
+                let sz = val.len() + offset;
+                let slice0 = env.alloc(sz);
+                if slice0.is_err() {
+                    return Err((env, slice0.unwrap_err()))
+                }
+                let mut slice = slice0.unwrap();
+                write_size_into_slice!(val.len(), &mut slice);
+                let mut i = offset;
+                for b in val {
+                    slice[i] = *b;
+                    i += 1;
+                }
+                env.dictionary.insert(word, slice);
+                Ok((env, None))
+            },
+            _ => Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    fn handle_set_lookup(&mut self, env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if env.dictionary.contains_key(word) {
             let mut vec = Vec::new();
             {
                 let def = env.dictionary.get(word).unwrap();
@@ -1163,16 +1108,13 @@ impl<'a> VM<'a> {
 
     #[inline]
     fn handle_send(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == SEND {
-            let topic = stack_pop!(env);
-            let data = stack_pop!(env);
+        word_is!(env, word, SEND);
+        let topic = stack_pop!(env);
+        let data = stack_pop!(env);
 
-            self.publisher.send(Vec::from(topic), Vec::from(data));
+        self.publisher.send(Vec::from(topic), Vec::from(data));
 
-            Ok((env, None))
-        } else {
-            Err((env, Error::UnknownWord))
-        }
+        Ok((env, None))
     }
 }
 

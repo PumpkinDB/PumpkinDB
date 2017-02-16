@@ -89,6 +89,14 @@ macro_rules! stack_pop {
     }
 }
 
+macro_rules! word_is {
+    ($env: expr, $word: expr, $exp: expr) => {
+        if $word != $exp {
+            return Err(($env, Error::UnknownWord))
+        }
+    };
+}
+
 #[cfg(test)]
 macro_rules! eval {
         ($script: expr, $env: ident, $expr: expr) => {
