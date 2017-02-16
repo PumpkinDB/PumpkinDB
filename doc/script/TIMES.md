@@ -13,7 +13,7 @@ Allocates for recursion during runtime.
 
 ## Errors
 
-EmptyStack error if there is less than two items on the stack
+[EmptyStack](./ERRORS/EmptyStack.md) error if there is less than two items on the stack
 
 ## Examples
 

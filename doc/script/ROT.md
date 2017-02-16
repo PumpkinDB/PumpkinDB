@@ -12,7 +12,7 @@ None
 
 ## Errors
 
-EmptyStack error if there are less than three items on the stack
+[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than three items on the stack
 
 ## Examples
 

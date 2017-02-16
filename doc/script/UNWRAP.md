@@ -20,9 +20,9 @@ Runtime allocation during parsing
 
 ## Errors
 
-EmptyStack error if there is less than one item on the stack
+[DatabaseError](./ERRORS/DatabaseError.md) error if there is less than one item on the stack
 
-InvalidValue error if there are words in the item
+[InvalidValue](./ERRORS/InvalidValue.md) error if there are words in the item
 
 
 ## Examples

@@ -15,7 +15,7 @@ Allocates for the result of the item size calculation
 
 ## Errors
 
-EmptyStack error if there are no items on the stack
+[EmptyStack](./ERRORS/EmptyStack.md) error if there are no items on the stack
 
 ## Examples
 

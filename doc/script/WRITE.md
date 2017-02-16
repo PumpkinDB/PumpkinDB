@@ -19,9 +19,9 @@ marker word.
 
 ## Errors
 
-EmptyStack error if stack is less than two items on the stack.
+[EmptyStack](./ERRORS/EmptyStack.md) error if stack is less than two items on the stack.
 
-DatabaseError error if there's a problem with underlying storage.
+[DatabaseError](./ERRORS/DatabaseError.md) error if there's a problem with underlying storage.
 
 
 ## Examples

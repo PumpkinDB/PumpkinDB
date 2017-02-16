@@ -12,7 +12,10 @@
 use lmdb;
 use lmdb::traits::LmdbResultExt;
 use std::mem;
-use super::{Env, EnvId, PassResult, Error, STACK_TRUE, STACK_FALSE, offset_by_size};
+use std::error::Error as StdError;
+use super::{Env, EnvId, PassResult, Error, STACK_TRUE, STACK_FALSE, offset_by_size,
+            ERROR_EMPTY_STACK, ERROR_INVALID_VALUE, ERROR_DUPLICATE_KEY, ERROR_NO_TX,
+            ERROR_UNKNOWN_KEY, ERROR_DATABASE};
 use core::ops::Deref;
 use byteorder::{BigEndian, WriteBytesExt};
 use snowflake::ProcessUniqueId;
@@ -78,7 +81,7 @@ macro_rules! read_or_write_transaction {
         } else if let Some((_, ref txn)) = $me.db_read_txn {
             txn.deref()
         } else {
-            return Err(($env, Error::NoTransaction));
+            return Err(($env, error_no_transaction!()));
         };
     };
 }
@@ -90,7 +93,7 @@ macro_rules! tx_type {
         } else if let Some((_, _)) = $me.db_read_txn {
             TxType::Read
         } else {
-            return Err(($env, Error::NoTransaction));
+            return Err(($env, error_no_transaction!()));
         };
     };
 }
@@ -109,7 +112,7 @@ macro_rules! cursor_op {
         let tuple = ($pid, Vec::from(c));
         let mut cursor = match $me.cursors.remove(&tuple) {
             Some((_, cursor)) => cursor,
-            None => return Err(($env, Error::InvalidValue))
+            None => return Err(($env, error_invalid_value!(c)))
         };
         let access = txn.access();
         let item = cursor.$op::<[u8], [u8]>(&access, $($arg)*);
@@ -154,7 +157,7 @@ macro_rules! cursorp_op {
         let tuple = ($pid, Vec::from(c));
         let mut cursor = match $me.cursors.remove(&tuple) {
             Some((_, cursor)) => cursor,
-            None => return Err(($env, Error::InvalidValue))
+            None => return Err(($env, error_invalid_value!(c)))
         };
         let access = txn.access();
         let item = cursor.$op::<[u8], [u8]>(&access, $($arg)*);
@@ -194,7 +197,7 @@ impl<'a> Handler<'a> {
                 vec.extend_from_slice(WRITE_END); // transaction end marker
                 // prepare transaction
                 match lmdb::WriteTransaction::new(self.db_env) {
-                    Err(e) => Err((env, Error::DatabaseError(e))),
+                    Err(e) => Err((env, error_database!(e))),
                     Ok(txn) => {
                         self.db_write_txn = Some((pid, txn));
                         Ok((env, Some(vec)))
@@ -224,7 +227,7 @@ impl<'a> Handler<'a> {
                 vec.extend_from_slice(READ_END); // transaction end marker
                 // prepare transaction
                 match lmdb::ReadTransaction::new(self.db_env) {
-                    Err(e) => Err((env, Error::DatabaseError(e))),
+                    Err(e) => Err((env, error_database!(e))),
                     Ok(txn) => {
                         self.db_read_txn = Some((pid, txn));
                         Ok((env, Some(vec)))
@@ -255,11 +258,11 @@ impl<'a> Handler<'a> {
 
                 match access.put(self.db, key, value, lmdb::put::NOOVERWRITE) {
                     Ok(_) => Ok((env, None)),
-                    Err(lmdb::Error::ValRejected(_)) => Err((env, Error::DuplicateKey)),
-                    Err(err) => Err((env, Error::DatabaseError(err))),
+                    Err(lmdb::Error::ValRejected(_)) => Err((env, error_duplicate_key!(key))),
+                    Err(err) => Err((env, error_database!(err))),
                 }
             } else {
-                Err((env, Error::NoTransaction))
+                Err((env, error_no_transaction!()))
             }
         } else {
             Err((env, Error::UnknownWord))
@@ -274,7 +277,7 @@ impl<'a> Handler<'a> {
                 let _ = txn.commit();
                 Ok((env, None))
             } else {
-                Err((env, Error::NoTransaction))
+                Err((env, error_no_transaction!()))
             }
         } else {
             Err((env, Error::UnknownWord))
@@ -305,8 +308,8 @@ impl<'a> Handler<'a> {
                     env.push(slice);
                     Ok((env, None))
                 }
-                Ok(None) => Err((env, Error::UnknownKey)),
-                Err(err) => Err((env, Error::DatabaseError(err))),
+                Ok(None) => Err((env, error_unknown_key!(key))),
+                Err(err) => Err((env, error_database!(err))),
             }
         } else {
             Err((env, Error::UnknownWord))
@@ -331,7 +334,7 @@ impl<'a> Handler<'a> {
                     env.push(STACK_FALSE);
                     Ok((env, None))
                 }
-                Err(err) => Err((env, Error::DatabaseError(err))),
+                Err(err) => Err((env, error_database!(err))),
             }
         } else {
             Err((env, Error::UnknownWord))
@@ -370,7 +373,7 @@ impl<'a> Handler<'a> {
                     env.push(slice);
                     Ok((env, None))
                 },
-                Err(err) => Err((env, Error::DatabaseError(err)))
+                Err(err) => Err((env, error_database!(err)))
             }
         } else {
             Err((env, Error::UnknownWord))
@@ -447,7 +450,6 @@ impl<'a> Handler<'a> {
             Err((env, Error::UnknownWord))
         }
     }
-
 }
 
 #[cfg(test)]

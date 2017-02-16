@@ -14,7 +14,9 @@ None
 
 ## Errors
 
-InvalidValue error if the value being negated is not a boolean.
+[InvalidValue](./ERRORS/InvalidValue.md) error if the value being negated is not a boolean.
+
+[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than two items on the stack
 
 ## Examples
 

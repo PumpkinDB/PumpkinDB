@@ -21,7 +21,9 @@ None
 
 ## Errors
 
-InvalidValue error if the value being checked for truth is not a boolean.
+[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than two items on the stack
+
+[InvalidValue](./ERRORS/InvalidValue.md) error if the value being checked for truth is not a boolean.
 
 ## Examples
 

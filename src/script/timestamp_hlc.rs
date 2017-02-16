@@ -15,13 +15,13 @@ word!(HLC_TICK, b"\x88HLC/TICK");
 word!(HLC_LTP, b"\x87HLC/LT?");
 word!(HLC_GTP, b"\x87HLC/GT?");
 
-use super::{Env, EnvId, PassResult, Error, STACK_TRUE, STACK_FALSE};
+use super::{Env, EnvId, PassResult, Error, STACK_TRUE, STACK_FALSE, ERROR_EMPTY_STACK,
+            ERROR_INVALID_VALUE, offset_by_size};
 use timestamp;
 
 use hlc;
 use std::marker::PhantomData;
 use byteorder::{BigEndian, WriteBytesExt};
-
 
 pub struct Handler<'a> {
     phantom: PhantomData<&'a ()>
@@ -56,7 +56,7 @@ impl<'a> Handler<'a> {
             let b = env.pop();
 
             if a.is_none() || b.is_none() {
-                return Err((env, Error::EmptyStack));
+                return Err((env, error_empty_stack!()));
             }
 
             let mut a1 = a.unwrap();
@@ -65,8 +65,12 @@ impl<'a> Handler<'a> {
             let t1_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut b1);
             let t2_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut a1);
 
-            if t1_.is_err() || t2_.is_err() {
-                return Err((env, Error::InvalidValue))
+            if t1_.is_err() {
+                return Err((env, error_invalid_value!(b1)))
+            }
+
+            if t2_.is_err() {
+                return Err((env, error_invalid_value!(a1)))
             }
 
             let t1 = t1_.unwrap();
@@ -91,7 +95,7 @@ impl<'a> Handler<'a> {
             let b = env.pop();
 
             if a.is_none() || b.is_none() {
-                return Err((env, Error::EmptyStack));
+                return Err((env, error_empty_stack!()));
             }
 
             let mut a1 = a.unwrap();
@@ -100,8 +104,12 @@ impl<'a> Handler<'a> {
             let t1_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut b1);
             let t2_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut a1);
 
-            if t1_.is_err() || t2_.is_err() {
-                return Err((env, Error::InvalidValue))
+            if t1_.is_err() {
+                return Err((env, error_invalid_value!(b1)))
+            }
+
+            if t2_.is_err() {
+                return Err((env, error_invalid_value!(a1)))
             }
 
             let t1 = t1_.unwrap();
@@ -125,7 +133,7 @@ impl<'a> Handler<'a> {
             let a = env.pop();
 
             if a.is_none() {
-                return Err((env, Error::EmptyStack));
+                return Err((env, error_empty_stack!()));
             }
 
             let mut a1 = a.unwrap();
@@ -133,7 +141,7 @@ impl<'a> Handler<'a> {
             let t1_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut a1);
 
             if t1_.is_err() {
-                return Err((env, Error::InvalidValue))
+                return Err((env, error_invalid_value!(a1)))
             }
 
             let mut t1 = t1_.unwrap();
@@ -159,7 +167,7 @@ impl<'a> Handler<'a> {
             let a = env.pop();
 
             if a.is_none() {
-                return Err((env, Error::EmptyStack));
+                return Err((env, error_empty_stack!()));
             }
 
             let mut a1 = a.unwrap();
@@ -167,7 +175,7 @@ impl<'a> Handler<'a> {
             let t1_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut a1);
 
             if t1_.is_err() {
-                return Err((env, Error::InvalidValue))
+                return Err((env, error_invalid_value!(a1)))
             }
 
             let t1 = t1_.unwrap();

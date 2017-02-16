@@ -14,7 +14,7 @@ None
 
 ## Errors
 
-EmptyStack error if there are less than two items on the stack
+[EmptyStack](../ERRORS/EmptyStack.md) error if there are less than two items on the stack
 
 It will fail if any of the top two items is not an HLC timestamp.
 

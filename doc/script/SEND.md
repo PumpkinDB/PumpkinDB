@@ -17,7 +17,7 @@ Allocates for sending data copies.
 
 ## Errors
 
-EmptyStack error if stack is less than two items on the stack.
+[EmptyStack](./ERRORS/EmptyStack.md) error if stack is less than two items on the stack.
 
 
 ## Examples

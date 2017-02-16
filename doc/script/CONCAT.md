@@ -13,7 +13,7 @@ Allocates for a result of concatenation
 
 ## Errors
 
-EmptyStack error if there are less than two items on the stack
+[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than two items on the stack
 
 ## Examples
 
