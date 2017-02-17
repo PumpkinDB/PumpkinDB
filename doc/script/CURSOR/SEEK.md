@@ -2,7 +2,7 @@
 
 Sets the cursor at the key value pair with a greater or equal key
 
-Input stack: `key cursor`
+Input stack: `cursor key`
 
 Output stack: `[key value]` or `[]`
 
