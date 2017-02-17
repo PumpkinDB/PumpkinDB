@@ -36,7 +36,7 @@ macro_rules! write_size_into_slice {
 }
 
 macro_rules! handle_words {
-    ($env: expr, $program: expr, $word: expr, $res: ident,
+    ($it: expr, $env: expr, $program: expr, $word: expr, $res: ident,
      $pid: ident, { $($me: expr => $name: ident),* }, $block: expr) => {
     {
       let mut env = $env;
@@ -50,6 +50,7 @@ macro_rules! handle_words {
               Err((env, Error::Reschedule)) => return Ok((env, Some($program.clone()))),
               Err((env, Error::UnknownWord)) => env,
               Err((mut env, err @ Error::ProgramError(_))) => {
+                $it.storage.cleanup($pid.clone());
                 if env.tracking_errors > 0 {
                    env.aborting_try.push(err);
                    let $res : (Env<'a>, Option<Vec<u8>>) = (env, None);
@@ -62,6 +63,7 @@ macro_rules! handle_words {
               Ok($res) => $block
             };
           )*
+          $it.storage.cleanup($pid.clone());
           if env.tracking_errors > 0 {
              env.aborting_try.push(error_unknown_word!($word));
              let $res : (Env<'a>, Option<Vec<u8>>) = (env, None);

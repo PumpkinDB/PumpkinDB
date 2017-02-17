@@ -537,7 +537,7 @@ impl<'a> VM<'a> {
                 _ => (env, Some(rest)),
             });
         } else if let nom::IResult::Done(_, word) = binparser::word_or_internal_word(slice) {
-            handle_words!(env,
+            handle_words!(self, env,
                           program,
                           word,
                           res,

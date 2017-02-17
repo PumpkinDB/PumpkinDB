@@ -186,6 +186,34 @@ impl<'a> Handler<'a> {
         }
     }
 
+    pub fn cleanup(&mut self, pid: EnvId) {
+        let mut is_in_read = false;
+        let mut is_in_write = false;
+
+        if let Some((pid_, _)) = self.db_read_txn {
+            is_in_read = pid_ == pid;
+        }
+
+        if let Some((pid_, _)) = self.db_write_txn {
+            is_in_write = pid_ == pid;
+        }
+
+        if is_in_read {
+            match mem::replace(&mut self.db_read_txn, None) {
+                Some((_, txn)) => drop(txn),
+                None => ()
+            }
+        }
+
+        if is_in_write {
+            match mem::replace(&mut self.db_write_txn, None) {
+                Some((_, txn)) => drop(txn),
+                None => ()
+            }
+        }
+
+    }
+
     #[inline]
     pub fn handle_write(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         match word {
@@ -771,6 +799,23 @@ mod tests {
               {
                   assert!(result.is_err());
               });
+    }
+
+    #[test]
+    fn errors_during_txn() {
+        eval!("[[\"Hey\" ASSOC COMMIT] WRITE] TRY [\"Hey\" ASSOC?] READ",
+              env,
+              result,
+              {
+                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
+              });
+        eval!("[[\"Hey\" ASSOC COMMIT] WRITE] TRY DROP [\"Hey\" \"there\" ASSOC COMMIT] WRITE [\"Hey\" ASSOC?] READ",
+              env,
+              result,
+              {
+                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+              });
+
     }
 
     use test::Bencher;
