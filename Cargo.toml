@@ -29,3 +29,5 @@ crossbeam = "0.2.10"
 
 [features]
 travis = []
+experimental = ["scoped_dictionary"]
+scoped_dictionary = []

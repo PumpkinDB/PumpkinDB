@@ -16,7 +16,10 @@ remainder.
 `SET` will put the second topmost item off the stack (`v`) into the
 word referenced by top item (`w`)
 
-
+If the `scoped_dictionary` feature has been enabled, the definition
+is valid for the scope of the closure, or the rest of the program if
+used outside of a closure. Otherwise, the definition is valid for the
+rest of the program, unless overridden.
 
 ## Allocation
 
