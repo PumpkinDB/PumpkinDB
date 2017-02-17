@@ -6,8 +6,6 @@
 #![feature(slice_patterns, advanced_slice_patterns)]
 #![cfg_attr(test, feature(test))]
 
-#![feature(alloc, heap_api)]
-
 include!("crates.rs");
 
 pub mod script;
