@@ -59,16 +59,15 @@
 //!   from carrying these references outside of the scope of the transaction)
 //!
 
-
-use alloc::heap;
-
 use num_bigint::BigUint;
 use num_traits::{Zero, One};
 use num_traits::ToPrimitive;
 use core::ops::Sub;
-use std::cmp;
 
 use std::collections::BTreeMap;
+
+pub mod envheap;
+use self::envheap::EnvHeap;
 
 /// `word!` macro is used to define a built-in word, its signature (if applicable)
 /// and representation
@@ -234,10 +233,7 @@ pub const HEAP_SIZE: usize = 32_768;
 pub struct Env<'a> {
     stack: Vec<&'a [u8]>,
     stack_size: usize,
-    heap: *mut u8,
-    heap_size: usize,
-    heap_align: usize,
-    heap_ptr: usize,
+    heap: EnvHeap,
     dictionary: BTreeMap<&'a [u8], &'a [u8]>,
     // current TRY status
     tracking_errors: usize,
@@ -254,7 +250,6 @@ unsafe impl<'a> Send for Env<'a> {}
 
 const _EMPTY: &'static [u8] = b"";
 
-use std::slice;
 use std::mem;
 
 impl<'a> Env<'a> {
@@ -274,21 +269,14 @@ impl<'a> Env<'a> {
     /// This function is useful for working with result stacks received from
     /// [VM](struct.VM.html)
     pub fn new_with_stack(stack: Vec<&'a [u8]>, stack_size: usize) -> Result<Self, Error> {
-        unsafe {
-            heap::allocate(HEAP_SIZE, mem::align_of::<u8>()).as_mut()
-        }.and_then(|heap| {
-                Some(Env {
-                    stack: stack,
-                    stack_size: stack_size,
-                    heap: heap,
-                    heap_size: HEAP_SIZE,
-                    heap_align: mem::align_of::<u8>(),
-                    heap_ptr: 0,
-                    dictionary: BTreeMap::new(),
-                    tracking_errors: 0,
-                    aborting_try: Vec::new()
-                })
-        }).ok_or(Error::HeapAllocFailed)
+        Ok(Env {
+            stack: stack,
+            stack_size: stack_size,
+            heap: EnvHeap::new(HEAP_SIZE),
+            dictionary: BTreeMap::new(),
+            tracking_errors: 0,
+            aborting_try: Vec::new()
+        })
     }
 
     /// Returns the entire stack
@@ -335,33 +323,7 @@ impl<'a> Env<'a> {
     /// Allocates a slice off the Env-specific heap. Will be collected
     /// once this Env is dropped.
     pub fn alloc(&mut self, len: usize) -> Result<&'a mut [u8], Error> {
-        if self.heap_ptr + len >= self.heap_size {
-            let increase = cmp::max(len, HEAP_SIZE);
-            match unsafe {
-                heap::reallocate(self.heap,
-                                 self.heap_size,
-                                 self.heap_size + increase,
-                                 self.heap_align).as_mut()
-            } {
-                Some(heap) => {
-                    self.heap = heap;
-                    self.heap_size = self.heap_size + increase;
-                }
-                None => return Err(Error::HeapAllocFailed)
-            }
-        }
-        let mut space = unsafe { slice::from_raw_parts_mut(self.heap, self.heap_size) };
-        let slice = &mut space[self.heap_ptr..self.heap_ptr + len];
-        self.heap_ptr += len;
-        Ok(slice)
-    }
-}
-
-impl<'a> Drop for Env<'a> {
-    fn drop(&mut self) {
-        unsafe {
-            heap::deallocate(self.heap, self.heap_size, self.heap_align);
-        }
+        Ok(unsafe { mem::transmute::<& mut [u8], &'a mut [u8]>(self.heap.alloc(len)) })
     }
 }
 
@@ -1186,15 +1148,6 @@ mod tests {
         assert!(env.stack.len() >= target);
     }
 
-    #[test]
-    fn env_heap_growth() {
-        let mut env = Env::new().unwrap();
-        let sz = env.heap_size;
-        for i in 1..100 {
-            env.alloc(sz);
-        }
-        assert!(env.heap_size >= sz * 100);
-    }
 
     #[test]
     fn drop() {
