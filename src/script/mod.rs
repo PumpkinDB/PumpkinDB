@@ -214,6 +214,8 @@ pub enum ParseError {
     Err(u32),
     /// Unknown error
     UnknownErr,
+    /// Unparseable remainder
+    Superfluous(Vec<u8>)
 }
 pub mod binparser;
 pub use self::binparser::parse as parse_bin;

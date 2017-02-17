@@ -5,7 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use nom::{IResult, ErrorKind};
-use nom::{is_hex_digit, is_space, is_digit};
+use nom::{is_hex_digit, multispace, is_digit};
 
 use num_bigint::BigUint;
 use core::str::FromStr;
@@ -95,10 +95,6 @@ fn is_word_char(s: u8) -> bool {
 }
 
 
-fn is_crlf(s: u8) -> bool {
-    s == 10 || s == 13
-}
-
 fn flatten_program(p: Vec<Vec<u8>>) -> Vec<u8> {
     let mut vec = Vec::new();
     for mut item in p {
@@ -121,6 +117,10 @@ fn eof(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
     } else {
         IResult::Error(ErrorKind::Custom(1))
     }
+}
+
+fn is_multispace(s: u8) -> bool {
+    s == b'\n' || s == b'\r' || s == b'\t' || s == b' '
 }
 
 named!(uint<Vec<u8>>, do_parse!(
@@ -146,15 +146,16 @@ named!(code<Vec<u8>>, do_parse!(
                                (sized_vec(prog))));
 named!(item<Vec<u8>>, alt!(binary | string | uint | code | wordref | word));
 named!(program<Vec<u8>>, alt!(do_parse!(
-                               take_while!(is_space)                        >>
+                               take_while!(is_multispace)                        >>
                             v: eof                                          >>
                                (v))
                               | do_parse!(
-                               take_while!(is_space)                        >>
-                         item: separated_list!(take_while!(is_space), item) >>
+                               take_while!(is_multispace)                        >>
+                         item: separated_list!(multispace, item)            >>
+                               take_while!(is_multispace)                        >>
                                (flatten_program(item)))));
 named!(pub programs<Vec<Vec<u8>>>, do_parse!(
-                         item: separated_list!(take_while!(is_crlf), program)   >>
+                         item: separated_list!(tag!(b"."), program)  >>
                                (item)));
 
 /// Parses human-readable PumpkinScript
@@ -184,7 +185,13 @@ named!(pub programs<Vec<Vec<u8>>>, do_parse!(
 /// a "suboptimal" protocol that allows to converse with PumpkinDB over telnet
 pub fn parse(script: &str) -> Result<Program, ParseError> {
     match program(script.as_bytes()) {
-        IResult::Done(_, x) => Ok(x),
+        IResult::Done(rest, x) => {
+            if rest.len() == 0 {
+                Ok(x)
+            } else {
+                Err(ParseError::Superfluous(Vec::from(rest)))
+            }
+        },
         IResult::Incomplete(_) => Err(ParseError::Incomplete),
         IResult::Error(ErrorKind::Custom(code)) => Err(ParseError::Err(code)),
         _ => Err(ParseError::UnknownErr),
@@ -203,6 +210,20 @@ mod tests {
         assert_eq!(script, vec![]);
         let script = parse("  ").unwrap();
         assert_eq!(script, vec![]);
+    }
+
+    #[test]
+    fn multiline() {
+        let script_multiline = parse("\nHELP [\n\
+        DROP] \n\
+        1").unwrap();
+        let script = parse("HELP [DROP] 1").unwrap();
+        assert_eq!(script, script_multiline);
+    }
+
+    #[test]
+    fn superfluous() {
+        assert!(parse("HELP [DROP]]").is_err());
     }
 
     #[test]
@@ -295,12 +316,7 @@ mod tests {
 
     #[test]
     fn test_programs() {
-        let str = "SOMETHING : BURP DURP\nBURP : DURP";
-        let (_, mut progs) = programs(str.as_bytes()).unwrap();
-        assert_eq!(Vec::from(progs.pop().unwrap()), parse("BURP : DURP").unwrap());
-        assert_eq!(Vec::from(progs.pop().unwrap()), parse("SOMETHING : BURP DURP").unwrap());
-
-        let str = "SOMETHING : BURP DURP\nBURP : DURP";
+        let str = "SOMETHING : BURP DURP.\nBURP : DURP";
         let (_, mut progs) = programs(str.as_bytes()).unwrap();
         assert_eq!(Vec::from(progs.pop().unwrap()), parse("BURP : DURP").unwrap());
         assert_eq!(Vec::from(progs.pop().unwrap()), parse("SOMETHING : BURP DURP").unwrap());
