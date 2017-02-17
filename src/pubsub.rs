@@ -110,6 +110,12 @@ impl<T : Sized + Clone> PublisherAccessor<T> {
         let _ = r.recv();
     }
 
+    pub fn send_async(&self, topic: Topic, data: T) -> mpsc::Receiver<()> {
+        let (s, r) = mpsc::channel();
+        let _ = self.sender.send(PublisherMessage::Send(topic, data, s));
+        r
+    }
+
     /// Shutdown publisher
     pub fn shutdown(&self) {
         let _ = self.sender.send(PublisherMessage::Shutdown);
