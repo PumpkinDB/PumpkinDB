@@ -776,10 +776,6 @@ mod tests {
     use test::Bencher;
 
     #[bench]
-    // This test, even when executed under `cargo test`,
-    // is hanging on Travis CI. Unable to figure it out now,
-    // disabling it.
-    #[cfg(not(feature = "travis"))]
     fn write_1000_kv_pairs_in_isolated_txns(b: &mut Bencher) {
         let path = "pumpkindb-bench-write_1000_kv_pairs_in_isolated_txns";
         fs::create_dir_all(path).expect("can't create directory");
