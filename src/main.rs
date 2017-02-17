@@ -10,6 +10,8 @@
 
 include!("crates.rs");
 
+extern crate alloc;
+
 pub mod script;
 pub mod server;
 pub mod timestamp;
