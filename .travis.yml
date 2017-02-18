@@ -7,4 +7,4 @@ matrix:
     - rust: stable 
 script:
   - cargo build --verbose
-  - cargo test --verbose --features=travis
+  - make test
