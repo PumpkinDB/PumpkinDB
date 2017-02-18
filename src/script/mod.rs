@@ -119,7 +119,9 @@ word!(UINT_SUB, (a, b => c), b"\x88UINT/SUB");
 
 // Category: Control flow
 #[cfg(feature = "scoped_dictionary")]
-word!(SCOPE_END, b"\x80\x81/"); // internal word
+word!(EVAL_SCOPED, b"\x8BEVAL/SCOPED");
+#[cfg(feature = "scoped_dictionary")]
+word!(SCOPE_END, b"\x80\x8BEVAL/SCOPED"); // internal word
 word!(DOWHILE, b"\x87DOWHILE");
 word!(TIMES, b"\x85TIMES");
 word!(EVAL, b"\x84EVAL");
@@ -623,6 +625,7 @@ impl<'a> VM<'a> {
                            self => handle_scope_end,
                            self => handle_eval,
                            self => handle_eval_validp,
+                           self => handle_eval_scoped,
                            self => handle_try,
                            self => handle_try_end,
                            self => handle_unwrap,
@@ -661,11 +664,7 @@ impl<'a> VM<'a> {
                               let (env_, rest) = match res {
                                   (env_, Some(mut vec)) => {
                                       let mut rest_0 = program.split_off(word.len());
-                                      #[cfg(feature = "scoped_dictionary")]
-                                      vec.extend_from_slice(SCOPE_END);
                                       vec.append(&mut rest_0);
-                                      #[cfg(feature = "scoped_dictionary")]
-                                      env_.push_dictionary();
                                       (env_, vec)
                                   }
                                   (env_, None) => (env_, program.split_off(word.len())),
@@ -1004,6 +1003,23 @@ impl<'a> VM<'a> {
         Ok((env, None))
     }
 
+    #[inline]
+    #[cfg(feature = "scoped_dictionary")]
+    fn handle_eval_scoped(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, EVAL_SCOPED);
+        env.push_dictionary();
+        let a = stack_pop!(env);
+        assert_decodable!(env, a);
+        let mut vec = Vec::from(a);
+        vec.extend_from_slice(SCOPE_END);
+        Ok((env, Some(vec)))
+    }
+
+    #[inline]
+    #[cfg(not(feature = "scoped_dictionary"))]
+    fn handle_eval_scoped(&mut self, env: Env<'a>, _: &'a [u8], _: EnvId) -> PassResult<'a> {
+        Err((env, Error::UnknownWord))
+    }
 
 
     #[inline]
@@ -1842,26 +1858,12 @@ mod tests {
     #[test]
     #[cfg(feature = "scoped_dictionary")]
     fn dictionary_scoping() {
-        eval!("[2 'val SET val] EVAL val", env, result, {
+        eval!("[2 'val SET val] EVAL/SCOPED val", env, result, {
             assert_error!(result, "[\"Unknown word: val\" [val] 2]");
         });
 
-        eval!("1 'val SET [2 'val SET val] EVAL val", env, result, {
+        eval!("1 'val SET [2 'val SET val] EVAL/SCOPED val", env, result, {
             assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x02"));
-            assert_eq!(env.pop(), None);
-        });
-        eval!("1 'val SET [2 'val SET val] TRY val", env, result, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[]"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x02"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("1 'val SET [2 'val SET val] 3 TIMES val", env, result, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x02"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x02"));
             assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x02"));
             assert_eq!(env.pop(), None);
         });
