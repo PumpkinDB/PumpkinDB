@@ -122,7 +122,7 @@ macro_rules! cursor_op {
            Ok((key, val)) => {
                 let mut offset = 0;
                 let sz = key.len() + val.len() + offset_by_size(key.len()) + offset_by_size(val.len());
-                let slice = $env.alloc(sz).unwrap();
+                let slice = alloc_slice!(sz, $env);
                 write_size_into_slice!(key.len(), &mut slice[offset..]);
                 offset += offset_by_size(key.len());
                 for i in 0..key.len() {
@@ -329,14 +329,7 @@ impl<'a> Handler<'a> {
 
             return match access.get::<[u8], [u8]>(self.db, key).to_opt() {
                 Ok(Some(val)) => {
-                    let slice0 = env.alloc(val.len());
-                    if slice0.is_err() {
-                        return Err((env, slice0.unwrap_err()))
-                    }
-                    let mut slice = slice0.unwrap();
-                    for i in 0..val.len() {
-                        slice[i] = val[i];
-                    }
+                    let slice = alloc_and_write!(val, env);
                     env.push(slice);
                     Ok((env, None))
                 }
@@ -396,12 +389,7 @@ impl<'a> Handler<'a> {
                     }
                     let _ = bytes.write_u64::<BigEndian>(id.offset);
                     self.cursors.insert((pid.clone(), bytes.clone()), (tx_type!(self, env), Handler::cast_away(cursor)));
-                    let slice = env.alloc(bytes.len()).unwrap();
-                    let mut i = 0;
-                    for byte in bytes {
-                        slice[i] = byte;
-                        i += 1;
-                    }
+                    let slice = alloc_and_write!(bytes, env);
                     env.push(slice);
                     Ok((env, None))
                 },

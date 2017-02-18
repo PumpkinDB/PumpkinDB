@@ -581,14 +581,7 @@ impl<'a> VM<'a> {
         if program.len() == 0 {
             return Ok((env, None));
         }
-        let slice0 = env.alloc(program.len());
-        if slice0.is_err() {
-            return Err((env, slice0.unwrap_err()));
-        }
-        let mut slice = slice0.unwrap();
-        for i in 0..program.len() {
-            slice[i] = program[i];
-        }
+        let slice = alloc_and_write!(program, env);
         if let nom::IResult::Done(_, data) = binparser::data(slice) {
             if env.aborting_try.is_empty() {
                 env.push(&data[offset_by_size(data.len())..]);
@@ -750,14 +743,7 @@ impl<'a> VM<'a> {
     fn handle_depth(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         word_is!(env, word, DEPTH);
         let bytes = BigUint::from(env.stack_size).to_bytes_be();
-        let slice0 = env.alloc(bytes.len());
-        if slice0.is_err() {
-            return Err((env, slice0.unwrap_err()));
-        }
-        let mut slice = slice0.unwrap();
-        for i in 0..bytes.len() {
-            slice[i] = bytes[i];
-        }
+        let slice = alloc_and_write!(bytes, env);
         env.push(slice);
         Ok((env, None))
     }
@@ -780,21 +766,18 @@ impl<'a> VM<'a> {
         let size = vec.clone().into_iter()
             .fold(0, |a, item| a + item.len() + offset_by_size(item.len()));
 
-        match env.alloc(size) {
-            Ok(mut slice) => {
-                let mut offset = 0;
-                for item in vec {
-                    write_size_into_slice!(item.len(), &mut slice[offset..]);
-                    offset += offset_by_size(item.len());
-                    for b in item {
-                        slice[offset] = *b;
-                        offset += 1;
-                    }
-                }
-                env.push(slice);
+        let mut slice = alloc_slice!(size, env);
+
+        let mut offset = 0;
+        for item in vec {
+            write_size_into_slice!(item.len(), &mut slice[offset..]);
+            offset += offset_by_size(item.len());
+            for b in item {
+                slice[offset] = *b;
+                offset += 1;
             }
-            Err(err) => return Err((env, err))
         }
+        env.push(slice);
         Ok((env, None))
     }
 
@@ -927,11 +910,7 @@ impl<'a> VM<'a> {
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
-        let slice0 = env.alloc(a.len() + b.len());
-        if slice0.is_err() {
-            return Err((env, slice0.unwrap_err()));
-        }
-        let mut slice = slice0.unwrap();
+        let slice = alloc_slice!(a.len() + b.len(), env);
         let mut offset = 0;
 
         for byte in b {
@@ -985,18 +964,7 @@ impl<'a> VM<'a> {
         let len = BigUint::from(a.len() as u64);
         let len_bytes = len.to_bytes_be();
 
-        let slice0 = env.alloc(len_bytes.len());
-        if slice0.is_err() {
-            return Err((env, slice0.unwrap_err()));
-        }
-        let mut slice = slice0.unwrap();
-
-        let mut offset = 0;
-
-        for byte in len_bytes {
-            slice[offset] = byte;
-            offset += 1
-        }
+        let slice = alloc_and_write!(len_bytes, env);
 
         env.push(slice);
 
@@ -1050,18 +1018,9 @@ impl<'a> VM<'a> {
 
         let c_bytes = c_uint.to_bytes_be();
 
-        match env.alloc(c_bytes.len()) {
-            Ok(slice) => {
-                let mut i = 0;
-                for byte in c_bytes {
-                    slice[i] = byte;
-                    i += 1;
-                }
-                env.push(slice);
-                Ok((env, None))
-            }
-            Err(err) => Err((env, err))
-        }
+        let slice = alloc_and_write!(c_bytes, env);
+        env.push(slice);
+        Ok((env, None))
     }
 
     #[inline]
@@ -1080,19 +1039,9 @@ impl<'a> VM<'a> {
         let c_uint = b_uint.sub(a_uint);
 
         let c_bytes = c_uint.to_bytes_be();
-
-        match env.alloc(c_bytes.len()) {
-            Ok(slice) => {
-                let mut i = 0;
-                for byte in c_bytes {
-                    slice[i] = byte;
-                    i += 1;
-                }
-                env.push(slice);
-                Ok((env, None))
-            }
-            Err(err) => Err((env, err))
-        }
+        let slice = alloc_and_write!(c_bytes, env);
+        env.push(slice);
+        Ok((env, None))
     }
 
 
@@ -1135,18 +1084,9 @@ impl<'a> VM<'a> {
             env.push(_EMPTY);
             Ok((env, None))
         } else if let Some(Error::ProgramError(err)) = env.aborting_try.pop() {
-            match env.alloc(err.len()) {
-                Ok(slice) => {
-                    let mut i = 0;
-                    for byte in err {
-                        slice[i] = byte;
-                        i += 1;
-                    }
-                    env.push(slice);
-                    Ok((env, None))
-                }
-                Err(err) => Err((env, err))
-            }
+            let slice = alloc_and_write!(err, env);
+            env.push(slice);
+            Ok((env, None))
         } else {
             env.push(_EMPTY);
             Ok((env, None))
@@ -1240,26 +1180,22 @@ impl<'a> VM<'a> {
         let value = stack_pop!(env);
         match binparser::word(word) {
             nom::IResult::Done(_, _) => {
-                match env.alloc(value.len() + offset_by_size(value.len())) {
-                    Ok(mut slice) => {
-                        write_size_into_slice!(value.len(), slice);
-                        let mut offset = offset_by_size(value.len());
-                        for b in value {
-                            slice[offset] = *b;
-                            offset += 1;
-                        }
-                        #[cfg(feature = "scoped_dictionary")]
-                        {
-                            let mut dict = env.dictionary.pop().unwrap();
-                            dict.insert(word, slice);
-                            env.dictionary.push(dict);
-                        }
-                        #[cfg(not(feature = "scoped_dictionary"))]
-                        env.dictionary.insert(word, slice);
-                        Ok((env, None))
-                    }
-                    Err(err) => return Err((env, err))
+                let slice = alloc_slice!(value.len() + offset_by_size(value.len()), env);
+                write_size_into_slice!(value.len(), slice);
+                let mut offset = offset_by_size(value.len());
+                for b in value {
+                    slice[offset] = *b;
+                    offset += 1;
                 }
+                #[cfg(feature = "scoped_dictionary")]
+                {
+                    let mut dict = env.dictionary.pop().unwrap();
+                    dict.insert(word, slice);
+                    env.dictionary.push(dict);
+                }
+                #[cfg(not(feature = "scoped_dictionary"))]
+                env.dictionary.insert(word, slice);
+                Ok((env, None))
             },
             _ => Err((env, error_invalid_value!(word)))
         }
