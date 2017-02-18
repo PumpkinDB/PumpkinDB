@@ -15,6 +15,8 @@ Allocates for recursion during runtime.
 
 [EmptyStack](./ERRORS/EmptyStack.md) error if there is less than two items on the stack
 
+[Decoding error](./ERRORS/DECODING.md) error if the code is undecodable.
+
 ## Examples
 
 ```

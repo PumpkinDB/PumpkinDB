@@ -21,6 +21,8 @@ from an error that occurred.
 
 [EmptyStack](./ERRORS/EmptyStack.md) error if there is less than one item on the stack
 
+[Decoding error](./ERRORS/DECODING.md) error if the code is undecodable.
+
 ## Examples
 
 ```

@@ -35,6 +35,20 @@ macro_rules! write_size_into_slice {
     };
 }
 
+macro_rules! handle_error {
+    ($env: expr, $err: expr) => {
+       handle_error!($env, $err, Ok(($env, None)))
+    };
+    ($env: expr, $err: expr, $body: expr) => {{
+        if $env.tracking_errors > 0 {
+            $env.aborting_try.push($err);
+            $body
+        } else {
+            return Err(($env, $err))
+        }
+    }};
+}
+
 macro_rules! handle_words {
     ($it: expr, $env: expr, $program: expr, $word: expr, $res: ident,
      $pid: ident, { $($me: expr => $name: ident),* }, $block: expr) => {
@@ -51,26 +65,20 @@ macro_rules! handle_words {
               Err((env, Error::UnknownWord)) => env,
               Err((mut env, err @ Error::ProgramError(_))) => {
                 $it.storage.cleanup($pid.clone());
-                if env.tracking_errors > 0 {
-                   env.aborting_try.push(err);
+                handle_error!(env, err, {
                    let $res : (Env<'a>, Option<Vec<u8>>) = (env, None);
                    $block
-                } else {
-                   return Err((env, err))
-                }
+                });
               },
               Err((env, err)) => return Err((env, err)),
               Ok($res) => $block
             };
           )*
           $it.storage.cleanup($pid.clone());
-          if env.tracking_errors > 0 {
-             env.aborting_try.push(error_unknown_word!($word));
-             let $res : (Env<'a>, Option<Vec<u8>>) = (env, None);
-             $block
-          } else {
-             return Err((env, error_unknown_word!($word)))
-          }
+          handle_error!(env, error_unknown_word!($word), {
+                   let $res : (Env<'a>, Option<Vec<u8>>) = (env, None);
+                   $block
+          })
       }
     }
     };
@@ -115,6 +123,14 @@ macro_rules! word_is {
     ($env: expr, $word: expr, $exp: expr) => {
         if $word != $exp {
             return Err(($env, Error::UnknownWord))
+        }
+    };
+}
+
+macro_rules! assert_decodable {
+    ($env: expr, $code: expr) => {
+        if binparser::parse($code).is_err() {
+            return Err(($env, error_decoding!()))
         }
     };
 }
@@ -226,7 +242,7 @@ macro_rules! error_invalid_value {
 
 macro_rules! error_unknown_word {
     ($word: expr) => { {
-        let (_, w) = binparser::word($word).unwrap();
+        let (_, w) = binparser::word_or_internal_word($word).unwrap();
 
         let word = match str::from_utf8(&w[1..]) {
             Ok(word) => word,
