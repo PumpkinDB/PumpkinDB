@@ -243,7 +243,8 @@ pub struct Env<'a> {
     dictionary: BTreeMap<&'a [u8], &'a [u8]>,
     // current TRY status
     tracking_errors: usize,
-    aborting_try: Vec<Error>
+    aborting_try: Vec<Error>,
+    send_ack: Option<mpsc::Receiver<()>>
 }
 
 impl<'a> std::fmt::Debug for Env<'a> {
@@ -281,7 +282,8 @@ impl<'a> Env<'a> {
             heap: EnvHeap::new(HEAP_SIZE),
             dictionary: BTreeMap::new(),
             tracking_errors: 0,
-            aborting_try: Vec::new()
+            aborting_try: Vec::new(),
+            send_ack: None
         })
     }
 
@@ -500,6 +502,10 @@ impl<'a> VM<'a> {
                 }
                 Ok(RequestMessage::RescheduleEnv(pid, mut program, env, chan)) => {
                     match self.pass(env, &mut program, pid.clone()) {
+                        Err((env, Error::Reschedule)) => {
+                            let _ = self.loopback
+                                .send(RequestMessage::RescheduleEnv(pid, program, env, chan));
+                        }
                         Err((env, err)) => {
                             let _ = chan.send(ResponseMessage::EnvFailed(pid,
                                                                          err,
@@ -522,6 +528,19 @@ impl<'a> VM<'a> {
     }
 
     fn pass(&mut self, mut env: Env<'a>, program: &mut Vec<u8>, pid: EnvId) -> PassResult<'a> {
+        // Check if this Env has a pending SEND
+        match mem::replace(&mut env.send_ack, None) {
+            None => (),
+            Some(rcvr) =>
+                match rcvr.try_recv() {
+                    Err(mpsc::TryRecvError::Empty) => {
+                        env.send_ack = Some(rcvr);
+                        return Err((env, Error::Reschedule))
+                    },
+                    Err(mpsc::TryRecvError::Disconnected) => (),
+                    Ok(()) => ()
+                }
+        }
         if program.len() == 0 {
             return Ok((env, None));
         }
@@ -1168,7 +1187,9 @@ impl<'a> VM<'a> {
         let topic = stack_pop!(env);
         let data = stack_pop!(env);
 
-        self.publisher.send(Vec::from(topic), Vec::from(data));
+        let receiver = self.publisher.send_async(Vec::from(topic), Vec::from(data));
+
+        env.send_ack = Some(receiver);
 
         Ok((env, None))
     }
