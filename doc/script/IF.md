@@ -25,6 +25,8 @@ None
 
 [InvalidValue](./ERRORS/InvalidValue.md) error if the value being checked for truth is not a boolean.
 
+[Decoding error](./ERRORS/DECODING.md) error if the code is undecodable.
+
 ## Examples
 
 ```

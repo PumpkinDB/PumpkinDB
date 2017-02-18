@@ -121,6 +121,7 @@ word!(UINT_SUB, (a, b => c), b"\x88UINT/SUB");
 word!(DOWHILE, b"\x87DOWHILE");
 word!(TIMES, b"\x85TIMES");
 word!(EVAL, b"\x84EVAL");
+word!(EVAL_VALIDP, b"\x8BEVAL/VALID?");
 word!(TRY, b"\x83TRY");
 word!(TRY_END, b"\x80\x83TRY"); // internal word
 word!(SET, b"\x83SET");
@@ -513,8 +514,14 @@ impl<'a> VM<'a> {
                                                                          Some(env.stack_size)));
                         }
                         Ok((env, Some(program))) => {
-                            let _ = self.loopback
-                                .send(RequestMessage::RescheduleEnv(pid, program, env, chan));
+                            if program.len() > 0 {
+                                let _ = self.loopback
+                                    .send(RequestMessage::RescheduleEnv(pid, program, env, chan));
+                            } else {
+                                let _ = chan.send(ResponseMessage::EnvTerminated(pid,
+                                                                                 Vec::from(env.stack()),
+                                                                                 env.stack_size));
+                            }
                         }
                         Ok((env, None)) => {
                             let _ = chan.send(ResponseMessage::EnvTerminated(pid,
@@ -586,6 +593,7 @@ impl<'a> VM<'a> {
                            self => handle_dowhile,
                            self => handle_times,
                            self => handle_eval,
+                           self => handle_eval_validp,
                            self => handle_try,
                            self => handle_try_end,
                            self => handle_unwrap,
@@ -622,8 +630,7 @@ impl<'a> VM<'a> {
                            },
                           {
                               let (env_, rest) = match res {
-                                  (env_, Some(code_injection)) => {
-                                      let mut vec = Vec::from(code_injection);
+                                  (env_, Some(mut vec)) => {
                                       let mut rest_0 = program.split_off(word.len());
                                       vec.append(&mut rest_0);
                                       (env_, vec)
@@ -634,9 +641,9 @@ impl<'a> VM<'a> {
                                   0 => (env_, None),
                                   _ => (env_, Some(rest)),
                               });
-                          });
+                          })
         } else {
-            return Err((env, error_decoding!()));
+            handle_error!(env, error_decoding!(), Ok((env, Some(program.split_off(1)))))
         }
     }
 
@@ -840,6 +847,8 @@ impl<'a> VM<'a> {
         let else_ = stack_pop!(env);
         let then = stack_pop!(env);
         let cond = stack_pop!(env);
+        assert_decodable!(env, else_);
+        assert_decodable!(env, then);
 
         if cond == STACK_TRUE {
             Ok((env, Some(Vec::from(then))))
@@ -1025,13 +1034,27 @@ impl<'a> VM<'a> {
     fn handle_eval(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         word_is!(env, word, EVAL);
         let a = stack_pop!(env);
+        assert_decodable!(env, a);
         Ok((env, Some(Vec::from(a))))
+    }
+
+    #[inline]
+    fn handle_eval_validp(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, EVAL_VALIDP);
+        let a = stack_pop!(env);
+        if parse_bin(a).is_ok() {
+            env.push(STACK_TRUE);
+        } else {
+            env.push(STACK_FALSE);
+        }
+        Ok((env, None))
     }
 
     #[inline]
     fn handle_try(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         word_is!(env, word, TRY);
         let v = stack_pop!(env);
+        assert_decodable!(env, v);
         env.tracking_errors += 1;
         let mut vec = Vec::from(v);
         vec.extend_from_slice(TRY_END);
@@ -1086,6 +1109,7 @@ impl<'a> VM<'a> {
     fn handle_dowhile(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         word_is!(env, word, DOWHILE);
         let v = stack_pop!(env);
+        assert_decodable!(env, v);
 
         // inject the code itself
         let mut vec = Vec::from(v);
@@ -1115,6 +1139,7 @@ impl<'a> VM<'a> {
         let count = stack_pop!(env);
 
         let v = stack_pop!(env);
+        assert_decodable!(env, v);
 
         let counter = BigUint::from_bytes_be(count);
         if counter.is_zero() {
@@ -1171,6 +1196,7 @@ impl<'a> VM<'a> {
         word_is!(env, word, DEF);
         let word = stack_pop!(env);
         let value = stack_pop!(env);
+        assert_decodable!(env, value);
         match binparser::word(word) {
             nom::IResult::Done(_, _) => {
                 env.dictionary.insert(word, value);
@@ -1299,6 +1325,10 @@ mod tests {
             assert_eq!(env.pop(), None);
             assert_eq!(env.pop(), None);
         });
+        eval!("1 \"Hello\" IF", env, result, {
+            assert_error!(result, "[\"Decoding error\" [] 5]");
+        });
+
     }
 
     #[test]
@@ -1449,6 +1479,14 @@ mod tests {
         eval!("IFELSE", env, result, {
             assert_error!(result, "[\"Empty stack\" [] 4]");
         });
+
+        eval!("1 \"Hello\" [] IFELSE", env, result, {
+            assert_error!(result, "[\"Decoding error\" [] 5]");
+        });
+
+        eval!("1 [] \"Hello\" IFELSE", env, result, {
+            assert_error!(result, "[\"Decoding error\" [] 5]");
+        });
     }
 
     #[test]
@@ -1543,6 +1581,10 @@ mod tests {
             assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
+        eval!("1 5 TIMES", env, result, {
+            assert_error!(result, "[\"Decoding error\" [] 5]");
+        });
+
     }
 
     #[test]
@@ -1571,6 +1613,10 @@ mod tests {
             assert_error!(result, "[\"Invalid value\" [100] 3]");
         });
 
+        eval!("1 DOWHILE", env, result, {
+            assert_error!(result, "[\"Decoding error\" [] 5]");
+        });
+
     }
 
     #[test]
@@ -1583,6 +1629,10 @@ mod tests {
 
         eval!("EVAL", env, result, {
             assert_error!(result, "[\"Empty stack\" [] 4]");
+        });
+
+        eval!("1 EVAL", env, result, {
+            assert_error!(result, "[\"Decoding error\" [] 5]");
         });
     }
 
@@ -1729,13 +1779,10 @@ mod tests {
             assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
-    }
-
-    #[test]
-    fn invalid_eval() {
-        eval!("0x10 EVAL", env, result, {
+        eval!("1 'a DEF", env, result, {
             assert_error!(result, "[\"Decoding error\" [] 5]");
         });
+
     }
 
     use std::time::Duration;
@@ -1829,6 +1876,10 @@ mod tests {
 
         eval!("[DUP] TRY STACK DROP DUP", env, result, {
             assert!(result.is_err());
+        });
+
+        eval!("1 TRY", env, result, {
+            assert_error!(result, "[\"Decoding error\" [] 5]");
         });
 
     }

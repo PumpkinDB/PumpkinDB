@@ -17,14 +17,13 @@ pub fn word_tag(i: &[u8]) -> IResult<&[u8], u8> {
     }
 }
 
-pub fn internal_word(i: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn internal_word_tag(i: &[u8]) -> IResult<&[u8], u8> {
     if i.len() < 2 {
-        IResult::Incomplete(Needed::Size(1))
-    } else if i[0] != 128 {
+        IResult::Incomplete(Needed::Size(2))
+    } else if i[0] != 128 || i[1] < 129 {
         IResult::Error(ErrorKind::Custom(128))
     } else {
-        IResult::Done(&i[(i[1] - 128 + 2) as usize..],
-                      &i[0..(i[1] - 128 + 2) as usize])
+        IResult::Done(&i[0..], i[1] - 128 + 2)
     }
 }
 
@@ -100,6 +99,7 @@ fn flatten_program(p: Vec<&[u8]>) -> Vec<u8> {
 named!(pub data_size<usize>, alt!(micro_length | byte_length | small_length | big_length));
 named!(pub data, length_bytes!(data_size));
 named!(pub word, length_bytes!(word_tag));
+named!(pub internal_word, length_bytes!(internal_word_tag));
 named!(pub word_or_internal_word, alt!(internal_word | word));
 named!(item, alt!(word | data));
 named!(split_code<Vec<u8>>, do_parse!(

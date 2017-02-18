@@ -25,6 +25,8 @@ None.
 
 EmptyStack error if there are less than two items on the stack
 
+[Decoding error](./ERRORS/DECODING.md) error if the code is undecodable.
+
 It will error if the format of the word is incorrect
 
 It may error if this word is a built-in word that was previously

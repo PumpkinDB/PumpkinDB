@@ -23,6 +23,7 @@ marker word.
 
 [DatabaseError](./ERRORS/DatabaseError.md) error if there's a problem with underlying storage.
 
+[Decoding error](./ERRORS/DECODING.md) error if the code is undecodable.
 
 ## Examples
 
