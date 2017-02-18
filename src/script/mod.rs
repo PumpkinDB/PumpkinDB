@@ -62,7 +62,7 @@
 use num_bigint::BigUint;
 use num_traits::{Zero, One};
 use num_traits::ToPrimitive;
-use core::ops::Sub;
+use core::ops::{Add, Sub};
 
 use std::collections::BTreeMap;
 
@@ -112,6 +112,10 @@ word!(GTP, (a, b => c), b"\x83GT?");
 word!(LENGTH, (a => b), b"\x86LENGTH");
 word!(CONCAT, (a, b => c), b"\x86CONCAT");
 word!(SLICE, (a, b, c => d), b"\x85SLICE");
+
+// Category: arithmetics
+word!(UINT_ADD, (a, b => c), b"\x88UINT/ADD");
+word!(UINT_SUB, (a, b => c), b"\x88UINT/SUB");
 
 // Category: Control flow
 word!(DOWHILE, b"\x87DOWHILE");
@@ -555,6 +559,8 @@ impl<'a> VM<'a> {
                            self => handle_equal,
                            self => handle_concat,
                            self => handle_slice,
+                           self => handle_uint_add,
+                           self => handle_uint_sub,
                            self => handle_length,
                            self => handle_dowhile,
                            self => handle_times,
@@ -934,6 +940,65 @@ impl<'a> VM<'a> {
 
         Ok((env, None))
     }
+
+    #[inline]
+    fn handle_uint_add(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, UINT_ADD);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+
+        let a_uint = BigUint::from_bytes_be(a);
+        let b_uint = BigUint::from_bytes_be(b);
+
+        let c_uint = a_uint.add(b_uint);
+
+        let c_bytes = c_uint.to_bytes_be();
+
+        match env.alloc(c_bytes.len()) {
+            Ok(slice) => {
+                let mut i = 0;
+                for byte in c_bytes {
+                    slice[i] = byte;
+                    i += 1;
+                }
+                env.push(slice);
+                Ok((env, None))
+            }
+            Err(err) => Err((env, err))
+        }
+    }
+
+    #[inline]
+    fn handle_uint_sub(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, UINT_SUB);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+
+        let a_uint = BigUint::from_bytes_be(a);
+        let b_uint = BigUint::from_bytes_be(b);
+
+        if a_uint > b_uint {
+            return Err((env, error_invalid_value!(a)));
+        }
+
+        let c_uint = b_uint.sub(a_uint);
+
+        let c_bytes = c_uint.to_bytes_be();
+
+        match env.alloc(c_bytes.len()) {
+            Ok(slice) => {
+                let mut i = 0;
+                for byte in c_bytes {
+                    slice[i] = byte;
+                    i += 1;
+                }
+                env.push(slice);
+                Ok((env, None))
+            }
+            Err(err) => Err((env, err))
+        }
+    }
+
 
     #[inline]
     fn handle_eval(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
@@ -1741,6 +1806,20 @@ mod tests {
 
         eval!("[DUP] TRY STACK DROP DUP", env, result, {
             assert!(result.is_err());
+        });
+
+    }
+
+    #[test]
+    fn uint_arith() {
+        eval!("1 2 UINT/ADD 3 2 UINT/SUB", env, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x03"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("1 2 UINT/SUB", env, result, {
+            assert_error!(result, "[\"Invalid value\" [2] 3]");
         });
 
     }
