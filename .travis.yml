@@ -7,4 +7,5 @@ matrix:
     - rust: stable 
 script:
   - cargo build --verbose
+  - cargo build --features="experimental" --verbose
   - make test

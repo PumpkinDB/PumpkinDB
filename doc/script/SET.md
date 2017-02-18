@@ -16,8 +16,6 @@ remainder.
 `SET` will put the second topmost item off the stack (`v`) into the
 word referenced by top item (`w`)
 
-
-
 ## Allocation
 
 Allocates on the heap for the binary form definition.

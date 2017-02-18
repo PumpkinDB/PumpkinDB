@@ -16,7 +16,6 @@ remainder.
 `DEF` will put the second topmost item off the stack (`c`) into the
 word referenced by top item (`w`)
 
-
 ## Allocation
 
 None.

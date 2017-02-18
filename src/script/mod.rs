@@ -118,6 +118,10 @@ word!(UINT_ADD, (a, b => c), b"\x88UINT/ADD");
 word!(UINT_SUB, (a, b => c), b"\x88UINT/SUB");
 
 // Category: Control flow
+#[cfg(feature = "scoped_dictionary")]
+word!(EVAL_SCOPED, b"\x8BEVAL/SCOPED");
+#[cfg(feature = "scoped_dictionary")]
+word!(SCOPE_END, b"\x80\x8BEVAL/SCOPED"); // internal word
 word!(DOWHILE, b"\x87DOWHILE");
 word!(TIMES, b"\x85TIMES");
 word!(EVAL, b"\x84EVAL");
@@ -241,6 +245,9 @@ pub struct Env<'a> {
     stack: Vec<&'a [u8]>,
     stack_size: usize,
     heap: EnvHeap,
+    #[cfg(feature = "scoped_dictionary")]
+    dictionary: Vec<BTreeMap<&'a [u8], &'a [u8]>>,
+    #[cfg(not(feature = "scoped_dictionary"))]
     dictionary: BTreeMap<&'a [u8], &'a [u8]>,
     // current TRY status
     tracking_errors: usize,
@@ -277,11 +284,15 @@ impl<'a> Env<'a> {
     /// This function is useful for working with result stacks received from
     /// [VM](struct.VM.html)
     pub fn new_with_stack(stack: Vec<&'a [u8]>, stack_size: usize) -> Result<Self, Error> {
+        #[cfg(feature = "scoped_dictionary")]
+        let dictionary = vec![BTreeMap::new()];
+        #[cfg(not(feature = "scoped_dictionary"))]
+        let dictionary = BTreeMap::new();
         Ok(Env {
             stack: stack,
             stack_size: stack_size,
             heap: EnvHeap::new(HEAP_SIZE),
-            dictionary: BTreeMap::new(),
+            dictionary: dictionary,
             tracking_errors: 0,
             aborting_try: Vec::new(),
             send_ack: None
@@ -334,7 +345,25 @@ impl<'a> Env<'a> {
     pub fn alloc(&mut self, len: usize) -> Result<&'a mut [u8], Error> {
         Ok(unsafe { mem::transmute::<& mut [u8], &'a mut [u8]>(self.heap.alloc(len)) })
     }
+
+
+    #[cfg(feature = "scoped_dictionary")]
+    pub fn push_dictionary(&mut self) {
+        let dict = self.dictionary.pop().unwrap();
+        let new_dict = dict.clone();
+        self.dictionary.push(dict);
+        self.dictionary.push(new_dict);
+    }
+
+    #[cfg(feature = "scoped_dictionary")]
+    pub fn pop_dictionary(&mut self) {
+        self.dictionary.pop();
+        if self.dictionary.len() == 0 {
+            self.dictionary.push(BTreeMap::new());
+        }
+    }
 }
+
 
 use nom;
 
@@ -534,6 +563,7 @@ impl<'a> VM<'a> {
         }
     }
 
+    #[allow(unused_mut)]
     fn pass(&mut self, mut env: Env<'a>, program: &mut Vec<u8>, pid: EnvId) -> PassResult<'a> {
         // Check if this Env has a pending SEND
         match mem::replace(&mut env.send_ack, None) {
@@ -592,8 +622,10 @@ impl<'a> VM<'a> {
                            self => handle_length,
                            self => handle_dowhile,
                            self => handle_times,
+                           self => handle_scope_end,
                            self => handle_eval,
                            self => handle_eval_validp,
+                           self => handle_eval_scoped,
                            self => handle_try,
                            self => handle_try_end,
                            self => handle_unwrap,
@@ -972,6 +1004,40 @@ impl<'a> VM<'a> {
     }
 
     #[inline]
+    #[cfg(feature = "scoped_dictionary")]
+    fn handle_eval_scoped(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, EVAL_SCOPED);
+        env.push_dictionary();
+        let a = stack_pop!(env);
+        assert_decodable!(env, a);
+        let mut vec = Vec::from(a);
+        vec.extend_from_slice(SCOPE_END);
+        Ok((env, Some(vec)))
+    }
+
+    #[inline]
+    #[cfg(not(feature = "scoped_dictionary"))]
+    fn handle_eval_scoped(&mut self, env: Env<'a>, _: &'a [u8], _: EnvId) -> PassResult<'a> {
+        Err((env, Error::UnknownWord))
+    }
+
+
+    #[inline]
+    #[cfg(feature = "scoped_dictionary")]
+    fn handle_scope_end(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, SCOPE_END);
+        env.pop_dictionary();
+        Ok((env, None))
+    }
+
+
+    #[inline]
+    #[cfg(not(feature = "scoped_dictionary"))]
+    fn handle_scope_end(&mut self, env: Env<'a>, _: &'a [u8], _: EnvId) -> PassResult<'a> {
+        Err((env, Error::UnknownWord))
+    }
+
+    #[inline]
     fn handle_uint_add(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         word_is!(env, word, UINT_ADD);
         let a = stack_pop!(env);
@@ -1182,6 +1248,13 @@ impl<'a> VM<'a> {
                             slice[offset] = *b;
                             offset += 1;
                         }
+                        #[cfg(feature = "scoped_dictionary")]
+                        {
+                            let mut dict = env.dictionary.pop().unwrap();
+                            dict.insert(word, slice);
+                            env.dictionary.push(dict);
+                        }
+                        #[cfg(not(feature = "scoped_dictionary"))]
                         env.dictionary.insert(word, slice);
                         Ok((env, None))
                     }
@@ -1199,6 +1272,13 @@ impl<'a> VM<'a> {
         assert_decodable!(env, value);
         match binparser::word(word) {
             nom::IResult::Done(_, _) => {
+                #[cfg(feature = "scoped_dictionary")]
+                {
+                    let mut dict = env.dictionary.pop().unwrap();
+                    dict.insert(word, value);
+                    env.dictionary.push(dict);
+                }
+                #[cfg(not(feature = "scoped_dictionary"))]
                 env.dictionary.insert(word, value);
                 Ok((env, None))
             },
@@ -1221,6 +1301,25 @@ impl<'a> VM<'a> {
     }
 
     #[inline]
+    #[cfg(feature = "scoped_dictionary")]
+    fn handle_dictionary(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        let dict = env.dictionary.pop().unwrap();
+        if dict.contains_key(word) {
+            let mut vec = Vec::new();
+            {
+                let def = dict.get(word).unwrap();
+                vec.extend_from_slice(def);
+            }
+            env.dictionary.push(dict);
+            Ok((env, Some(vec)))
+        } else {
+            env.dictionary.push(dict);
+            Err((env, Error::UnknownWord))
+        }
+    }
+
+    #[inline]
+    #[cfg(not(feature = "scoped_dictionary"))]
     fn handle_dictionary(&mut self, env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if env.dictionary.contains_key(word) {
             let mut vec = Vec::new();
@@ -1754,6 +1853,20 @@ mod tests {
             assert_error!(result, "[\"Empty stack\" [] 4]");
         });
 
+    }
+
+    #[test]
+    #[cfg(feature = "scoped_dictionary")]
+    fn dictionary_scoping() {
+        eval!("[2 'val SET val] EVAL/SCOPED val", env, result, {
+            assert_error!(result, "[\"Unknown word: val\" [val] 2]");
+        });
+
+        eval!("1 'val SET [2 'val SET val] EVAL/SCOPED val", env, result, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x02"));
+            assert_eq!(env.pop(), None);
+        });
     }
 
     #[test]
