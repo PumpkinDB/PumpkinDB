@@ -16,6 +16,7 @@ pub mod timestamp;
 pub mod pubsub;
 
 use std::thread;
+use std::sync::Arc;
 
 use std::fs;
 use std::path;
@@ -29,7 +30,7 @@ use core::mem::size_of;
 use std::sync::Mutex;
 
 lazy_static! {
- static ref ENV: lmdb::Environment = {
+ static ref ENV: Arc<lmdb::Environment> = {
      let _ = config::set_default("storage.path", "pumpkin.db");
 
      let path = config::get_str("storage.path").unwrap().into_owned();
@@ -55,16 +56,16 @@ lazy_static! {
                 }
                 heap::deallocate(statp as *mut u8, size_of::<statvfs>(), size_of::<usize>());
             }
-            env_builder
+            Arc::new(env_builder
                 .open(path.as_str(), lmdb::open::Flags::empty(), 0o600)
-                .expect("can't open env")
+                .expect("can't open env"))
     }
  };
 
- static ref DB: lmdb::Database<'static> = lmdb::Database::open(&ENV,
+ static ref DB: Arc<lmdb::Database<'static>> = Arc::new(lmdb::Database::open(ENV.clone(),
                               None,
                               &lmdb::DatabaseOptions::new(lmdb::db::CREATE))
-                              .expect("can't open database");
+                              .expect("can't open database"));
 
  static ref PUBLISHER: Mutex<pubsub::PublisherAccessor<Vec<u8>>> = {
      let mut publisher = pubsub::Publisher::new();
