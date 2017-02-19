@@ -32,7 +32,8 @@ for mediating this problem
 
 ## Tests
 
-```
-"hi" DUP "there" [ASSOC COMMIT] WRITE [ASSOC?] READ => 1
-"hi" DUP "there" [ASSOC] WRITE [ASSOC?] READ => 0
+```test
+works : "hi" "there" 2DUP [ASSOC COMMIT] WRITE SWAP [RETR] READ EQUAL?.
+requires_txn : ["hi" RETR] TRY UNWRAP 0x08 EQUAL?.
+empty_stack : [RETR] TRY UNWRAP 0x04 EQUAL?.
 ```

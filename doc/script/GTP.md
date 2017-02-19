@@ -25,8 +25,10 @@ None
 
 ## Tests
 
-```
-0x10 0x20 GT? => 0
-0x20 0x10 GT? => 1
-0x10 0x10 GT? => 0
+```test
+less : 0x10 0x20 GT? NOT.
+greater : 0x20 0x10 GT?.
+equal : 0x10 0x10 GT? NOT.
+requires_two_items_0 : [GT?] TRY UNWRAP 0x04 EQUAL?.
+requires_two_items_1 : [1 GT?] TRY UNWRAP 0x04 EQUAL?.
 ```

@@ -28,7 +28,8 @@ None
 
 ## Tests
 
-```
-[] NONE? => 1
-[1] NONE? => 0
+```test
+works : [] NONE?.
+works_1 : [1] NONE? NOT.
+empty_stack : [NONE?] TRY UNWRAP 0x04 EQUAL?.
 ```

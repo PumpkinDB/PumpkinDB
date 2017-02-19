@@ -21,7 +21,7 @@ None
 
 [EmptyStack](./ERRORS/EmptyStack.md) error if there are less than two items on the stack
 
-[EmptyStack](./ERRORS/NoTransaction.md) error if there's no current read or write transaction
+[NoTransaction](./ERRORS/NoTransaction.md) error if there's no current read or write transaction
 
 ## Examples
 
@@ -31,7 +31,9 @@ None
 
 ## Tests
 
-```
-"hi" DUP "there" [ASSOC COMMIT] WRITE [RETR] READ => "there"
-"hi" DUP "there" [ASSOC] WRITE [ASSOC?] READ => 0
+```test
+present : "hi" DUP "there" [ASSOC COMMIT] WRITE [ASSOC?] READ.
+not_present : "hi" "there" [ASSOC COMMIT] WRITE "bye" [ASSOC?] READ NOT.
+assocp_requires_txn : [0 ASSOC?] TRY UNWRAP 0x08 EQUAL?.
+assoc_requires_one_item : [[ASSOC] WRITE] TRY UNWRAP 0x04 EQUAL?.
 ```

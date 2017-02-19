@@ -38,7 +38,8 @@ defined.
 
 ## Tests
 
-```
-[DUP DUP] 'key SET "MyKey" key => "MyKey" "MyKey" "MyKey"
-DEPTH 'depth SET 1 2 3 depth => 0
+```test
+works : 1 'val SET 1 val.
+empty_stack : [SET] TRY UNWRAP 0x04 EQUAL?.
+empty_stack_1 : ['a SET] TRY UNWRAP 0x04 EQUAL?.
 ```

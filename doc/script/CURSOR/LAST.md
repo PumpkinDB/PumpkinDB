@@ -28,6 +28,9 @@ InvalidValue error if the cursor identifier is incorrect or expired
 
 ## Tests
 
-```
-["1" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/LAST] READ UNWRAP => "1" "2"
+```test
+works : ["1" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/LAST] READ ["1" "2"] EQUAL?.
+requires_txn : ["1" CURSOR/LAST] TRY UNWRAP 0x08 EQUAL?.
+empty_stack : [CURSOR/LAST] TRY UNWRAP 0x04 EQUAL?.
+invalid_cursor : [["1" CURSOR/LAST] READ] TRY UNWRAP 0x03 EQUAL?.
 ```

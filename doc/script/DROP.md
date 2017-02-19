@@ -22,6 +22,7 @@ None
 
 ## Tests
 
-```
-0x10 DROP =>
+```test
+works : 1 DROP DEPTH 0 EQUAL?.
+empty_stack : [DROP] TRY UNWRAP 0x04 EQUAL?.
 ```

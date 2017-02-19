@@ -26,6 +26,9 @@ Runtime allocation for code generation
 
 ## Tests
 
-```
-1 2 3 [1 EQUAL? NOT] DOWHILE =>
+```test
+works : 1 2 3 [1 EQUAL? NOT] DOWHILE DEPTH 0 EQUAL?.
+invalid_code : [1 DOWHILE] TRY UNWRAP 0x05 EQUAL?.
+invalid_value : [[5] DOWHILE] TRY UNWRAP 0x03 EQUAL?.
+empty_stack : [DOWHILE] TRY UNWRAP 0x04 EQUAL?.
 ```

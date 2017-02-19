@@ -20,7 +20,7 @@ Runtime allocation during parsing
 
 ## Errors
 
-[DatabaseError](./ERRORS/DatabaseError.md) error if there is less than one item on the stack
+[EmptyStack](./ERRORS/EmptyStack.md) error if there is less than one item on the stack
 
 [InvalidValue](./ERRORS/InvalidValue.md) error if there are words in the item
 
@@ -33,7 +33,7 @@ Runtime allocation during parsing
 
 ## Tests
 
-```
-[1 2 3] UNWRAP => 1 2 3
-[] UNWRAP =>
+```test
+works : [3 2 1 ] UNWRAP.
+empty_stack : [UNWRAP] TRY UNWRAP 0x04 EQUAL?.
 ```

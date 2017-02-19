@@ -26,6 +26,11 @@ HLC HLC HLC/LT? => 1
 
 ## Tests
 
-```
-HLC HLC HLC/LT? => 1
+```test
+equal :  HLC DUP HLC/LT? NOT.
+lesser : HLC DUP HLC/TICK HLC/LT?.
+invalid_value : [1 HLC HLC/LT?] TRY UNWRAP 0x03 EQUAL?.
+invalid_value_1 : [HLC 1 HLC/LT?] TRY UNWRAP 0x03 EQUAL?.
+empty_stack : [HLC/LT?] TRY UNWRAP 0x04 EQUAL?.
+empty_stack_1 : [HLC HLC/LT?] TRY UNWRAP 0x04 EQUAL?.
 ```

@@ -33,8 +33,8 @@ one item on the stack
 
 ## Tests
 
-```
-1 EVAL/VALID? => 0x00
-'DUP EVAL/VALID? => 0x01
-[1 DUP] EVAL/VALID? => 0x01
+```test
+positive : [1] EVAL/VALID?.
+negative : 1 EVAL/VALID? NOT.
+empty_stack : [EVAL/VALID?] TRY UNWRAP 0x04 EQUAL?. 
 ```

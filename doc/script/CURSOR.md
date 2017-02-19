@@ -28,3 +28,6 @@ NoTransaction error if there's no current write transaction
 
 ## Tests
 
+```test
+requires_txn : [CURSOR] TRY UNWRAP 0x08 EQUAL?.
+```

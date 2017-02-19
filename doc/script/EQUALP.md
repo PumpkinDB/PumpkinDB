@@ -24,7 +24,9 @@ None
 
 ## Tests
 
-```
-"Hello, " "world!" EQUAL? => 0
-"Hello, " "Hello, " EQUAL? => 1
+```test
+not_equal : "Hello, " "world!" EQUAL? NOT.
+equal : "Hello, " "Hello, " EQUAL?.
+requires_two_items_0 : [EQUAL?] TRY UNWRAP 0x04 EQUAL?.
+requires_two_items_1 : [1 EQUAL?] TRY UNWRAP 0x04 EQUAL?.
 ```

@@ -33,6 +33,8 @@ marker word.
   
 ## Tests
 
-```
-"hi" DUP "there" [ASSOC COMMIT] WRITE [RETR] READ => "there" 
+```test
+evals : [1] WRITE.
+invalid_code : [1 WRITE] TRY UNWRAP 0x05 EQUAL?.
+empty_stack : [WRITE] TRY UNWRAP 0x04 EQUAL?. 
 ```

@@ -24,7 +24,10 @@ None
 
 ## Tests
 
-```
-0x01 0x01 AND => 1
-0x00 0x01 AND => 0
+```test
+true_and_true : 1 1 AND 1 EQUAL?.
+true_and_false : 1 0 AND 0 EQUAL?.
+false_and_false : 0 0 AND 0 EQUAL?.
+and_bool_a : [2 0 AND] TRY UNWRAP 0x03 EQUAL?.
+and_bool_b : [0 2 AND] TRY UNWRAP 0x03 EQUAL?.
 ```

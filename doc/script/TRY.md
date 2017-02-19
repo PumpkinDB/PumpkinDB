@@ -32,7 +32,8 @@ from an error that occurred.
 
 ## Tests
 
-```
-[DUP] TRY SOME? => 0x1
-[1 DUP] TRY SOME? => 0x1 0x1 0x0
+```test
+works : [DUP] TRY SOME?.
+invalid_code : [1 TRY] TRY UNWRAP 0x05 EQUAL?.
+empty_stack : [TRY] TRY UNWRAP 0x04 EQUAL?.
 ```

@@ -29,6 +29,11 @@ InvalidValue error if the cursor identifier is incorrect or expired
 
 ## Tests
 
+```test
+works : ["3" "3" ASSOC COMMIT] WRITE [CURSOR 'c SET c "2" CURSOR/SEEK] READ ["3" "3"] EQUAL?.
+requires_txn : ["1" "1" CURSOR/SEEK] TRY UNWRAP 0x08 EQUAL?.
+empty_stack : [CURSOR/SEEK] TRY UNWRAP 0x04 EQUAL?.
+empty_stack_1 : ["a" CURSOR/SEEK] TRY UNWRAP 0x04 EQUAL?.
+invalid_cursor : [["1" "A" CURSOR/SEEK] READ] TRY UNWRAP 0x03 EQUAL?.
 ```
-["3" "3" ASSOC COMMIT] WRITE [CURSOR 'c SET c "2" CURSOR/SEEK] READ UNWRAP => "3" "3"
-```
+

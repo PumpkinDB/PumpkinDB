@@ -28,6 +28,7 @@ Allocates for sending data copies.
   
 ## Tests
 
-```
-"Hi" "MAIN" SEND => 
+```test
+empty_stack : [SEND] TRY UNWRAP 0x04 EQUAL?.
+empty_stack_1 : [1 SEND] TRY UNWRAP 0x04 EQUAL?.
 ```

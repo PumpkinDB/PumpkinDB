@@ -27,8 +27,9 @@ None
 
 ## Tests
 
-```
-0x01 0x01 OR => 1
-0x00 0x01 OR => 1
-0x00 0x00 OR => 0
+```test
+invalid_value_1 : [5 1 OR] TRY UNWRAP 0x03 EQUAL?.
+invalid_value_2 : [1 5 OR] TRY UNWRAP 0x03 EQUAL?.
+requires_two_items_0 : [OR] TRY UNWRAP 0x04 EQUAL?.
+requires_two_items_1 : [1 OR] TRY UNWRAP 0x04 EQUAL?.
 ```
