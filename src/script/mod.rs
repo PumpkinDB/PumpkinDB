@@ -1804,7 +1804,7 @@ mod tests {
     #[cfg(feature = "scoped_dictionary")]
     fn dictionary_scoping() {
         eval!("[2 'val SET val] EVAL/SCOPED val", env, result, {
-            assert_error!(result, "[\"Unknown word: val\" [val] 2]");
+            assert_error!(result, "[\"Unknown word: val\" ['val] 2]");
         });
 
         eval!("1 'val SET [2 'val SET val] EVAL/SCOPED val", env, result, {
