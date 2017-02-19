@@ -281,9 +281,7 @@ macro_rules! alloc_slice {
 macro_rules! alloc_and_write {
     ($bytes: expr, $env: expr) => {{
         let slice = alloc_slice!($bytes.len(), $env);
-        for i in 0..$bytes.len() {
-            slice[i] = $bytes[i];
-        }
+        slice.copy_from_slice($bytes);
         slice
     }};
 }

@@ -125,15 +125,11 @@ macro_rules! cursor_op {
                 let slice = alloc_slice!(sz, $env);
                 write_size_into_slice!(key.len(), &mut slice[offset..]);
                 offset += offset_by_size(key.len());
-                for i in 0..key.len() {
-                    slice[offset+i] = key[i];
-                }
+                slice[offset..offset + key.len()].copy_from_slice(key);
                 offset += key.len();
                 write_size_into_slice!(val.len(), &mut slice[offset..]);
                 offset += offset_by_size(val.len());
-                for i in 0..val.len() {
-                    slice[offset+i] = val[i];
-                }
+                slice[offset..offset + val.len()].copy_from_slice(val);
                 $env.push(slice);
            }
            // not found
@@ -389,7 +385,7 @@ impl<'a> Handler<'a> {
                     }
                     let _ = bytes.write_u64::<BigEndian>(id.offset);
                     self.cursors.insert((pid.clone(), bytes.clone()), (tx_type!(self, env), Handler::cast_away(cursor)));
-                    let slice = alloc_and_write!(bytes, env);
+                    let slice = alloc_and_write!(bytes.as_slice(), env);
                     env.push(slice);
                     Ok((env, None))
                 },

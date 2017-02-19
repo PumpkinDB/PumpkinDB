@@ -743,7 +743,7 @@ impl<'a> VM<'a> {
     fn handle_depth(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         word_is!(env, word, DEPTH);
         let bytes = BigUint::from(env.stack_size).to_bytes_be();
-        let slice = alloc_and_write!(bytes, env);
+        let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
         Ok((env, None))
     }
@@ -772,10 +772,8 @@ impl<'a> VM<'a> {
         for item in vec {
             write_size_into_slice!(item.len(), &mut slice[offset..]);
             offset += offset_by_size(item.len());
-            for b in item {
-                slice[offset] = *b;
-                offset += 1;
-            }
+            slice[offset..offset + item.len()].copy_from_slice(item);
+            offset += item.len();
         }
         env.push(slice);
         Ok((env, None))
@@ -911,17 +909,9 @@ impl<'a> VM<'a> {
         let b = stack_pop!(env);
 
         let slice = alloc_slice!(a.len() + b.len(), env);
-        let mut offset = 0;
 
-        for byte in b {
-            slice[offset] = *byte;
-            offset += 1
-        }
-
-        for byte in a {
-            slice[offset] = *byte;
-            offset += 1
-        }
+        slice[0..b.len()].copy_from_slice(b);
+        slice[b.len()..b.len()+a.len()].copy_from_slice(a);
 
         env.push(slice);
 
@@ -964,7 +954,7 @@ impl<'a> VM<'a> {
         let len = BigUint::from(a.len() as u64);
         let len_bytes = len.to_bytes_be();
 
-        let slice = alloc_and_write!(len_bytes, env);
+        let slice = alloc_and_write!(len_bytes.as_slice(), env);
 
         env.push(slice);
 
@@ -1018,7 +1008,7 @@ impl<'a> VM<'a> {
 
         let c_bytes = c_uint.to_bytes_be();
 
-        let slice = alloc_and_write!(c_bytes, env);
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
         env.push(slice);
         Ok((env, None))
     }
@@ -1039,7 +1029,7 @@ impl<'a> VM<'a> {
         let c_uint = b_uint.sub(a_uint);
 
         let c_bytes = c_uint.to_bytes_be();
-        let slice = alloc_and_write!(c_bytes, env);
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
         env.push(slice);
         Ok((env, None))
     }
@@ -1084,7 +1074,7 @@ impl<'a> VM<'a> {
             env.push(_EMPTY);
             Ok((env, None))
         } else if let Some(Error::ProgramError(err)) = env.aborting_try.pop() {
-            let slice = alloc_and_write!(err, env);
+            let slice = alloc_and_write!(err.as_slice(), env);
             env.push(slice);
             Ok((env, None))
         } else {
@@ -1182,11 +1172,8 @@ impl<'a> VM<'a> {
             nom::IResult::Done(_, _) => {
                 let slice = alloc_slice!(value.len() + offset_by_size(value.len()), env);
                 write_size_into_slice!(value.len(), slice);
-                let mut offset = offset_by_size(value.len());
-                for b in value {
-                    slice[offset] = *b;
-                    offset += 1;
-                }
+                let offset = offset_by_size(value.len());
+                slice[offset..offset + value.len()].copy_from_slice(value);
                 #[cfg(feature = "scoped_dictionary")]
                 {
                     let mut dict = env.dictionary.pop().unwrap();
