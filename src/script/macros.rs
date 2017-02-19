@@ -142,6 +142,10 @@ macro_rules! error_program {
         write_size_header!($desc, error);
         error.extend_from_slice($desc);
 
+        if $details.len() > 0 {
+            write_size!($details.len() + offset_by_size($details.len()), error);
+        }
+
         write_size_header!($details, error);
         error.extend_from_slice($details);
 
@@ -216,25 +220,11 @@ macro_rules! error_empty_stack {
     }}
 }
 
-macro_rules! error_invalid_value_word {
-    ($value: expr) => {{
-        error_program!(
-            "Invalid value".as_bytes(),
-            $value,
-            ERROR_INVALID_VALUE
-        )
-    }}
-}
-
 macro_rules! error_invalid_value {
     ($value: expr) => {{
-        let mut details = Vec::new();
-        write_size_header!($value, details);
-        details.extend_from_slice($value);
-
         error_program!(
             "Invalid value".as_bytes(),
-            &details,
+            &$value,
             ERROR_INVALID_VALUE
         )
     }}
@@ -262,8 +252,14 @@ macro_rules! error_unknown_word {
 
 macro_rules! write_size_header {
     ($bytes: expr, $vec: expr) => {{
-        let mut header = vec![0;offset_by_size($bytes.len())];
-        write_size_into_slice!($bytes.len(), header.as_mut_slice());
+        write_size!($bytes.len(), $vec);
+    }};
+}
+
+macro_rules! write_size {
+    ($size: expr, $vec: expr) => {{
+        let mut header = vec![0;offset_by_size($size)];
+        write_size_into_slice!($size, header.as_mut_slice());
         $vec.append(&mut header);
     }};
 }

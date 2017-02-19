@@ -1094,7 +1094,7 @@ impl<'a> VM<'a> {
                     current = rest
                 },
                 _ => {
-                    return Err((env, error_invalid_value_word!(current)))
+                    return Err((env, error_invalid_value!(current)))
                 }
             }
         }
@@ -1273,6 +1273,15 @@ mod tests {
     use pubsub;
 
     const _EMPTY: &'static [u8] = b"";
+
+    #[test]
+    fn error_macro() {
+        if let Error::ProgramError(err) = error_program!("Test".as_bytes(), "123".as_bytes(),b"\x01\x33") {
+            assert_eq!(err, parsed_data!("[\"Test\" [\"123\"] 0x33]"));
+        } else {
+            assert!(false);
+        }
+    }
 
     #[test]
     fn env_stack_growth() {
@@ -1671,7 +1680,7 @@ mod tests {
         });
 
         eval!("[1 DUP] UNWRAP", env, result, {
-            assert_error!(result, "[\"Invalid value\" [DUP] 3]");
+            assert_error!(result, "[\"Invalid value\" ['DUP] 3]");
         });
 
         eval!("UNWRAP", env, result, {
@@ -1782,7 +1791,7 @@ mod tests {
     #[cfg(feature = "scoped_dictionary")]
     fn dictionary_scoping() {
         eval!("[2 'val SET val] EVAL/SCOPED val", env, result, {
-            assert_error!(result, "[\"Unknown word: val\" [val] 2]");
+            assert_error!(result, "[\"Unknown word: val\" ['val] 2]");
         });
 
         eval!("1 'val SET [2 'val SET val] EVAL/SCOPED val", env, result, {
@@ -1868,7 +1877,7 @@ mod tests {
     #[test]
     fn unknown_word() {
         eval!("NOTAWORD", env, result, {
-            assert_error!(result, "[\"Unknown word: NOTAWORD\" [NOTAWORD] 2]");
+            assert_error!(result, "[\"Unknown word: NOTAWORD\" ['NOTAWORD] 2]");
         });
     }
 
@@ -1895,7 +1904,7 @@ mod tests {
         });
 
         eval!("[NOTAWORD] TRY", env, result, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Unknown word: NOTAWORD\" [NOTAWORD] 2]"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Unknown word: NOTAWORD\" ['NOTAWORD] 2]"));
             assert_eq!(env.pop(), None);
         });
 
