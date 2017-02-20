@@ -570,17 +570,19 @@ impl<'a> VM<'a> {
     #[allow(unused_mut)]
     fn pass(&mut self, mut env: Env<'a>, program: &mut Vec<u8>, pid: EnvId) -> PassResult<'a> {
         // Check if this Env has a pending SEND
-        match mem::replace(&mut env.send_ack, None) {
-            None => (),
-            Some(rcvr) =>
-                match rcvr.try_recv() {
-                    Err(mpsc::TryRecvError::Empty) => {
-                        env.send_ack = Some(rcvr);
-                        return Err((env, Error::Reschedule))
-                    },
-                    Err(mpsc::TryRecvError::Disconnected) => (),
-                    Ok(()) => ()
-                }
+        if env.send_ack.is_some() {
+            match mem::replace(&mut env.send_ack, None) {
+                None => (),
+                Some(rcvr) =>
+                    match rcvr.try_recv() {
+                        Err(mpsc::TryRecvError::Empty) => {
+                            env.send_ack = Some(rcvr);
+                            return Err((env, Error::Reschedule))
+                        },
+                        Err(mpsc::TryRecvError::Disconnected) => (),
+                        Ok(()) => ()
+                    }
+            }
         }
         if program.len() == 0 {
             return Ok((env, None));
