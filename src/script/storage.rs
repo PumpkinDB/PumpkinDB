@@ -15,12 +15,10 @@ use std::mem;
 use std::error::Error as StdError;
 use super::{Env, EnvId, PassResult, Error, STACK_TRUE, STACK_FALSE, offset_by_size,
             ERROR_EMPTY_STACK, ERROR_INVALID_VALUE, ERROR_DUPLICATE_KEY, ERROR_NO_TX,
-            ERROR_UNKNOWN_KEY, ERROR_DATABASE, ERROR_DECODING};
+            ERROR_UNKNOWN_KEY, ERROR_DATABASE};
 use core::ops::Deref;
 use byteorder::{BigEndian, WriteBytesExt};
 use snowflake::ProcessUniqueId;
-
-use script::binparser;
 
 pub type CursorId = ProcessUniqueId;
 
@@ -217,7 +215,6 @@ impl<'a> Handler<'a> {
         match word {
             WRITE => {
                 let v = stack_pop!(env);
-                assert_decodable!(env, v);
 
                 validate_lockout!(env, self.db_write_txn, pid);
                 // prepare transaction
@@ -248,7 +245,6 @@ impl<'a> Handler<'a> {
         match word {
             READ => {
                 let v = stack_pop!(env);
-                assert_decodable!(env, v);
 
                 validate_lockout!(env, self.db_read_txn, pid);
                 // prepare transaction

@@ -124,14 +124,6 @@ macro_rules! word_is {
     };
 }
 
-macro_rules! assert_decodable {
-    ($env: expr, $code: expr) => {
-        if binparser::parse($code).is_err() {
-            return Err(error_decoding!())
-        }
-    };
-}
-
 macro_rules! error_program {
     ($desc: expr, $details: expr, $code: expr) => {{
         let mut error = Vec::new();

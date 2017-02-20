@@ -34,6 +34,6 @@ from an error that occurred.
 
 ```test
 works : [DUP] TRY SOME?.
-invalid_code : [1 TRY] TRY UNWRAP 0x05 EQUAL?.
+invalid_code : 1 TRY UNWRAP 0x05 EQUAL?.
 empty_stack : [TRY] TRY UNWRAP 0x04 EQUAL?.
 ```

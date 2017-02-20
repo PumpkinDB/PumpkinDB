@@ -42,7 +42,7 @@ None
 works : 1 [2] [3] IFELSE 2 EQUAL?.
 works_else : 0 [2] [3] IFELSE 3 EQUAL?.
 invalid_code : [1 1 [] IFELSE] TRY UNWRAP 0x05 EQUAL?.
-invalid_code_1 : [1 [] 1 IFELSE] TRY UNWRAP 0x05 EQUAL?.
+invalid_code_1 : [0 [] 1 IFELSE] TRY UNWRAP 0x05 EQUAL?.
 invalid_value : [5 [1] [2] IFELSE] TRY UNWRAP 0x03 EQUAL?.
 requires_three_items_0 : [IFELSE] TRY UNWRAP 0x04 EQUAL?.
 requires_three_items_1 : [[] IFELSE] TRY UNWRAP 0x04 EQUAL?.
