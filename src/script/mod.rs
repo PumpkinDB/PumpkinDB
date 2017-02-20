@@ -1416,5 +1416,21 @@ mod tests {
 
     }
 
+    use test::Bencher;
+
+    #[bench]
+    fn times(b: &mut Bencher) {
+       bench_eval!("[1 DROP] 1000 TIMES", b);
+    }
+
+    #[bench]
+    fn ackermann(b: &mut Bencher) { // HT @5HT
+        bench_eval!("['n SET 'm SET m 0 EQUAL? [n 1 UINT/ADD] \
+        [n 0 EQUAL? [m 1 UINT/SUB 1 ack] [m 1 UINT/SUB m n 1 UINT/SUB ack ack] IFELSE] IFELSE] \
+        'ack DEF \
+        3 4 ack", b);
+    }
+
+
 
 }
