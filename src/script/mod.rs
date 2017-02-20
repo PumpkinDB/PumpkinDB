@@ -112,6 +112,7 @@ word!(GTQ, (a, b => c), b"\x83GT?");
 word!(LENGTH, (a => b), b"\x86LENGTH");
 word!(CONCAT, (a, b => c), b"\x86CONCAT");
 word!(SLICE, (a, b, c => d), b"\x85SLICE");
+word!(PAD, (a, b, c => d), b"\x83PAD");
 
 // Category: arithmetics
 word!(UINT_ADD, (a, b => c), b"\x88UINT/ADD");
@@ -613,6 +614,7 @@ impl<'a> VM<'a> {
                            self => handle_equal,
                            self => handle_concat,
                            self => handle_slice,
+                           self => handle_pad,
                            self => handle_uint_add,
                            self => handle_uint_sub,
                            self => handle_length,
@@ -945,6 +947,35 @@ impl<'a> VM<'a> {
         }
 
         env.push(&slice[start_int..end_int]);
+
+        Ok((env, None))
+    }
+
+    #[inline]
+    fn handle_pad(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, PAD);
+        let byte = stack_pop!(env);
+        let size = stack_pop!(env);
+        let value = stack_pop!(env);
+
+        if byte.len() != 1 {
+            return Err((env, error_invalid_value!(byte)));
+        }
+
+        let size_int = BigUint::from_bytes_be(size).to_u64().unwrap() as usize;
+
+        if size_int > 1024 {
+            return Err((env, error_invalid_value!(size)));
+        }
+
+        let slice = alloc_slice!(size_int, env);
+
+        for i in 0..size_int-value.len() {
+            slice[i] = byte[0];
+        }
+        slice[size_int-value.len()..].copy_from_slice(value);
+
+        env.push(slice);
 
         Ok((env, None))
     }
