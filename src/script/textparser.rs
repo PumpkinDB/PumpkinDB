@@ -144,7 +144,8 @@ named!(string<Vec<u8>>,  alt!(do_parse!(tag!(b"\"\"") >> (vec![0])) |
 named!(code<Vec<u8>>, do_parse!(
                          prog: delimited!(char!('['), ws!(program), char!(']')) >>
                                (sized_vec(prog))));
-named!(item<Vec<u8>>, alt!(binary | string | uint | code | wordref | word));
+named!(comment<Vec<u8>>, do_parse!(delimited!(char!('('), is_not!(")"), char!(')')) >> (vec![])));
+named!(item<Vec<u8>>, alt!(comment | binary | string | uint | code | wordref | word));
 named!(program<Vec<u8>>, alt!(do_parse!(
                                take_while!(is_multispace)                        >>
                             v: eof                                          >>
@@ -219,6 +220,18 @@ mod tests {
         1").unwrap();
         let script = parse("HELP [DROP] 1").unwrap();
         assert_eq!(script, script_multiline);
+    }
+
+    #[test]
+    fn test_comment() {
+        let script = parse("1 (hello) 2").unwrap();
+        assert_eq!(script, parse("1 2").unwrap());
+    }
+
+    #[test]
+    fn test_multiline_comment() {
+        let script = parse("1 (hel\nlo) 2").unwrap();
+        assert_eq!(script, parse("1 2").unwrap());
     }
 
     #[test]
