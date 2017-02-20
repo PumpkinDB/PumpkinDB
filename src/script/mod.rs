@@ -649,8 +649,6 @@ impl<'a> VM<'a> {
                            self.hlc => handle_hlc,
                            self.hlc => handle_hlc_lc,
                            self.hlc => handle_hlc_tick,
-                           self.hlc => handle_hlc_ltp,
-                           self.hlc => handle_hlc_gtp,
                            // pubsub
                            self => handle_send,
                            // features
