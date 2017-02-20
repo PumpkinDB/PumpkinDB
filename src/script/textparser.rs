@@ -34,16 +34,17 @@ macro_rules! write_size {
       match $size {
         0...120 => $vec.push($size as u8),
         121...255 => {
-            $vec.push(121u8);
+            $vec.push(111u8);
             $vec.push($size as u8);
         }
         256...65535 => {
-            $vec.push(122u8);
+            println!("IN HERE");
+            $vec.push(112u8);
             $vec.push(($size >> 8) as u8);
             $vec.push($size as u8);
         }
         65536...4294967296 => {
-            $vec.push(123u8);
+            $vec.push(113u8);
             $vec.push(($size >> 24) as u8);
             $vec.push(($size >> 16) as u8);
             $vec.push(($size >> 8) as u8);
