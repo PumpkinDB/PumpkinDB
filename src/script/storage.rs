@@ -138,7 +138,7 @@ macro_rules! qcursor_op {
            }
         }
         $me.cursors.insert(tuple, (tx_type!($me, $env), cursor));
-        Ok(($env, None))
+        Ok($env)
     }
     };
 }
@@ -169,7 +169,7 @@ macro_rules! cursorq_op {
            }
         }
         $me.cursors.insert(tuple, (tx_type!($me, $env), cursor));
-        Ok(($env, None))
+        Ok($env)
     }
     };
 }
@@ -220,14 +220,14 @@ impl<'a> Handler<'a> {
                 assert_decodable!(env, v);
 
                 validate_lockout!(env, self.db_write_txn, pid);
-                let mut vec = Vec::from(v);
-                vec.extend_from_slice(WRITE_END); // transaction end marker
                 // prepare transaction
                 match lmdb::WriteTransaction::new(self.db_env) {
                     Err(e) => Err((env, error_database!(e))),
                     Ok(txn) => {
                         self.db_write_txn = Some((pid, txn));
-                        Ok((env, Some(vec)))
+                        env.program.push(WRITE_END);
+                        env.program.push(v);
+                        Ok(env)
                     }
                 }
             }
@@ -237,7 +237,7 @@ impl<'a> Handler<'a> {
                                             BTreeMap::new()).into_iter()
                     .filter(|t| ((*t).1).0 != TxType::Write).collect();
                 self.db_write_txn = None;
-                Ok((env, None))
+                Ok(env)
             }
             _ => Err((env, Error::UnknownWord)),
         }
@@ -251,14 +251,14 @@ impl<'a> Handler<'a> {
                 assert_decodable!(env, v);
 
                 validate_lockout!(env, self.db_read_txn, pid);
-                let mut vec = Vec::from(v);
-                vec.extend_from_slice(READ_END); // transaction end marker
                 // prepare transaction
                 match lmdb::ReadTransaction::new(self.db_env) {
                     Err(e) => Err((env, error_database!(e))),
                     Ok(txn) => {
                         self.db_read_txn = Some((pid, txn));
-                        Ok((env, Some(vec)))
+                        env.program.push(READ_END);
+                        env.program.push(v);
+                        Ok(env)
                     }
                 }
             }
@@ -268,7 +268,7 @@ impl<'a> Handler<'a> {
                                             BTreeMap::new()).into_iter()
                     .filter(|t| ((*t).1).0 != TxType::Read).collect();
                 self.db_read_txn = None;
-                Ok((env, None))
+                Ok(env)
             }
             _ => Err((env, Error::UnknownWord)),
         }
@@ -285,7 +285,7 @@ impl<'a> Handler<'a> {
                 let mut access = txn.access();
 
                 match access.put(self.db, key, value, lmdb::put::NOOVERWRITE) {
-                    Ok(_) => Ok((env, None)),
+                    Ok(_) => Ok(env),
                     Err(lmdb::Error::Code(code)) if lmdb::error::KEYEXIST == code => Err((env, error_duplicate_key!(key))),
                     Err(err) => Err((env, error_database!(err))),
                 }
@@ -303,7 +303,7 @@ impl<'a> Handler<'a> {
             validate_lockout!(env, self.db_write_txn, pid);
             if let Some((_, txn)) = mem::replace(&mut self.db_write_txn, None) {
                 let _ = txn.commit();
-                Ok((env, None))
+                Ok(env)
             } else {
                 Err((env, error_no_transaction!()))
             }
@@ -327,7 +327,7 @@ impl<'a> Handler<'a> {
                 Ok(Some(val)) => {
                     let slice = alloc_and_write!(val, env);
                     env.push(slice);
-                    Ok((env, None))
+                    Ok(env)
                 }
                 Ok(None) => Err((env, error_unknown_key!(key))),
                 Err(err) => Err((env, error_database!(err))),
@@ -349,11 +349,11 @@ impl<'a> Handler<'a> {
             match access.get::<[u8], [u8]>(self.db, key).to_opt() {
                 Ok(Some(_)) => {
                     env.push(STACK_TRUE);
-                    Ok((env, None))
+                    Ok(env)
                 }
                 Ok(None) => {
                     env.push(STACK_FALSE);
-                    Ok((env, None))
+                    Ok(env)
                 }
                 Err(err) => Err((env, error_database!(err))),
             }
@@ -387,7 +387,7 @@ impl<'a> Handler<'a> {
                     self.cursors.insert((pid.clone(), bytes.clone()), (tx_type!(self, env), Handler::cast_away(cursor)));
                     let slice = alloc_and_write!(bytes.as_slice(), env);
                     env.push(slice);
-                    Ok((env, None))
+                    Ok(env)
                 },
                 Err(err) => Err((env, error_database!(err)))
             }

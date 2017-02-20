@@ -37,7 +37,7 @@ macro_rules! write_size_into_slice {
 
 macro_rules! handle_error {
     ($env: expr, $err: expr) => {
-       handle_error!($env, $err, Ok(($env, None)))
+       handle_error!($env, $err, Ok($env))
     };
     ($env: expr, $err: expr, $body: expr) => {{
         if $env.tracking_errors > 0 {
@@ -51,34 +51,32 @@ macro_rules! handle_error {
 
 macro_rules! handle_words {
     ($it: expr, $env: expr, $program: expr, $word: expr, $res: ident,
-     $pid: ident, { $($me: expr => $name: ident),* }, $block: expr) => {
+     $pid: ident, { $($me: expr => $name: ident),* }) => {
     {
       let mut env = $env;
       if $word != TRY_END && !env.aborting_try.is_empty() {
-        let $res : (Env<'a>, Option<Vec<u8>>) = (env, None);
-        $block
+         Ok(env)
       } else {
           $(
            env =
             match $me.$name(env, $word, $pid) {
-              Err((env, Error::Reschedule)) => return Ok((env, Some($program.clone()))),
+              Err((mut env, Error::Reschedule)) => {
+                // restore original program
+                let _ = env.program.pop().unwrap();
+                env.program.push($program);
+                return Ok(env);
+              },
               Err((env, Error::UnknownWord)) => env,
               Err((mut env, err @ Error::ProgramError(_))) => {
                 $it.storage.cleanup($pid.clone());
-                handle_error!(env, err, {
-                   let $res : (Env<'a>, Option<Vec<u8>>) = (env, None);
-                   $block
-                });
+                return handle_error!(env, err)
               },
               Err((env, err)) => return Err((env, err)),
-              Ok($res) => $block
+              Ok(env_) => return Ok(env_)
             };
           )*
           $it.storage.cleanup($pid.clone());
-          handle_error!(env, error_unknown_word!($word), {
-                   let $res : (Env<'a>, Option<Vec<u8>>) = (env, None);
-                   $block
-          })
+          handle_error!(env, error_unknown_word!($word))
       }
     }
     };
