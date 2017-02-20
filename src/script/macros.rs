@@ -349,6 +349,63 @@ macro_rules! eval {
 }
 
 #[cfg(test)]
+macro_rules! bench_eval {
+        ($script: expr, $b: expr) => {
+          {
+            let dir = TempDir::new("pumpkindb").unwrap();
+            let path = dir.path().to_str().unwrap();
+            fs::create_dir_all(path).expect("can't create directory");
+            let env = unsafe {
+                lmdb::EnvBuilder::new()
+                    .expect("can't create env builder")
+                    .open(path, lmdb::open::Flags::empty(), 0o600)
+                    .expect("can't open env")
+            };
+
+            let db = lmdb::Database::open(&env,
+                                 None,
+                                 &lmdb::DatabaseOptions::new(lmdb::db::CREATE))
+                                 .expect("can't open database");
+            crossbeam::scope(|scope| {
+                let mut publisher = pubsub::Publisher::new();
+                let publisher_accessor = publisher.accessor();
+                let publisher_accessor_ = publisher.accessor();
+                let publisher_thread = scope.spawn(move || publisher.run());
+                let mut vm = VM::new(&env, &db, publisher_accessor.clone());
+                let sender = vm.sender();
+                let sender_ = sender.clone();
+                let handle = scope.spawn(move || {
+                    vm.run();
+                });
+                let script = parse($script).unwrap();
+                $b.iter(move || {
+                    let (callback, receiver) = mpsc::channel::<ResponseMessage>();
+                    let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(),
+                                        script.clone(), callback));
+                    match receiver.recv() {
+                       Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => (),
+                       Ok(ResponseMessage::EnvFailed(_, err, stack, stack_size)) => {
+                          let _ = sender.send(RequestMessage::Shutdown);
+                          publisher_accessor.shutdown();
+                          panic!("error: {:?}", err);
+                       }
+                       Err(err) => {
+                          let _ = sender.send(RequestMessage::Shutdown);
+                          publisher_accessor.shutdown();
+                          panic!("recv error: {:?}", err);
+                       }
+                    }
+                });
+                let _ = sender_.send(RequestMessage::Shutdown);
+                publisher_accessor_.shutdown();
+                let _ = handle.join();
+                let _ = publisher_thread.join();
+          });
+        };
+      }
+}
+
+#[cfg(test)]
 macro_rules! data {
     ($ptr:expr) => {
         {

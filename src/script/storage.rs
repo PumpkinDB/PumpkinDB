@@ -503,45 +503,7 @@ mod tests {
 
     #[bench]
     fn write_1000_kv_pairs_in_isolated_txns(b: &mut Bencher) {
-        let path = "pumpkindb-bench-write_1000_kv_pairs_in_isolated_txns";
-        fs::create_dir_all(path).expect("can't create directory");
-        let env = unsafe {
-            lmdb::EnvBuilder::new()
-                .expect("can't create env builder")
-                .open(path, lmdb::open::Flags::empty(), 0o600)
-                .expect("can't open env")
-        };
-
-        let db = lmdb::Database::open(&env,
-                                      None,
-                                      &lmdb::DatabaseOptions::new(lmdb::db::CREATE))
-            .expect("can't open database");
-        crossbeam::scope(|scope| {
-            let publisher = pubsub::Publisher::new();
-            let publisher_accessor = publisher.accessor();
-            let mut vm = VM::new(&env, &db, publisher_accessor.clone());
-            let sender = vm.sender();
-            let handle = scope.spawn(move || {
-                vm.run();
-            });
-            let script = parse("[HLC \"Hello\"] 1000 TIMES [[ASSOC COMMIT] WRITE] 1000 TIMES").unwrap();
-            let sender_ = sender.clone();
-            b.iter(move || {
-                let (callback, receiver) = mpsc::channel::<ResponseMessage>();
-                let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(), script.clone(), callback));
-                match receiver.recv() {
-                    Ok(ResponseMessage::EnvTerminated(_, _, _)) => (),
-                    Ok(ResponseMessage::EnvFailed(_, err, _, _)) => {
-                        let _ = sender.send(RequestMessage::Shutdown);
-                        panic!("error: {:?}", err)
-                    },
-                    Err(err) => panic!("recv error: {:?}", err)
-                }
-            });
-            let _ = sender_.send(RequestMessage::Shutdown);
-            let _ = handle.join();
-        });
-        fs::remove_dir_all(path);
+        bench_eval!("[HLC \"Hello\"] 1000 TIMES [[ASSOC COMMIT] WRITE] 1000 TIMES", b);
     }
 
 }
