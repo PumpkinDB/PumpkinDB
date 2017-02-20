@@ -106,9 +106,9 @@ word!(UNWRAP, b"\x86UNWRAP");
 word!(WRAP, b"\x84WRAP");
 
 // Category: Byte arrays
-word!(EQUALP, (a, b => c), b"\x86EQUAL?");
-word!(LTP, (a, b => c), b"\x83LT?");
-word!(GTP, (a, b => c), b"\x83GT?");
+word!(EQUALQ, (a, b => c), b"\x86EQUAL?");
+word!(LTQ, (a, b => c), b"\x83LT?");
+word!(GTQ, (a, b => c), b"\x83GT?");
 word!(LENGTH, (a => b), b"\x86LENGTH");
 word!(CONCAT, (a, b => c), b"\x86CONCAT");
 word!(SLICE, (a, b, c => d), b"\x85SLICE");
@@ -142,7 +142,7 @@ word!(OR, (a, b => c), b"\x82OR");
 word!(SEND, (a => ), b"\x84SEND");
 
 // Category: experimental features
-word!(FEATUREP, (a => b), b"\x88FEATURE?");
+word!(FEATUREQ, (a => b), b"\x88FEATURE?");
 
 use std::str;
 
@@ -786,7 +786,7 @@ impl<'a> VM<'a> {
 
     #[inline]
     fn handle_equal(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, EQUALP);
+        word_is!(env, word, EQUALQ);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -879,7 +879,7 @@ impl<'a> VM<'a> {
 
     #[inline]
     fn handle_ltp(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, LTP);
+        word_is!(env, word, LTQ);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -894,7 +894,7 @@ impl<'a> VM<'a> {
 
     #[inline]
     fn handle_gtp(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, GTP);
+        word_is!(env, word, GTQ);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -1264,7 +1264,7 @@ impl<'a> VM<'a> {
     #[inline]
     #[allow(unused_variables)]
     fn handle_featurep(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, FEATUREP);
+        word_is!(env, word, FEATUREQ);
         let name = stack_pop!(env);
 
         #[cfg(feature = "scoped_dictionary")]

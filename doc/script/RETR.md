@@ -21,7 +21,7 @@ None
 
 [NoTransaction](./ERRORS/NoTransaction.md) error if there's no current write transaction
 
-UnknownKey error if there is no such key. See [ASSOC?](ASSOCP.md)
+UnknownKey error if there is no such key. See [ASSOC?](ASSOCQ.md)
 for mediating this problem
 
 ## Examples

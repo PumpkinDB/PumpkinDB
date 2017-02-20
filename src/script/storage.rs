@@ -35,18 +35,18 @@ word!(ASSOCQ, b"\x86ASSOC?");
 word!(RETR, b"\x84RETR");
 
 word!(CURSOR, b"\x86CURSOR");
-word!(CURSOR_FIRST, b"\x8CCURSOR/FIRST");
-word!(CURSOR_FIRSTP, b"\x8DCURSOR/FIRST?");
-word!(CURSOR_LAST, b"\x8BCURSOR/LAST");
-word!(CURSOR_LASTP, b"\x8CCURSOR/LAST?");
-word!(CURSOR_NEXT, b"\x8BCURSOR/NEXT");
-word!(CURSOR_NEXTP, b"\x8CCURSOR/NEXT?");
-word!(CURSOR_PREV, b"\x8BCURSOR/PREV");
-word!(CURSOR_PREVP, b"\x8CCURSOR/PREV?");
-word!(CURSOR_SEEK, b"\x8BCURSOR/SEEK");
-word!(CURSOR_SEEKP, b"\x8CCURSOR/SEEK?");
-word!(CURSOR_CUR, b"\x8ACURSOR/CUR");
-word!(CURSOR_CURP, b"\x8BCURSOR/CUR?");
+word!(QCURSOR_FIRST, b"\x8D?CURSOR/FIRST");
+word!(CURSOR_FIRSTQ, b"\x8DCURSOR/FIRST?");
+word!(QCURSOR_LAST, b"\x8C?CURSOR/LAST");
+word!(CURSOR_LASTQ, b"\x8CCURSOR/LAST?");
+word!(QCURSOR_NEXT, b"\x8C?CURSOR/NEXT");
+word!(CURSOR_NEXTQ, b"\x8CCURSOR/NEXT?");
+word!(QCURSOR_PREV, b"\x8C?CURSOR/PREV");
+word!(CURSOR_PREVQ, b"\x8CCURSOR/PREV?");
+word!(QCURSOR_SEEK, b"\x8C?CURSOR/SEEK");
+word!(CURSOR_SEEKQ, b"\x8CCURSOR/SEEK?");
+word!(QCURSOR_CUR, b"\x8B?CURSOR/CUR");
+word!(CURSOR_CURQ, b"\x8BCURSOR/CUR?");
 
 word!(COMMIT, b"\x86COMMIT");
 
@@ -102,7 +102,7 @@ macro_rules! tx_type {
 
 const STACK_EMPTY_CLOSURE: &'static [u8] = b"";
 
-macro_rules! cursor_op {
+macro_rules! qcursor_op {
     ($me: expr, $env: expr, $pid: expr, $op: ident, ($($arg: expr),*)) => {
     {
         validate_lockout!($env, $me.db_read_txn, $pid);
@@ -143,7 +143,7 @@ macro_rules! cursor_op {
     };
 }
 
-macro_rules! cursorp_op {
+macro_rules! cursorq_op {
     ($me: expr, $env: expr, $pid: expr, $op: ident, ($($arg: expr),*)) => {
     {
         validate_lockout!($env, $me.db_read_txn, $pid);
@@ -398,10 +398,10 @@ impl<'a> Handler<'a> {
 
     #[inline]
     pub fn handle_cursor_first(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == CURSOR_FIRST {
-            cursor_op!(self, env, pid, first, ())
-        } else if word == CURSOR_FIRSTP {
-            cursorp_op!(self, env, pid, first, ())
+        if word == QCURSOR_FIRST {
+            qcursor_op!(self, env, pid, first, ())
+        } else if word == CURSOR_FIRSTQ {
+            cursorq_op!(self, env, pid, first, ())
         }
         else {
             Err((env, Error::UnknownWord))
@@ -410,10 +410,10 @@ impl<'a> Handler<'a> {
 
     #[inline]
     pub fn handle_cursor_next(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == CURSOR_NEXT {
-            cursor_op!(self, env, pid, next, ())
-        } else if word == CURSOR_NEXTP {
-            cursorp_op!(self, env, pid, next, ())
+        if word == QCURSOR_NEXT {
+            qcursor_op!(self, env, pid, next, ())
+        } else if word == CURSOR_NEXTQ {
+            cursorq_op!(self, env, pid, next, ())
         } else {
             Err((env, Error::UnknownWord))
         }
@@ -421,10 +421,10 @@ impl<'a> Handler<'a> {
 
     #[inline]
     pub fn handle_cursor_prev(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == CURSOR_PREV {
-            cursor_op!(self, env, pid, prev, ())
-        } else if word == CURSOR_PREVP {
-            cursorp_op!(self, env, pid, prev, ())
+        if word == QCURSOR_PREV {
+            qcursor_op!(self, env, pid, prev, ())
+        } else if word == CURSOR_PREVQ {
+            cursorq_op!(self, env, pid, prev, ())
         } else {
             Err((env, Error::UnknownWord))
         }
@@ -432,10 +432,10 @@ impl<'a> Handler<'a> {
 
     #[inline]
     pub fn handle_cursor_last(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == CURSOR_LAST {
-            cursor_op!(self, env, pid, last, ())
-        } else if word == CURSOR_LASTP {
-            cursorp_op!(self, env, pid, last, ())
+        if word == QCURSOR_LAST {
+            qcursor_op!(self, env, pid, last, ())
+        } else if word == CURSOR_LASTQ {
+            cursorq_op!(self, env, pid, last, ())
         } else {
             Err((env, Error::UnknownWord))
         }
@@ -443,14 +443,14 @@ impl<'a> Handler<'a> {
 
     #[inline]
     pub fn handle_cursor_seek(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == CURSOR_SEEK {
+        if word == QCURSOR_SEEK {
             let key = stack_pop!(env);
 
-            cursor_op!(self, env, pid, seek_range_k, (key))
-        } else if word == CURSOR_SEEKP {
+            qcursor_op!(self, env, pid, seek_range_k, (key))
+        } else if word == CURSOR_SEEKQ {
             let key = stack_pop!(env);
 
-            cursorp_op!(self, env, pid, seek_range_k, (key))
+            cursorq_op!(self, env, pid, seek_range_k, (key))
         } else {
             Err((env, Error::UnknownWord))
         }
@@ -458,10 +458,10 @@ impl<'a> Handler<'a> {
 
     #[inline]
     pub fn handle_cursor_cur(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == CURSOR_CUR {
-            cursor_op!(self, env, pid, get_current, ())
-        } else if word == CURSOR_CURP {
-            cursorp_op!(self, env, pid, get_current, ())
+        if word == QCURSOR_CUR {
+            qcursor_op!(self, env, pid, get_current, ())
+        } else if word == CURSOR_CURQ {
+            cursorq_op!(self, env, pid, get_current, ())
         } else {
             Err((env, Error::UnknownWord))
         }

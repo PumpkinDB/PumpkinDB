@@ -41,7 +41,7 @@ in the file system. Below is the table for transliterating them:
 
 | Character | Replacement |
 |-----------|-------------|
-| ?         |  P          |
+| ?         |  Q          |
 | :         |  _          |
 | !         |  B          |
 | #         |  _          |

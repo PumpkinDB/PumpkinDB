@@ -9,7 +9,7 @@ Output stack: `b`
 If there is a first key/value pair in the database, `1` will be pushed onto the stack.
 Otherwise, `0` will be pushed and the cursor will be moved.
 
-Useful in conjunction with [CURSOR/CUR](CUR.md)
+Useful in conjunction with [CURSOR/CUR](../QCURSOR/CUR.md)
 
 ## Allocation
 
