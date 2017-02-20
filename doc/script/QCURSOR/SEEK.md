@@ -1,4 +1,4 @@
-# ?CURSOR/NEXT
+# ?CURSOR/SEEK
 
 Sets the cursor at the key value pair with a greater or equal key
 
