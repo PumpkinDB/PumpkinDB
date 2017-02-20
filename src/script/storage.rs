@@ -70,7 +70,7 @@ macro_rules! validate_lockout {
     ($env: expr, $name: expr, $pid: expr) => {
         if let Some((pid_, _)) = $name {
             if pid_ != $pid {
-                return Err(($env, Error::Reschedule))
+                return Err(Error::Reschedule)
             }
         }
     };
@@ -83,7 +83,7 @@ macro_rules! read_or_write_transaction {
         } else if let Some((_, ref txn)) = $me.db_read_txn {
             txn.deref()
         } else {
-            return Err(($env, error_no_transaction!()));
+            return Err(error_no_transaction!());
         };
     };
 }
@@ -95,7 +95,7 @@ macro_rules! tx_type {
         } else if let Some((_, _)) = $me.db_read_txn {
             TxType::Read
         } else {
-            return Err(($env, error_no_transaction!()));
+            return Err(error_no_transaction!());
         };
     };
 }
@@ -114,7 +114,7 @@ macro_rules! qcursor_op {
         let tuple = ($pid, Vec::from(c));
         let mut cursor = match $me.cursors.remove(&tuple) {
             Some((_, cursor)) => cursor,
-            None => return Err(($env, error_invalid_value!(c)))
+            None => return Err(error_invalid_value!(c))
         };
         let access = txn.access();
         let item = cursor.$op::<[u8], [u8]>(&access, $($arg)*);
@@ -138,7 +138,7 @@ macro_rules! qcursor_op {
            }
         }
         $me.cursors.insert(tuple, (tx_type!($me, $env), cursor));
-        Ok($env)
+        Ok(())
     }
     };
 }
@@ -155,7 +155,7 @@ macro_rules! cursorq_op {
         let tuple = ($pid, Vec::from(c));
         let mut cursor = match $me.cursors.remove(&tuple) {
             Some((_, cursor)) => cursor,
-            None => return Err(($env, error_invalid_value!(c)))
+            None => return Err(error_invalid_value!(c))
         };
         let access = txn.access();
         let item = cursor.$op::<[u8], [u8]>(&access, $($arg)*);
@@ -169,7 +169,7 @@ macro_rules! cursorq_op {
            }
         }
         $me.cursors.insert(tuple, (tx_type!($me, $env), cursor));
-        Ok($env)
+        Ok(())
     }
     };
 }
@@ -213,7 +213,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_write(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_write(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         match word {
             WRITE => {
                 let v = stack_pop!(env);
@@ -222,12 +222,12 @@ impl<'a> Handler<'a> {
                 validate_lockout!(env, self.db_write_txn, pid);
                 // prepare transaction
                 match lmdb::WriteTransaction::new(self.db_env) {
-                    Err(e) => Err((env, error_database!(e))),
+                    Err(e) => Err(error_database!(e)),
                     Ok(txn) => {
                         self.db_write_txn = Some((pid, txn));
                         env.program.push(WRITE_END);
                         env.program.push(v);
-                        Ok(env)
+                        Ok(())
                     }
                 }
             }
@@ -237,14 +237,14 @@ impl<'a> Handler<'a> {
                                             BTreeMap::new()).into_iter()
                     .filter(|t| ((*t).1).0 != TxType::Write).collect();
                 self.db_write_txn = None;
-                Ok(env)
+                Ok(())
             }
-            _ => Err((env, Error::UnknownWord)),
+            _ => Err(Error::UnknownWord),
         }
     }
 
     #[inline]
-    pub fn handle_read(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_read(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         match word {
             READ => {
                 let v = stack_pop!(env);
@@ -253,12 +253,12 @@ impl<'a> Handler<'a> {
                 validate_lockout!(env, self.db_read_txn, pid);
                 // prepare transaction
                 match lmdb::ReadTransaction::new(self.db_env) {
-                    Err(e) => Err((env, error_database!(e))),
+                    Err(e) => Err(error_database!(e)),
                     Ok(txn) => {
                         self.db_read_txn = Some((pid, txn));
                         env.program.push(READ_END);
                         env.program.push(v);
-                        Ok(env)
+                        Ok(())
                     }
                 }
             }
@@ -268,14 +268,14 @@ impl<'a> Handler<'a> {
                                             BTreeMap::new()).into_iter()
                     .filter(|t| ((*t).1).0 != TxType::Read).collect();
                 self.db_read_txn = None;
-                Ok(env)
+                Ok(())
             }
-            _ => Err((env, Error::UnknownWord)),
+            _ => Err(Error::UnknownWord),
         }
     }
 
     #[inline]
-    pub fn handle_assoc(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_assoc(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         if word == ASSOC {
             validate_lockout!(env, self.db_write_txn, pid);
             if let Some((_, ref txn)) = self.db_write_txn {
@@ -285,36 +285,36 @@ impl<'a> Handler<'a> {
                 let mut access = txn.access();
 
                 match access.put(self.db, key, value, lmdb::put::NOOVERWRITE) {
-                    Ok(_) => Ok(env),
-                    Err(lmdb::Error::Code(code)) if lmdb::error::KEYEXIST == code => Err((env, error_duplicate_key!(key))),
-                    Err(err) => Err((env, error_database!(err))),
+                    Ok(_) => Ok(()),
+                    Err(lmdb::Error::Code(code)) if lmdb::error::KEYEXIST == code => Err(error_duplicate_key!(key)),
+                    Err(err) => Err(error_database!(err)),
                 }
             } else {
-                Err((env, error_no_transaction!()))
+                Err(error_no_transaction!())
             }
         } else {
-            Err((env, Error::UnknownWord))
+            Err(Error::UnknownWord)
         }
     }
 
     #[inline]
-    pub fn handle_commit(&mut self, env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_commit(&mut self, _: &Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         if word == COMMIT {
             validate_lockout!(env, self.db_write_txn, pid);
             if let Some((_, txn)) = mem::replace(&mut self.db_write_txn, None) {
                 let _ = txn.commit();
-                Ok(env)
+                Ok(())
             } else {
-                Err((env, error_no_transaction!()))
+                Err(error_no_transaction!())
             }
         } else {
-            Err((env, Error::UnknownWord))
+            Err(Error::UnknownWord)
         }
     }
 
 
     #[inline]
-    pub fn handle_retr(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_retr(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         if word == RETR {
             validate_lockout!(env, self.db_write_txn, pid);
             validate_lockout!(env, self.db_read_txn, pid);
@@ -327,18 +327,18 @@ impl<'a> Handler<'a> {
                 Ok(Some(val)) => {
                     let slice = alloc_and_write!(val, env);
                     env.push(slice);
-                    Ok(env)
+                    Ok(())
                 }
-                Ok(None) => Err((env, error_unknown_key!(key))),
-                Err(err) => Err((env, error_database!(err))),
+                Ok(None) => Err(error_unknown_key!(key)),
+                Err(err) => Err(error_database!(err)),
             }
         } else {
-            Err((env, Error::UnknownWord))
+            Err(Error::UnknownWord)
         }
     }
 
     #[inline]
-    pub fn handle_assocq(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_assocq(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         if word == ASSOCQ {
             validate_lockout!(env, self.db_write_txn, pid);
             let key = stack_pop!(env);
@@ -349,16 +349,16 @@ impl<'a> Handler<'a> {
             match access.get::<[u8], [u8]>(self.db, key).to_opt() {
                 Ok(Some(_)) => {
                     env.push(STACK_TRUE);
-                    Ok(env)
+                    Ok(())
                 }
                 Ok(None) => {
                     env.push(STACK_FALSE);
-                    Ok(env)
+                    Ok(())
                 }
-                Err(err) => Err((env, error_database!(err))),
+                Err(err) => Err(error_database!(err)),
             }
         } else {
-            Err((env, Error::UnknownWord))
+            Err(Error::UnknownWord)
         }
     }
 
@@ -367,7 +367,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_cursor(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_cursor(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         if word == CURSOR {
             validate_lockout!(env, self.db_read_txn, pid);
             validate_lockout!(env, self.db_write_txn, pid);
@@ -387,62 +387,62 @@ impl<'a> Handler<'a> {
                     self.cursors.insert((pid.clone(), bytes.clone()), (tx_type!(self, env), Handler::cast_away(cursor)));
                     let slice = alloc_and_write!(bytes.as_slice(), env);
                     env.push(slice);
-                    Ok(env)
+                    Ok(())
                 },
-                Err(err) => Err((env, error_database!(err)))
+                Err(err) => Err(error_database!(err))
             }
         } else {
-            Err((env, Error::UnknownWord))
+            Err(Error::UnknownWord)
         }
     }
 
     #[inline]
-    pub fn handle_cursor_first(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_cursor_first(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         if word == QCURSOR_FIRST {
             qcursor_op!(self, env, pid, first, ())
         } else if word == CURSOR_FIRSTQ {
             cursorq_op!(self, env, pid, first, ())
-        }
-        else {
-            Err((env, Error::UnknownWord))
+        } else {
+            Err(Error::UnknownWord)
         }
     }
 
+
     #[inline]
-    pub fn handle_cursor_next(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_cursor_next(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         if word == QCURSOR_NEXT {
             qcursor_op!(self, env, pid, next, ())
         } else if word == CURSOR_NEXTQ {
             cursorq_op!(self, env, pid, next, ())
         } else {
-            Err((env, Error::UnknownWord))
+            Err(Error::UnknownWord)
         }
     }
 
     #[inline]
-    pub fn handle_cursor_prev(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_cursor_prev(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         if word == QCURSOR_PREV {
             qcursor_op!(self, env, pid, prev, ())
         } else if word == CURSOR_PREVQ {
             cursorq_op!(self, env, pid, prev, ())
         } else {
-            Err((env, Error::UnknownWord))
+            Err(Error::UnknownWord)
         }
     }
 
     #[inline]
-    pub fn handle_cursor_last(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_cursor_last(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         if word == QCURSOR_LAST {
             qcursor_op!(self, env, pid, last, ())
         } else if word == CURSOR_LASTQ {
             cursorq_op!(self, env, pid, last, ())
         } else {
-            Err((env, Error::UnknownWord))
+            Err(Error::UnknownWord)
         }
     }
 
     #[inline]
-    pub fn handle_cursor_seek(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_cursor_seek(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         if word == QCURSOR_SEEK {
             let key = stack_pop!(env);
 
@@ -452,18 +452,18 @@ impl<'a> Handler<'a> {
 
             cursorq_op!(self, env, pid, seek_range_k, (key))
         } else {
-            Err((env, Error::UnknownWord))
+            Err(Error::UnknownWord)
         }
     }
 
     #[inline]
-    pub fn handle_cursor_cur(&mut self, mut env: Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_cursor_cur(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         if word == QCURSOR_CUR {
             qcursor_op!(self, env, pid, get_current, ())
         } else if word == CURSOR_CURQ {
             cursorq_op!(self, env, pid, get_current, ())
         } else {
-            Err((env, Error::UnknownWord))
+            Err(Error::UnknownWord)
         }
     }
 }

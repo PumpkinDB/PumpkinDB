@@ -37,14 +37,14 @@ macro_rules! write_size_into_slice {
 
 macro_rules! handle_error {
     ($env: expr, $err: expr) => {
-       handle_error!($env, $err, Ok($env))
+       handle_error!($env, $err, Ok(()))
     };
     ($env: expr, $err: expr, $body: expr) => {{
         if $env.tracking_errors > 0 {
             $env.aborting_try.push($err);
             $body
         } else {
-            return Err(($env, $err))
+            return Err($err)
         }
     }};
 }
@@ -55,24 +55,23 @@ macro_rules! handle_words {
     {
       let mut env = $env;
       if $word != TRY_END && !env.aborting_try.is_empty() {
-         Ok(env)
+         Ok(())
       } else {
           $(
-           env =
             match $me.$name(env, $word, $pid) {
-              Err((mut env, Error::Reschedule)) => {
+              Err(Error::Reschedule) => {
                 // restore original program
                 let _ = env.program.pop().unwrap();
                 env.program.push($program);
-                return Ok(env);
+                return Ok(());
               },
-              Err((env, Error::UnknownWord)) => env,
-              Err((mut env, err @ Error::ProgramError(_))) => {
+              Err(Error::UnknownWord) => (),
+              Err(err @ Error::ProgramError(_)) => {
                 $it.storage.cleanup($pid.clone());
                 return handle_error!(env, err)
               },
-              Err((env, err)) => return Err((env, err)),
-              Ok(env_) => return Ok(env_)
+              Err(err) => return Err(err),
+              Ok(()) => return Ok(())
             };
           )*
           $it.storage.cleanup($pid.clone());
@@ -86,7 +85,7 @@ macro_rules! validate_lockout {
     ($env: expr, $name: expr, $pid: expr) => {
         if let Some((pid_, _)) = $name {
             if pid_ != $pid {
-                return Err(($env, Error::Reschedule))
+                return Err(Error::Reschedule)
             }
         }
     };
@@ -99,7 +98,7 @@ macro_rules! read_or_write_transaction {
         } else if let Some((_, ref txn)) = $me.db_read_txn {
             txn.deref()
         } else {
-            return Err(($env, error_no_transaction!()));
+            return Err(error_no_transaction!());
         };
     };
 }
@@ -108,7 +107,7 @@ macro_rules! stack_pop {
     ($env: expr) => {
         match $env.pop() {
             None => {
-                return Err(($env, error_empty_stack!()))
+                return Err(error_empty_stack!())
             }
             Some(e) => {
                 e
@@ -120,7 +119,7 @@ macro_rules! stack_pop {
 macro_rules! word_is {
     ($env: expr, $word: expr, $exp: expr) => {
         if $word != $exp {
-            return Err(($env, Error::UnknownWord))
+            return Err(Error::UnknownWord)
         }
     };
 }
@@ -128,7 +127,7 @@ macro_rules! word_is {
 macro_rules! assert_decodable {
     ($env: expr, $code: expr) => {
         if binparser::parse($code).is_err() {
-            return Err(($env, error_decoding!()))
+            return Err(error_decoding!())
         }
     };
 }
@@ -266,7 +265,7 @@ macro_rules! alloc_slice {
     ($size: expr, $env: expr) => {{
         let slice = $env.alloc($size);
         if slice.is_err() {
-            return Err(($env, slice.unwrap_err()));
+            return Err(slice.unwrap_err());
         }
         slice.unwrap()
     }};
