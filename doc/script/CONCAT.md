@@ -23,6 +23,8 @@ Allocates for a result of concatenation
 
 ## Tests
 
-```
-"Hello, " "world!" => "Hello, world!"
+```test
+concat : "Hello, " "world!" CONCAT "Hello, world!" EQUAL?.
+concat_requires_two_items_0 : [CONCAT] TRY UNWRAP 0x04 EQUAL?.
+concat_requires_two_items_1 : [1 CONCAT] TRY UNWRAP 0x04 EQUAL?.
 ```

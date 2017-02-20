@@ -1,6 +1,6 @@
 # Experimental Features
 
-PumpkinDB is new and many (experimental )features are being hashed out. Instead of
+PumpkinDB is new and many (experimental) features are being hashed out. Instead of
 these features sitting in their own branches or Pull Requests, we decided to encourage
 broader experimentation.
 

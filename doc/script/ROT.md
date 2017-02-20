@@ -22,6 +22,9 @@ None
 
 ## Tests
 
-```
-0x10 0x20 0x30 SWAP => 0x20 0x30 0x10
+```test
+works : 1 2 3 ROT 3 WRAP [2 3 1] EQUAL?.
+empty_stack : [ROT] TRY UNWRAP 0x04 EQUAL?.
+empty_stack_1 : [1 ROT] TRY UNWRAP 0x04 EQUAL?.
+empty_stack_2 : [1 2 ROT] TRY UNWRAP 0x04 EQUAL?.
 ```

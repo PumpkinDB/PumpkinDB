@@ -15,11 +15,8 @@ None
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than two items on the stack
-
 [NoTransaction](./ERRORS/NoTransaction.md) error if there's no current write transaction
 
-[DuplicateKey](./ERRORS/DuplicateKey.md) error if the key has been already used.
 
 ## Examples
 
@@ -29,6 +26,9 @@ None
 
 ## Tests
 
-```
-"hi" DUP "there" [ASSOC COMMIT] WRITE [RETR] READ => "there"
+```test
+change : "hi" DUP "there" [ASSOC COMMIT] WRITE [ASSOC?] READ.
+otherwise_no_change : "hi" DUP "there" [ASSOC] WRITE [ASSOC?] READ NOT.
+commit_requires_txn : [COMMIT] TRY UNWRAP 0x08 EQUAL?.
+commit_requires_write_txn : [[COMMIT] READ] TRY UNWRAP 0x08 EQUAL?.
 ```

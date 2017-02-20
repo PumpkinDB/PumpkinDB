@@ -24,5 +24,5 @@ Runtime allocations necessary for the server
 
 ## Tests
 
-```
-```
+No tests defined as this functionality is currently provided by the server,
+not the scheduler.

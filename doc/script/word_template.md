@@ -22,7 +22,9 @@ Output stack: [stack notation]
   
 ## Tests
 
-[Provide basic tests]
+```test
+example_test : 1 1 EQUAL?.
+```
 
 ---
 #### Template notes

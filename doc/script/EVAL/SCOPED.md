@@ -32,6 +32,6 @@ during the runtime.
 
 ## Tests
 
-```
-1 'val SET [2 'val SET val] EVAL/SCOPED val => 2 1
+```test
+eval_scoped_clone : "scoped_dictionary" FEATURE? [1 'val SET [2 'val SET val] EVAL/SCOPED val 2 WRAP 2 1 2 WRAP EQUAL?] [1] IFELSE.
 ```

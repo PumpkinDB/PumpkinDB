@@ -25,6 +25,8 @@ for the result.
 
 ## Tests
 
-```
-1 2 UINT/ADD => 3
+```test
+works : 2 1 UINT/ADD 3 EQUAL?.
+empty_stack : [UINT/ADD] TRY UNWRAP 0x04 EQUAL?.
+empty_stack_1 : [1 UINT/ADD] TRY UNWRAP 0x04 EQUAL?.
 ```

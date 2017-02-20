@@ -141,6 +141,9 @@ word!(OR, (a, b => c), b"\x82OR");
 // Category: pubsub
 word!(SEND, (a => ), b"\x84SEND");
 
+// Category: experimental features
+word!(FEATUREP, (a => b), b"\x88FEATURE?");
+
 use std::str;
 
 // Builtin words that are implemented in PumpkinScript
@@ -229,7 +232,7 @@ pub enum ParseError {
 pub mod binparser;
 pub use self::binparser::parse as parse_bin;
 
-mod textparser;
+pub mod textparser;
 pub use self::textparser::parse;
 
 /// Initial stack size
@@ -650,6 +653,8 @@ impl<'a> VM<'a> {
                            self.hlc => handle_hlc_gtp,
                            // pubsub
                            self => handle_send,
+                           // features
+                           self => handle_featurep,
                            // catch-all (NB: keep it last)
                            self => handle_dictionary
                            },
@@ -1256,6 +1261,25 @@ impl<'a> VM<'a> {
         }
     }
 
+    #[inline]
+    #[allow(unused_variables)]
+    fn handle_featurep(&mut self, mut env: Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, FEATUREP);
+        let name = stack_pop!(env);
+
+        #[cfg(feature = "scoped_dictionary")]
+        {
+            if name == "scoped_dictionary".as_bytes() {
+                env.push(STACK_TRUE);
+                return Ok((env, None))
+            }
+        }
+
+        env.push(STACK_FALSE);
+
+        Ok((env, None))
+    }
+
 }
 
 #[cfg(test)]
@@ -1291,543 +1315,6 @@ mod tests {
             env.push(_EMPTY);
         }
         assert!(env.stack.len() >= target);
-    }
-
-
-    #[test]
-    fn drop() {
-        eval!("0x010203 DROP", env, {
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("DROP", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-    }
-
-    #[test]
-    fn dup() {
-        eval!("0x010203 DUP", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x010203"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x010203"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("DUP", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-    }
-
-    #[test]
-    fn _2dup() {
-        eval!("1 2 2DUP", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("2"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("1"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("2"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("1"));
-            assert_eq!(env.pop(), None);
-        });
-        eval!("2 2DUP", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-        eval!("2DUP", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-    }
-
-    #[test]
-    fn _2drop() {
-        eval!("1 2 2DROP", env, {
-            assert_eq!(env.pop(), None);
-        });
-        eval!("2 2DROP", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-        eval!("2DROP", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-    }
-
-    #[test]
-    fn if_() {
-        eval!("0x01 [0x20] IF 0x00 [0x30] IF", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x20"));
-            assert_eq!(env.pop(), None);
-            assert_eq!(env.pop(), None);
-        });
-        eval!("1 \"Hello\" IF", env, result, {
-            assert_error!(result, "[\"Decoding error\" [] 5]");
-        });
-
-    }
-
-    #[test]
-    fn swap() {
-        eval!("0x010203 0x030201 SWAP", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x010203"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x030201"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("SWAP", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("0x10 SWAP", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-    }
-
-
-    #[test]
-    fn rot() {
-        eval!("0x010203 0x030201 0x00 ROT", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x010203"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x030201"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("0x010203 0x030201 ROT", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("0x010203 ROT", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("ROT", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-    }
-
-    #[test]
-    fn over() {
-        eval!("0x010203 0x00 OVER", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x010203"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x010203"));
-        });
-
-        eval!("0x00 OVER", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("OVER", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-    }
-
-    #[test]
-    fn depth() {
-        eval!("0x010203 0x00 \"Hello\" DEPTH", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("3"));
-        });
-    }
-
-    #[test]
-    fn equal() {
-        eval!("0x10 0x20 EQUAL? 0x10 0x10 EQUAL?", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
-            assert_eq!(env.pop(), None);
-        });
-    }
-
-    #[test]
-    fn ltgt() {
-        eval!("\"a\" \"b\" LT? \"a\" \"a\" LT? \"b\" \"a\" LT?", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("\"a\" \"b\" GT? \"a\" \"a\" GT? \"b\" \"a\" GT?", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
-            assert_eq!(env.pop(), None);
-        });
-
-    }
-
-    #[test]
-    fn not() {
-        eval!("0x10 0x20 EQUAL? NOT 0x10 0x10 EQUAL? NOT", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(env.pop(), None);
-        });
-    }
-
-    #[test]
-    fn and() {
-        eval!("0x01 0x01 AND 0x00 0x01 AND 0x01 0x00 AND 0x00 0x00 AND", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(env.pop(), None);
-        });
-    }
-
-    #[test]
-    fn or() {
-        eval!("0x01 0x01 OR 0x00 0x01 OR 0x01 0x00 OR 0x00 0x00 OR", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(env.pop(), None);
-        });
-    }
-
-    #[test]
-    fn ifelse() {
-        eval!("0x01 [0x10] [0x20] IFELSE 0x00 [0x10] [0x20] IFELSE", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x20"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x10"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("0x10 [0x10] [0x20] IFELSE", env, result, {
-            assert_error!(result, "[\"Invalid value\" [16] 3]");
-        });
-
-        eval!("[0x10] [0x20] IFELSE", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("[0x20] IFELSE", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("IFELSE", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("1 \"Hello\" [] IFELSE", env, result, {
-            assert_error!(result, "[\"Decoding error\" [] 5]");
-        });
-
-        eval!("1 [] \"Hello\" IFELSE", env, result, {
-            assert_error!(result, "[\"Decoding error\" [] 5]");
-        });
-    }
-
-    #[test]
-    fn concat() {
-        eval!("0x10 0x20 CONCAT", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x1020"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("0x20 CONCAT", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("CONCAT", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-    }
-
-    #[test]
-    fn slice() {
-        eval!("\"Hello\" 0 5 SLICE", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("\"Hello\""));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("\"Hello\" 1 4 SLICE", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("\"ell\""));
-            assert_eq!(env.pop(), None);
-        });
-
-
-        eval!("\"Hello\" 0 0 SLICE", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("\"\""));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("\"Hello\" 4 2 SLICE", env, result, {
-            assert_error!(result, "[\"Invalid value\" [4] 3]");
-        });
-
-        eval!("\"Hello\" 5 7 SLICE", env, result, {
-            assert_error!(result, "[\"Invalid value\" [5] 3]");
-        });
-
-        eval!("\"Hello\" 1 7 SLICE", env, result, {
-            assert_error!(result, "[\"Invalid value\" [7] 3]");
-        });
-
-        eval!("0 1 SLICE", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("1 SLICE", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("SLICE", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-    }
-
-    #[test]
-    fn length() {
-        eval!("[] LENGTH 0x10 LENGTH", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("LENGTH", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-    }
-
-    #[test]
-    fn times() {
-        eval!("0x01 [DUP] 4 TIMES", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("TIMES", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("5 TIMES", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("1 5 TIMES", env, result, {
-            assert_error!(result, "[\"Decoding error\" [] 5]");
-        });
-
-    }
-
-    #[test]
-    fn dowhile() {
-        eval!("1 2 3 [1 EQUAL? NOT] DOWHILE DEPTH", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("1 2 3 [1 EQUAL?] DOWHILE DEPTH", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x02"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x02"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("[0] DOWHILE", env, {
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("DOWHILE", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("[100] DOWHILE", env, result, {
-            assert_error!(result, "[\"Invalid value\" [100] 3]");
-        });
-
-        eval!("1 DOWHILE", env, result, {
-            assert_error!(result, "[\"Decoding error\" [] 5]");
-        });
-
-    }
-
-    #[test]
-    fn eval() {
-        eval!("[0x01 DUP [DUP] EVAL] EVAL DROP", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("EVAL", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("1 EVAL", env, result, {
-            assert_error!(result, "[\"Decoding error\" [] 5]");
-        });
-    }
-
-    #[test]
-    fn unwrap() {
-        eval!("[1 2] UNWRAP", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x02"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("[] UNWRAP", env, {
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("[1 DUP] UNWRAP", env, result, {
-            assert_error!(result, "[\"Invalid value\" ['DUP] 3]");
-        });
-
-        eval!("UNWRAP", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-    }
-
-    #[test]
-    fn stack() {
-        eval!("1 2 3 STACK", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[1 2 3]"));
-            assert_eq!(env.pop(), None);
-        });
-        eval!("1 2 3 STACK UNWRAP", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("3"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("2"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("1"));
-            assert_eq!(env.pop(), None);
-        });
-        eval!("STACK", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[]"));
-            assert_eq!(env.pop(), None);
-        });
-    }
-
-    #[test]
-    fn wrap() {
-        eval!("1 2 3 2 WRAP", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[2 3]"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("1"));
-            assert_eq!(env.pop(), None);
-        });
-        eval!("1 2 3 2 WRAP UNWRAP", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("3"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("2"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("1"));
-            assert_eq!(env.pop(), None);
-        });
-        eval!("1 2 WRAP", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("WRAP", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-    }
-
-    #[test]
-    fn someq() {
-        eval!("[1 2] SOME?", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("[] SOME?", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("SOME?", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-    }
-
-    #[test]
-    fn noneq() {
-        eval!("[1 2] NONE?", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("[] NONE?", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("NONE?", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-    }
-
-    #[test]
-    fn set() {
-        eval!("1 DEPTH 'current_depth SET 1 2 3 current_depth", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-        });
-
-        eval!("[DUP DUP] 'mydup SET mydup", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[DUP DUP]"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("0 0 SET", env, result, {
-            assert_error!(result, "[\"Invalid value\" [0] 3]");
-        });
-
-        eval!("'a SET", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("SET", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-    }
-
-    #[test]
-    #[cfg(feature = "scoped_dictionary")]
-    fn dictionary_scoping() {
-        eval!("[2 'val SET val] EVAL/SCOPED val", env, result, {
-            assert_error!(result, "[\"Unknown word: val\" ['val] 2]");
-        });
-
-        eval!("1 'val SET [2 'val SET val] EVAL/SCOPED val", env, result, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x02"));
-            assert_eq!(env.pop(), None);
-        });
-    }
-
-    #[test]
-    fn def() {
-        eval!("[DUP DUP] 'mydup DEF 1 mydup mydup", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("[DUP DUP] 0 DEF 1 mydup mydup", env, result, {
-            assert_error!(result, "[\"Invalid value\" [0] 3]");
-        });
-
-        eval!("'a DEF", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("DEF", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("1 'a DEF", env, result, {
-            assert_error!(result, "[\"Decoding error\" [] 5]");
-        });
-
     }
 
     use std::time::Duration;
@@ -1929,18 +1416,5 @@ mod tests {
 
     }
 
-    #[test]
-    fn uint_arith() {
-        eval!("1 2 UINT/ADD 3 2 UINT/SUB", env, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x03"));
-            assert_eq!(env.pop(), None);
-        });
-
-        eval!("1 2 UINT/SUB", env, result, {
-            assert_error!(result, "[\"Invalid value\" [2] 3]");
-        });
-
-    }
 
 }

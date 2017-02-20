@@ -36,7 +36,10 @@ None
 
 ## Tests
 
-```
-0x01 [0x20] IF => 0x20
-0x00 [0x20] IF =>
+```test
+works : 1 [2] IF 2 EQUAL?.
+invalid_code : [1 1 IF] TRY UNWRAP 0x05 EQUAL?.
+invalid_value : [5 [1] IF] TRY UNWRAP 0x03 EQUAL?.
+requires_two_items_0 : [IF] TRY UNWRAP 0x04 EQUAL?.
+requires_two_items_1 : [[] IF] TRY UNWRAP 0x04 EQUAL?.
 ```

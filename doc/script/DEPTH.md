@@ -22,6 +22,6 @@ None
 
 ## Tests
 
-```
-"Hello, " "world!" DEPTH => 2
+```test
+depth : "Hello, " "world!" DEPTH 2 EQUAL?.
 ```

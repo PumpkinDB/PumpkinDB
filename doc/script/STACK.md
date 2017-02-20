@@ -27,7 +27,7 @@ None
 
 ## Tests
 
-```
-1 2 3 STACK => 0x111213
-1 2 3 STACK UNWRAP => 0x1 0x2 0x3
+```test
+works : 1 2 3 STACK [1 2 3] EQUAL?.
+work_nil : STACK [] EQUAL?.
 ```

@@ -22,7 +22,7 @@ None.
 
 ## Errors
 
-EmptyStack error if there are less than two items on the stack
+[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than two items on the stack.
 
 [Decoding error](./ERRORS/DECODING.md) error if the code is undecodable.
 
@@ -39,6 +39,9 @@ defined.
 
 ## Tests
 
-```
-[DUP DUP] 'dup2 DEF 1 dup2 => 1 1 1
+```test
+works : [DUP DUP] 'dup2 DEF 1 dup2 3 WRAP 1 1 1 3 WRAP EQUAL?.
+invalid_code : [1 'dup2 DEF] TRY UNWRAP 0x05 EQUAL?.
+empty_stack : [DEF] TRY UNWRAP 0x04 EQUAL?.
+empty_stack_1 : ['a DEF] TRY UNWRAP 0x04 EQUAL?.
 ```

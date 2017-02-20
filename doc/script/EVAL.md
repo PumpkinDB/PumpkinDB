@@ -26,6 +26,8 @@ during the runtime.
 
 ## Tests
 
-```
-10 [DUP] EVAL => 10 10
+```test
+works : 10 [DUP] EVAL 2 WRAP 10 10 2 WRAP EQUAL?.
+empty_stack : [EVAL] TRY UNWRAP 0x04 EQUAL?.
+invalid_code : [1 EVAL] TRY UNWRAP 0x05 EQUAL?.
 ```

@@ -25,7 +25,10 @@ Allocates for recursion during runtime.
 
 ## Tests
 
-```
-[HLC] 0 TIMES =>
-["hello"] 2 TIMES => 0x68656C6C6F 0x68656C6C6F
+```test
+works : [10] 3 TIMES STACK [10 10 10] EQUAL?.
+works_0 : [10] 0 TIMES STACK LENGTH 0 EQUAL?.
+empty_stack : [TIMES] TRY UNWRAP 0x04 EQUAL?.
+empty_stack_1 : [1 TIMES] TRY UNWRAP 0x04 EQUAL?.
+invalid_code : [1 1 TIMES] TRY UNWRAP 0x05 EQUAL?.
 ```

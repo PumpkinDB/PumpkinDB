@@ -24,6 +24,7 @@ HLC => 0x000014A27859A0C2E2900000
 
 ## Tests
 
-```
-HLC HLC EQUAL? => 0
+```test
+inequality : HLC HLC EQUAL? NOT.
+growth : HLC HLC HLC/LT?.
 ```

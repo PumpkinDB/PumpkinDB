@@ -25,7 +25,7 @@ Allocates for the result of the item size calculation
 
 ## Tests
 
-```
-[] LENGTH => 0
-"Hello" LENGTH => 5
+```test
+works : "123" LENGTH 3 EQUAL?.
+empty_stack : [LENGTH] TRY UNWRAP 0x04 EQUAL?.
 ```

@@ -14,4 +14,4 @@ pub mod script;
 #[allow(dead_code)]
 mod timestamp;
 #[allow(dead_code)]
-mod pubsub;
+pub mod pubsub;
