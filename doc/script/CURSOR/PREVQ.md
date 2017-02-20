@@ -9,7 +9,7 @@ Output stack: `b`
 If there is a previous key/value pair in the database, `1` will be pushed onto the stack.
 Otherwise, `0` will be pushed and the cursor will be moved.
 
-Useful in conjunction with [CURSOR/CUR](CUR.md)
+Useful in conjunction with [CURSOR/CUR](../QCURSOR/CUR.md)
 
 ## Allocation
 
@@ -24,13 +24,13 @@ InvalidValue error if the cursor identifier is incorrect or expired
 ## Examples
 
 ```
-["1" "2" ASSOC "2" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/LAST DROP c CURSOR/PREV?] READ => 1
+["1" "2" ASSOC "2" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c ?CURSOR/LAST DROP c CURSOR/PREV?] READ => 1
 ```
 
 ## Tests
 
 ```test
-works : ["1" "2" ASSOC "2" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/LAST DROP c CURSOR/PREV?] READ.
+works : ["1" "2" ASSOC "2" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c ?CURSOR/LAST DROP c CURSOR/PREV?] READ.
 requires_txn : ["1" CURSOR/PREV?] TRY UNWRAP 0x08 EQUAL?.
 empty_stack : [CURSOR/PREV?] TRY UNWRAP 0x04 EQUAL?.
 invalid_cursor : [["1" CURSOR/PREV?] READ] TRY UNWRAP 0x03 EQUAL?.

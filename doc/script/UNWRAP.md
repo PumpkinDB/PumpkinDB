@@ -11,8 +11,8 @@ UNWRAP is a "safe" cousin of [EVAL](EVAL.md). It takes a closure
 and as long as it does not contain any words, evaluates it (essentially,
 putting all the data on the stack)
 
-It's particularly useful in conjunction with [NONE?](NONEP.md) and
-[SOME?](SOMEP.md).
+It's particularly useful in conjunction with [NONE?](NONEQ.md) and
+[SOME?](SOMEQ.md).
 
 ## Allocation
 

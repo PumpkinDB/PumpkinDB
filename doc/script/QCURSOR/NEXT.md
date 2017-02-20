@@ -1,4 +1,4 @@
-# CURSOR/NEXT
+# ?CURSOR/NEXT
 
 Sets the cursor at the next key value
 
@@ -8,7 +8,7 @@ Output stack: `[key value]` or `[]`
 
 If there is a next key/value pair in the database, `[key value]` will be pushed onto the stack.
 Otherwise, `[]` will be pushed. Useful in conjunction with [UNWRAP](../UNWRAP.md),
-[SOME?](../SOMEP.md) and [NONE?](../NONEP.md).
+[SOME?](../SOMEQ.md) and [NONE?](../NONEQ.md).
 
 ## Allocation
 
@@ -23,15 +23,15 @@ InvalidValue error if the cursor identifier is incorrect or expired
 ## Examples
 
 ```
-["1" "2" ASSOC "2" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/FIRST DROP c CURSOR/NEXT] READ UNWRAP => "2" "2"
+["1" "2" ASSOC "2" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c ?CURSOR/FIRST DROP c CURSOR/NEXT] READ UNWRAP => "2" "2"
 ```
 
 ## Tests
 
 ```test
-works : ["1" "2" ASSOC "2" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/FIRST DROP c CURSOR/NEXT] READ ["2" "2"] EQUAL?.
-requires_txn : ["1" CURSOR/NEXT] TRY UNWRAP 0x08 EQUAL?.
-empty_stack : [CURSOR/NEXT] TRY UNWRAP 0x04 EQUAL?.
-invalid_cursor : [["1" CURSOR/NEXT] READ] TRY UNWRAP 0x03 EQUAL?.
+works : ["1" "2" ASSOC "2" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c ?CURSOR/FIRST DROP c ?CURSOR/NEXT] READ ["2" "2"] EQUAL?.
+requires_txn : ["1" ?CURSOR/NEXT] TRY UNWRAP 0x08 EQUAL?.
+empty_stack : [?CURSOR/NEXT] TRY UNWRAP 0x04 EQUAL?.
+invalid_cursor : [["1" ?CURSOR/NEXT] READ] TRY UNWRAP 0x03 EQUAL?.
 ```
 

@@ -22,13 +22,13 @@ InvalidValue error if the cursor identifier is incorrect or expired
 ## Examples
 
 ```
-["1" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/FIRST DROP c CURSOR/CUR?] READ UNWRAP => 1
+["1" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c ?CURSOR/FIRST DROP c CURSOR/CUR?] READ UNWRAP => 1
 ```
 
 ## Tests
 
 ```test
-works : ["1" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c CURSOR/FIRST DROP c CURSOR/CUR?] READ.
+works : ["1" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c ?CURSOR/FIRST DROP c CURSOR/CUR?] READ.
 requires_txn : ["1" CURSOR/CUR?] TRY UNWRAP 0x08 EQUAL?.
 empty_stack : [CURSOR/CUR?] TRY UNWRAP 0x04 EQUAL?.
 invalid_cursor : [["1" CURSOR/CUR?] READ] TRY UNWRAP 0x03 EQUAL?.
