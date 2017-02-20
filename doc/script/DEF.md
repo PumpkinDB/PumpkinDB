@@ -24,8 +24,6 @@ None.
 
 [EmptyStack](./ERRORS/EmptyStack.md) error if there are less than two items on the stack.
 
-[Decoding error](./ERRORS/DECODING.md) error if the code is undecodable.
-
 It will error if the format of the word is incorrect
 
 It may error if this word is a built-in word that was previously
@@ -41,7 +39,6 @@ defined.
 
 ```test
 works : [DUP DUP] 'dup2 DEF 1 dup2 3 WRAP 1 1 1 3 WRAP EQUAL?.
-invalid_code : [1 'dup2 DEF] TRY UNWRAP 0x05 EQUAL?.
 empty_stack : [DEF] TRY UNWRAP 0x04 EQUAL?.
 empty_stack_1 : ['a DEF] TRY UNWRAP 0x04 EQUAL?.
 ```
