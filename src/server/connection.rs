@@ -14,6 +14,8 @@ use byteorder::{ByteOrder, BigEndian};
 use mio::*;
 use mio::tcp::*;
 
+const MAX_PRE_ALLOC: usize = 10000;
+
 pub struct Connection {
     // handle to the accepted socket
     sock: TcpStream,
@@ -69,31 +71,50 @@ impl Connection {
 
         let msg_len = msg_len as usize;
 
-        let mut recv_buf : Vec<u8> = Vec::with_capacity(msg_len);
-        unsafe { recv_buf.set_len(msg_len); }
+        let alloc_len = if msg_len > MAX_PRE_ALLOC {
+            MAX_PRE_ALLOC
+        } else {
+            msg_len
+        };
+
+        let mut recv_buf : Vec<u8> = Vec::with_capacity(alloc_len);
+        unsafe { recv_buf.set_len(alloc_len); }
+
+        let mut read = 0;
 
         let sock_ref = <TcpStream as Read>::by_ref(&mut self.sock);
 
-        match sock_ref.take(msg_len as u64).read(&mut recv_buf) {
-            Ok(n) => {
-                if n < msg_len as usize {
-                    return Err(Error::new(ErrorKind::InvalidData, "Did not read enough bytes"));
-                }
-
-                self.read_continuation = None;
-
-                Ok(Some(recv_buf.to_vec()))
-            }
-            Err(e) => {
-
-                if e.kind() == ErrorKind::WouldBlock {
-                    self.read_continuation = Some(msg_len as u64);
-                    Ok(None)
+        while msg_len > read {
+            let read_next = if read >= MAX_PRE_ALLOC {
+                if msg_len - read <= MAX_PRE_ALLOC {
+                    recv_buf.resize(msg_len, 0);
+                    msg_len - read
                 } else {
-                    Err(e)
+                    recv_buf.resize(MAX_PRE_ALLOC + read, 0);
+                    MAX_PRE_ALLOC
+                }
+            } else {
+                alloc_len
+            };
+            match sock_ref.take(read_next as u64).read(&mut recv_buf[read..]) {
+                Ok(n) => {
+                    if n < read_next as usize {
+                        return Err(Error::new(ErrorKind::InvalidData, "Did not read enough bytes"));
+                    }
+                    read += read_next;
+                    self.read_continuation = None;
+                }
+                Err(e) => {
+                    if e.kind() == ErrorKind::WouldBlock {
+                        self.read_continuation = Some(msg_len as u64);
+                        return Ok(None);
+                    } else {
+                        return Err(e);
+                    }
                 }
             }
         }
+        Ok(Some(recv_buf.to_vec()))
     }
 
     fn read_message_length(&mut self) -> io::Result<Option<u64>> {
@@ -115,11 +136,11 @@ impl Connection {
         };
 
         if bytes < 8 {
-            //println!("Found message length of {} bytes", bytes);
             return Err(Error::new(ErrorKind::InvalidData, "Invalid message length"));
         }
 
         let msg_len = BigEndian::read_u64(buf.as_ref());
+
         Ok(Some(msg_len))
     }
 
