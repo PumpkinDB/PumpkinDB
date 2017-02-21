@@ -31,5 +31,6 @@ quickcheck_macros = "0.4.1"
 matches = "0.1.4"
 
 [features]
-experimental = ["scoped_dictionary"]
+default = ["scoped_dictionary"]
+experimental = []
 scoped_dictionary = []

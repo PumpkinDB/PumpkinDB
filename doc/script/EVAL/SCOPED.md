@@ -1,6 +1,6 @@
 # EVAL/SCOPED
 
-## Experimental feature: `scoped_dictionary`
+## Graduated feature: `scoped_dictionary`
 
 Takes the topmost item and evaluates it as a PumpkinScript
 program on the current stack with a clone of the dictionary

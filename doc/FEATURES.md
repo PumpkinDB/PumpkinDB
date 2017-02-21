@@ -20,4 +20,11 @@ in`default`), the feature gate can be dropped.
 
 ## Current experimental features
 
+## Graduated features
+
+Graduated features are enabled by default, but in the source code,
+they are still behind a feature gate. This means that if things go
+wrong, they can still be easily demoted or dropped altogether. If
+everything is good, though, the gate will be eventually dropped.
+
 * `scoped_dictionary` ([issue #71](https://github.com/PumpkinDB/PumpkinDB/issues/71))
