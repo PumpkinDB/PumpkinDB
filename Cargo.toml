@@ -1,7 +1,8 @@
 [package]
 name = "pumpkindb"
 version = "0.1.0"
-authors = ["Yurii Rashkovskii <yrashk@gmail.com>"]
+authors = ["Ómar Yasin <omarkj@gmail.com>",
+           "Yurii Rashkovskii <yrashk@gmail.com>"]
 
 [dependencies]
 nom = "^2.1"
