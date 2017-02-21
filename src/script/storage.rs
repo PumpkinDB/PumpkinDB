@@ -484,15 +484,14 @@ mod tests {
               env,
               result,
               {
-                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
+                  assert_eq!(Vec::from(env.pop().unwrap()), [0]);
               });
         eval!("[[\"Hey\" ASSOC COMMIT] WRITE] TRY DROP [\"Hey\" \"there\" ASSOC COMMIT] WRITE [\"Hey\" ASSOC?] READ",
               env,
               result,
               {
-                  assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+                  assert_eq!(Vec::from(env.pop().unwrap()), [1]);
               });
-
     }
 
     use test::Bencher;

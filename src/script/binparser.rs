@@ -27,17 +27,27 @@ pub fn internal_word_tag(i: &[u8]) -> IResult<&[u8], u8> {
     }
 }
 
+pub fn small_numbers(i: &[u8]) -> IResult<&[u8], &[u8]> {
+    if i.len() < 1 {
+        IResult::Incomplete(Needed::Size(1))
+    } else if i[0] > 10 {
+        IResult::Error(ErrorKind::Custom(0))
+    } else {
+        IResult::Done(&i[1..], &i[0..1])
+    }
+}
+
 pub fn micro_length(i: &[u8]) -> IResult<&[u8], usize> {
     if i.len() < 1 {
         IResult::Incomplete(Needed::Size(1))
-    } else if i[0] > 99 {
-        IResult::Error(ErrorKind::Custom(99))
+    } else if i[0] < 11 || i[0] > 110 {
+        IResult::Error(ErrorKind::Custom(10))
     } else {
         let size = i[0] as usize;
-        if size > i.len() - 1 {
+        if size - 11 > i.len() - 1 {
             IResult::Incomplete(Needed::Size(1 + size))
         } else {
-            IResult::Done(&i[0..], size + 1)
+            IResult::Done(&i[0..], size - 10)
         }
     }
 }
@@ -97,7 +107,7 @@ fn flatten_program(p: Vec<&[u8]>) -> Vec<u8> {
 }
 
 named!(pub data_size<usize>, alt!(micro_length | byte_length | small_length | big_length));
-named!(pub data, length_bytes!(data_size));
+named!(pub data, alt!(small_numbers | length_bytes!(data_size)));
 named!(pub word, length_bytes!(word_tag));
 named!(pub internal_word, length_bytes!(internal_word_tag));
 named!(pub word_or_internal_word, alt!(internal_word | word));
@@ -124,7 +134,7 @@ mod tests {
     use script::binparser::parse;
 
     #[test]
-    fn test() {
+    fn test_basic() {
         let v = parse_text("0x10 DUP").unwrap();
         assert_eq!(parse(v.as_slice()).unwrap(), parse_text("0x10 DUP").unwrap());
     }
@@ -163,6 +173,12 @@ mod tests {
         }
         let v = parse_text(byte_sized_sequence.as_ref()).unwrap();
         assert_eq!(parse(v.as_slice()).unwrap(), parse_text(byte_sized_sequence.as_ref()).unwrap());
+    }
+
+    #[test]
+    fn test_reserved_numbers() {
+        let s = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        assert_eq!(parse(&s).unwrap(), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     }
 
 }
