@@ -41,3 +41,5 @@ extern crate config;
 #[macro_use]
 extern crate lazy_static;
 
+extern crate crypto;
+

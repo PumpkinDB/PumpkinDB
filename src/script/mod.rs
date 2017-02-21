@@ -428,6 +428,7 @@ use pubsub;
 
 pub mod storage;
 pub mod timestamp_hlc;
+pub mod hash;
 
 /// VM is a PumpkinScript scheduler and interpreter. This is the
 /// most central part of this module.
@@ -469,6 +470,7 @@ pub struct VM<'a> {
     publisher: pubsub::PublisherAccessor<Vec<u8>>,
     storage: storage::Handler<'a>,
     hlc: timestamp_hlc::Handler<'a>,
+    hash: hash::Handler<'a>
 }
 
 unsafe impl<'a> Send for VM<'a> {}
@@ -502,6 +504,7 @@ impl<'a> VM<'a> {
             publisher: publisher,
             storage: storage::Handler::new(db_env, db),
             hlc: timestamp_hlc::Handler::new(),
+            hash: hash::Handler::new()
         }
     }
 
@@ -673,6 +676,14 @@ impl<'a> VM<'a> {
                            self.hlc => handle_hlc,
                            self.hlc => handle_hlc_lc,
                            self.hlc => handle_hlc_tick,
+                           // hashing
+                           self.hash => handle_hash_sha1,
+                           self.hash => handle_hash_sha224,
+                           self.hash => handle_hash_sha256,
+                           self.hash => handle_hash_sha384,
+                           self.hash => handle_hash_sha512,
+                           self.hash => handle_hash_sha512_224,
+                           self.hash => handle_hash_sha512_256,
                            // pubsub
                            self => handle_send,
                            // features
