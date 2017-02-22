@@ -548,8 +548,16 @@ impl<'a> VM<'a> {
                 },
                 None => ()
             }
-            match self.inbox.try_recv() {
-                Err(mpsc::TryRecvError::Empty) => (),
+            let message = if envs.len() == 0 {
+                self.inbox.recv()
+            } else {
+                let msg = self.inbox.try_recv();
+                if let Err(mpsc::TryRecvError::Empty) = msg {
+                    continue;
+                }
+                msg.map_err(|_| mpsc::RecvError{})
+            };
+            match message {
                 Err(err) => panic!("error receiving: {:?}", err),
                 Ok(RequestMessage::Shutdown) => break,
                 Ok(RequestMessage::ScheduleEnv(pid, program, chan)) => {
