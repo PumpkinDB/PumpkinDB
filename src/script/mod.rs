@@ -509,12 +509,12 @@ impl<'a> VM<'a> {
         self.sender.clone()
     }
 
-    /// Scheduler thread. It is supposed to be running in a separate thread
+    /// Scheduler. It is supposed to be running in a separate thread
     ///
-    /// The scheduler handles all incoming and internal messages. Once at least one
-    /// program is scheduled (`ScheduleEnv`), it will create an [Env](struct.Env.html) for
-    /// it and reschedule for execution (`RescheduleEnv`), at which time it will execute
-    /// one instruction. This way it can execute multiple scripts at the same time.
+    /// The scheduler handles all incoming  messages. Once at least one
+    /// program is scheduled (`ScheduleEnv`), it will start scheduling work,
+    /// after which it will execute one instruction per program at a time.
+    /// This way it can execute multiple scripts at the same time.
     ///
     /// Once an environment execution has been terminated, a message will be sent,
     /// depending on the result (`EnvTerminated` or `EnvFailed`)
