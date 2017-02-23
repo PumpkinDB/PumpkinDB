@@ -56,7 +56,16 @@ So what **is** PumpkinDB?
 
 ## Trying it out
 
-There are no releases at this time. You are welcome to clone the repository and run
+There are no releases at this time. You are welcome to clone the repository and build
+it yourself. You will need Rust Nightly to do this. The easiest way to get it is to use
+[rustup](https://www.rust-lang.org/en-US/install.html)
+
+```shell
+$ rustup install nightly
+$ rustup override set nightly # in PumpkinDB directory
+```
+
+After that, you can run PumpkinDB server this way:
 
 ```
 $ cargo run --bin pumpkindb
