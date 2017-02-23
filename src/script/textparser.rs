@@ -151,64 +151,75 @@ fn unwrap_word(mut word: Vec<u8>) -> Vec<u8> {
     vec
 }
 
-fn rewrap(prog: Vec<Vec<u8>>) -> Vec<u8> {
+fn rewrap(prog: Vec<u8>) -> Vec<u8> {
+    let mut program = &prog[..];
     let mut vec = Vec::new();
     let mut acc = Vec::new();
-    let mut unwrapped = false;
     let mut counter = 0;
-    for item in prog {
-        if item.len() > 0 && item[0] == b'`' {
+
+    while program.len() > 0 {
+        if let IResult::Done(rest, unwrap) = bin_unwrap(program) {
             if acc.len() > 0 {
-                vec.append(&mut sized_vec(flatten_program(acc.clone())));
+                vec.append(&mut sized_vec(acc.clone()));
                 acc.clear();
                 counter += 1;
             }
-            counter += 1;
-            vec.extend_from_slice(&item[1..]);
+            vec.extend_from_slice(&unwrap[1..]);
             vec.extend_from_slice(b"\x01\x01");
             vec.append(&mut prefix_word(b"WRAP"));
-            unwrapped = true;
+
+            counter += 1;
+            program = rest;
+        } else if let IResult::Done(rest, data) = super::binparser::data(program) {
+            acc.extend_from_slice(data);
+            program = rest;
+        } else if let IResult::Done(rest, word) = super::binparser::word(program) {
+            acc.extend_from_slice(word);
+            program = rest;
         } else {
-            acc.push(item.clone());
+            panic!("invalid data {:?}", &program);
         }
     }
     if acc.len() > 0 {
-        if unwrapped {
-            vec.append(&mut sized_vec(flatten_program(acc.clone())));
-            counter += 1;
-            acc.clear();
-        } else {
-            vec.append(&mut flatten_program(acc.clone()));
-            acc.clear();
-        }
+        counter += 1;
+        vec.append(&mut sized_vec(acc.clone()));
+        acc.clear();
     }
-    if unwrapped {
-        for _ in 0..counter - 1 {
-            vec.append(&mut prefix_word(b"CONCAT"));
-        }
-        vec
-    } else {
+    for _ in 0..counter - 1 {
+        vec.append(&mut prefix_word(b"CONCAT"));
+    }
+    if counter == 0 {
         sized_vec(vec)
+    } else {
+        vec
     }
 }
 
+use super::binparser::word_tag;
+named!(bin_word<Vec<u8>>, do_parse!(v: length_bytes!(word_tag) >> (Vec::from(v))));
+
+named!(bin_unwrap<Vec<u8>>, do_parse!(
+                              tag!(b"`")                   >>
+                        word: alt!(bin_word | bin_unwrap)  >>
+                              (unwrap_word(word))));
+
 named!(unwrap<Vec<u8>>, do_parse!(
                               tag!(b"`")                 >>
-                        word: word                       >>
+                        word: alt!(word | unwrap)        >>
                               (unwrap_word(word))));
 named!(wrap<Vec<u8>>, do_parse!(
                          prog: delimited!(char!('['), ws!(wrapped_program), char!(']')) >>
                                (rewrap(prog))));
 named!(wrapped_item<Vec<u8>>, alt!(item | unwrap));
-named!(wrapped_program<Vec<Vec<u8>>>, alt!(do_parse!(
+named!(wrapped_program<Vec<u8>>, alt!(do_parse!(
                                take_while!(is_multispace)                        >>
                             v: eof                                               >>
-                               (vec![v]))
+                               (v))
                               | do_parse!(
                                take_while!(is_multispace)                        >>
                          item: separated_list!(multispace, wrapped_item)         >>
                                take_while!(is_multispace)                        >>
-                               (item))));
+                               (flatten_program(item)))));
 
 named!(program<Vec<u8>>, alt!(do_parse!(
                                take_while!(is_multispace)                        >>
@@ -246,6 +257,13 @@ named!(pub programs<Vec<Vec<u8>>>, do_parse!(
 /// ```norun
 /// PumpkinDB> 1 'a SET [`a] 'b SET 2 'a SET b EVAL
 /// 0x01
+/// ```
+///
+/// It is also possible to unwrap multiple levels:
+///
+/// ```norun
+/// PumpkinDB> "A" 'a SET [[2 ``a DUP] EVAL] 'b SET "B" 'a SET b EVAL
+/// 0x02 "A" "A"
 /// ```
 ///
 /// # Example
@@ -421,6 +439,12 @@ mod tests {
         assert_eq!(parse("[1 `val DUP]").unwrap(), parse("[1] val 1 WRAP [DUP] CONCAT CONCAT").unwrap());
         assert_eq!(parse("[1 `val DUP `val]").unwrap(), parse("[1] val 1 WRAP [DUP] val 1 WRAP CONCAT CONCAT CONCAT").unwrap());
         assert_eq!(parse("[1 `val]").unwrap(), parse("[1] val 1 WRAP CONCAT").unwrap());
+    }
+
+    #[test]
+    fn nested_unwrapping() {
+        assert_eq!(parse("[[``val DUP]]").unwrap(), parse("val 1 WRAP [1 WRAP [DUP] CONCAT] CONCAT").unwrap());
+        assert_eq!(parse("[[2 ``val DUP]]").unwrap(), parse("[[2]] val 1 WRAP [1 WRAP [DUP] CONCAT CONCAT] CONCAT CONCAT").unwrap());
     }
 
 }

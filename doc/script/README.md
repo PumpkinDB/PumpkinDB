@@ -45,6 +45,12 @@ syntax (\`word) that can embed a value of a word into this code:
 unwrapping : 1 'a SET [`a] 'b SET 2 'a SET b EVAL 0x01 EQUAL?.
 ```
 
+It is also possible to unwrap multiple levels:
+
+```test
+unwrapping_multiple : 1 'a SET [[``a] EVAL] 'b SET 2 'a SET b EVAL 0x01 EQUAL?.
+```
+
 (this verifies that the closure we save in `b` remains at 1
 while we re-set `a` to 2)
 
