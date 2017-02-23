@@ -432,6 +432,7 @@ use pubsub;
 pub mod storage;
 pub mod timestamp_hlc;
 pub mod hash;
+pub mod json;
 
 /// VM is a PumpkinScript scheduler and interpreter. This is the
 /// most central part of this module.
@@ -473,7 +474,8 @@ pub struct VM<'a> {
     publisher: pubsub::PublisherAccessor<Vec<u8>>,
     storage: storage::Handler<'a>,
     hlc: timestamp_hlc::Handler<'a>,
-    hash: hash::Handler<'a>
+    hash: hash::Handler<'a>,
+    json: json::Handler<'a>,
 }
 
 unsafe impl<'a> Send for VM<'a> {}
@@ -507,7 +509,8 @@ impl<'a> VM<'a> {
             publisher: publisher,
             storage: storage::Handler::new(db_env, db),
             hlc: timestamp_hlc::Handler::new(),
-            hash: hash::Handler::new()
+            hash: hash::Handler::new(),
+            json: json::Handler::new(),
         }
     }
 
@@ -698,6 +701,19 @@ impl<'a> VM<'a> {
                            self.hash => handle_hash_sha512,
                            self.hash => handle_hash_sha512_224,
                            self.hash => handle_hash_sha512_256,
+                           // json
+                           self.json => handle_jsonq,
+                           self.json => handle_json_objectq,
+                           self.json => handle_json_stringq,
+                           self.json => handle_json_numberq,
+                           self.json => handle_json_booleanq,
+                           self.json => handle_json_arrayq,
+                           self.json => handle_json_nullq,
+                           self.json => handle_json_get,
+                           self.json => handle_json_hasq,
+                           self.json => handle_json_set,
+                           self.json => handle_json_string_to,
+                           self.json => handle_json_to_string,
                            // pubsub
                            self => handle_send,
                            // features
