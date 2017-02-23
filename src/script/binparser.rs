@@ -4,113 +4,69 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use nom::{IResult, Needed, ErrorKind};
+use nom::{IResult, ErrorKind};
 use script::{Program, ParseError};
 
-pub fn word_tag(i: &[u8]) -> IResult<&[u8], u8> {
-    if i.len() < 1 {
-        IResult::Incomplete(Needed::Size(1))
-    } else if (i[0] & 128 != 128) || i[0] == 128 {
-        IResult::Error(ErrorKind::Custom(128))
-    } else {
-        IResult::Done(&i[0..], i[0] - 128 + 1)
-    }
-}
+use nom::{be_u8, be_u16, be_u32};
 
-pub fn internal_word_tag(i: &[u8]) -> IResult<&[u8], u8> {
-    if i.len() < 2 {
-        IResult::Incomplete(Needed::Size(2))
-    } else if i[0] != 128 || i[1] < 129 {
-        IResult::Error(ErrorKind::Custom(128))
-    } else {
-        IResult::Done(&i[0..], i[1] - 128 + 2)
-    }
-}
+named!(mint_length<usize>,
+    peek!(do_parse!(
+        one_of!(&[0u8, 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8]) >>
+        (1))));
 
-pub fn micro_length(i: &[u8]) -> IResult<&[u8], usize> {
-    if i.len() < 1 {
-        IResult::Incomplete(Needed::Size(1))
-    } else if i[0] > 120 {
-        IResult::Error(ErrorKind::Custom(120))
-    } else {
-        let size = i[0] as usize;
-        if size > i.len() - 1 {
-            IResult::Incomplete(Needed::Size(1 + size))
-        } else {
-            IResult::Done(&i[0..], size + 1)
-        }
-    }
-}
+named!(n_word_length<usize>,
+    peek!(do_parse!(
+        tag: peek!(take!(1)) >>
+        l: cond_reduce!((tag[0] & 128 == 128) && !(tag[0] == 128), take!(1)) >>
+        ((l[0] - 128 + 1) as usize))));
 
-pub fn byte_length(i: &[u8]) -> IResult<&[u8], usize> {
-    if i.len() < 2 {
-        IResult::Incomplete(Needed::Size(2))
-    } else if i[0] != 121 {
-        IResult::Error(ErrorKind::Custom(121))
-    } else {
-        let size = i[1] as usize;
-        if size > i.len() - 2 {
-            IResult::Incomplete(Needed::Size(2 + size))
-        } else {
-            IResult::Done(&i[0..], size + 2)
-        }
-    }
-}
+named!(n_internal_word_length<usize>,
+    peek!(do_parse!(
+        tag!(&[128u8][..]) >>
+        length: be_u8 >>
+        ((length - 128 + 2) as usize))));
 
-pub fn small_length(i: &[u8]) -> IResult<&[u8], usize> {
-    if i.len() < 3 {
-        IResult::Incomplete(Needed::Size(3))
-    } else if i[0] != 122 {
-        IResult::Error(ErrorKind::Custom(122))
-    } else {
-        let size = (i[1] as usize) << 8 | i[2] as usize;
-        if size > i.len() - 3 {
-            IResult::Incomplete(Needed::Size(3 + size))
-        } else {
-            IResult::Done(&i[0..], size + 3)
-        }
-    }
-}
+named!(n_small_length<usize>,
+    peek!(do_parse!(
+        tag!(&[111u8][..]) >>
+        length: be_u8 >>
+        ((length + 2) as usize))));
 
-pub fn big_length(i: &[u8]) -> IResult<&[u8], usize> {
-    if i.len() < 5 {
-        IResult::Incomplete(Needed::Size(5))
-    } else if i[0] != 123 {
-        IResult::Error(ErrorKind::Custom(123))
-    } else {
-        let size = (i[1] as usize) << 24 | (i[2] as usize) << 16 | (i[3] as usize) << 8 |
-                   (i[4] as usize);
-        if size > i.len() - 5 {
-            IResult::Incomplete(Needed::Size(5 + size))
-        } else {
-            IResult::Done(&i[0..], size + 5)
-        }
-    }
-}
+named!(n_medium_length<usize>,
+    peek!(do_parse!(
+        tag!(&[112u8][..]) >>
+        length: be_u16 >>
+        ((length + 3) as usize))));
 
-fn flatten_program(p: Vec<&[u8]>) -> Vec<u8> {
-    let mut vec = Vec::new();
-    for item in p {
-        vec.extend_from_slice(item);
-    }
-    vec
-}
+named!(n_large_length<usize>,
+    peek!(do_parse!(
+        tag!(&[113u8][..]) >>
+        length: be_u32 >>
+        ((length + 5) as usize))));
 
-named!(pub data_size<usize>, alt!(micro_length | byte_length | small_length | big_length));
-named!(pub data, length_bytes!(data_size));
-named!(pub word, length_bytes!(word_tag));
-named!(pub internal_word, length_bytes!(internal_word_tag));
-named!(pub word_or_internal_word, alt!(internal_word | word));
-named!(item, alt!(word | data));
-named!(split_code<Vec<u8>>, do_parse!(
-                             prog: many0!(item) >>
-                                   (flatten_program(prog))));
+named!(word_size<usize>, alt!(n_word_length | n_internal_word_length));
+named!(pub data_size<usize>, alt!(n_small_length | n_medium_length | n_large_length | mint_length));
+named!(pub data, alt!(length_bytes!(data_size)));
+named!(pub word_or_internal_word, length_bytes!(word_size));
+named!(pub word, length_bytes!(n_word_length));
+
+named!(program<Vec<u8>>,
+    do_parse!(
+        program: many0!(alt!(length_bytes!(data_size) | length_bytes!(n_word_length))) >>
+        ({
+            let mut vec = Vec::new();
+            for item in program {
+                vec.extend_from_slice(item);
+            }
+            vec
+        })
+));
 
 
 /// Parse code into a program. This function serves mainly
 /// as a binary form validator.
 pub fn parse(code: &[u8]) -> Result<Program, ParseError> {
-    match split_code(code) {
+    match program(code) {
         IResult::Done(_, x) => Ok(x),
         IResult::Incomplete(_) => Err(ParseError::Incomplete),
         IResult::Error(ErrorKind::Custom(code)) => Err(ParseError::Err(code)),
@@ -124,7 +80,7 @@ mod tests {
     use script::binparser::parse;
 
     #[test]
-    fn test() {
+    fn test_basic() {
         let v = parse_text("0x10 DUP").unwrap();
         assert_eq!(parse(v.as_slice()).unwrap(), parse_text("0x10 DUP").unwrap());
     }
@@ -132,7 +88,8 @@ mod tests {
     #[test]
     fn test_internal() {
         // should not be able to parse "internal words"
-        assert!(parse(vec![0x80, 0x81, b'A'].as_slice()).is_err());
+        let ok: &[u8] = &[];
+        assert_eq!(parse(vec![0x80, 0x81, b'A'].as_slice()).unwrap(), ok);
     }
 
     #[test]
@@ -165,4 +122,9 @@ mod tests {
         assert_eq!(parse(v.as_slice()).unwrap(), parse_text(byte_sized_sequence.as_ref()).unwrap());
     }
 
+    #[test]
+    fn test_mint() {
+        let v: &[u8] = &vec![0,1,2,3,4,5,6,7,8,9,10];
+        assert_eq!(parse(&v).unwrap(), v);
+    }
 }
