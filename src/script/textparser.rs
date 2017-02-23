@@ -71,10 +71,13 @@ fn bin(bin: &[u8]) -> Vec<u8> {
 }
 
 fn string_to_vec(s: &[u8]) -> Vec<u8> {
+    let s = unsafe { String::from_utf8_unchecked(s.to_vec()) }
+            .replace("\\\"","\"")
+            .replace("\\n","\n");
     let mut bin = Vec::new();
     let size = s.len();
     write_size!(bin, size);
-    bin.extend_from_slice(s);
+    bin.extend_from_slice(s.as_bytes());
     bin
 }
 
@@ -139,7 +142,7 @@ named!(binary<Vec<u8>>, do_parse!(
 ));
 named!(string<Vec<u8>>,  alt!(do_parse!(tag!(b"\"\"") >> (vec![0])) |
                          do_parse!(
-                         str: delimited!(char!('"'), is_not!("\""), char!('"')) >>
+                         str: delimited!(char!('"'), escaped!(is_not!("\"\\"), '\\', one_of!("\"n\\")), char!('"')) >>
                               (string_to_vec(str)))));
 named!(comment<Vec<u8>>, do_parse!(delimited!(char!('('), is_not!(")"), char!(')')) >> (vec![])));
 named!(item<Vec<u8>>, alt!(comment | binary | string | uint | wrap | wordref | word));
@@ -242,7 +245,7 @@ named!(pub programs<Vec<Vec<u8>>>, do_parse!(
 /// with binaries represented as:
 ///
 /// * `0x<hexadecimal>` (hexadecimal form)
-/// * `"STRING"` (string form, no quoted characters support yet)
+/// * `"STRING"` (string form, newline and double quotes can be escaped with `\`)
 /// * `integer` (integer form, will convert to a big endian big integer)
 /// * `'word` (word in a binary form)
 ///
@@ -408,6 +411,14 @@ mod tests {
         let script = parse("\"\"").unwrap();
 
         assert_eq!(script, vec![0]);
+    }
+
+    #[test]
+    fn test_string_escaping() {
+        let script = parse(r#""\"1\"""#).unwrap();
+        assert_eq!(script, vec![3, b'"', b'1', b'"']);
+        let script = parse(r#""\n""#).unwrap();
+        assert_eq!(script, vec![1, b'\n']);
     }
 
     #[test]

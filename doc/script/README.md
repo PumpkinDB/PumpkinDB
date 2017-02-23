@@ -26,7 +26,7 @@ with binaries represented as:
 
 {% method -%}
 * `0x<hexadecimal>` (hexadecimal form)
-* `"STRING"` (string form, no quoted characters support yet)
+* `"STRING"` (string form, newline and double quotes can be escaped with `\`)
 * `integer` (integer form, will convert to a big endian big integer)
 * `'word` (word in a binary form)
 
