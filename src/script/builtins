@@ -4,3 +4,15 @@ IF : [] IFELSE.
 NONE? : LENGTH 0 EQUAL?.
 SOME? : NONE? NOT.
 STACK : DEPTH WRAP.
+( Cursor-related functionality )
+CURSOR/DOWHILE : ['iterator SET 'closure SET 'c SET
+                   [c `closure EVAL [c ``iterator EVAL] [0] IFELSE] DOWHILE] EVAL/SCOPED.
+?CURSOR/DOWHILE : ['iterator SET 'closure SET 'c SET
+                   c [?CURSOR/CUR `closure EVAL] iterator CURSOR/DOWHILE] EVAL/SCOPED.
+CURSOR/DOWHILE-PREFIXED : ['closure SET
+                            'prefix SET
+                            [UNWRAP OVER 0 `prefix LENGTH SLICE `prefix EQUAL? [``closure EVAL] [2DROP 0] IFELSE]
+                            'closure1 SET
+                            CURSOR 'c SET
+                            c prefix CURSOR/SEEK?
+                            [`c `closure1 'CURSOR/NEXT? ?CURSOR/DOWHILE] IF] EVAL/SCOPED.
