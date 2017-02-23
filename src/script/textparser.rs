@@ -298,9 +298,10 @@ mod tests {
     #[test]
     fn test_empty() {
         let script = parse("").unwrap();
-        assert_eq!(script, vec![]);
+        let empty : Vec<u8> = vec![];
+        assert_eq!(script, empty);
         let script = parse("  ").unwrap();
-        assert_eq!(script, vec![]);
+        assert_eq!(script, empty);
     }
 
     #[test]
