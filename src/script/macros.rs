@@ -7,23 +7,23 @@
 macro_rules! write_size_into_slice {
     ($size:expr, $slice: expr) => {
      match $size {
-        0...120 => {
-            $slice[0] = $size as u8;
-            1
+        0...99 => {
+            $slice[0] = ($size + 11) as u8;
+            0
         }
-        121...255 => {
-            $slice[0] = 121u8;
+        100...255 => {
+            $slice[0] = 111u8;
             $slice[1] = $size as u8;
             2
         }
         256...65535 => {
-            $slice[0] = 122u8;
+            $slice[0] = 112u8;
             $slice[1] = ($size >> 8) as u8;
             $slice[2] = $size as u8;
             3
         }
         65536...4294967296 => {
-            $slice[0] = 123u8;
+            $slice[0] = 113u8;
             $slice[1] = ($size >> 24) as u8;
             $slice[2] = ($size >> 16) as u8;
             $slice[3] = ($size >> 8) as u8;

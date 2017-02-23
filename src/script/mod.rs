@@ -376,8 +376,8 @@ use nom;
 #[inline]
 pub fn offset_by_size(size: usize) -> usize {
     match size {
-        0...120 => 1,
-        120...255 => 2,
+        0...99 => 1,
+        100...255 => 2,
         255...65535 => 3,
         65536...4294967296 => 5,
         _ => unreachable!(),
@@ -480,14 +480,14 @@ type PassResult<'a> = Result<(), Error>;
 const STACK_TRUE: &'static [u8] = b"\x01";
 const STACK_FALSE: &'static [u8] = b"\x00";
 
-const ERROR_UNKNOWN_WORD: &'static [u8] = b"\x01\x02";
-const ERROR_INVALID_VALUE: &'static [u8] = b"\x01\x03";
-const ERROR_EMPTY_STACK: &'static [u8] = b"\x01\x04";
-const ERROR_DECODING: &'static [u8] = b"\x01\x05";
-const ERROR_DUPLICATE_KEY: &'static [u8] = b"\x01\x06";
-const ERROR_UNKNOWN_KEY: &'static [u8] = b"\x01\x07";
-const ERROR_NO_TX: &'static [u8] = b"\x01\x08";
-const ERROR_DATABASE: &'static [u8] = b"\x01\x09";
+const ERROR_UNKNOWN_WORD: &'static [u8] = b"\x0C\x02";
+const ERROR_INVALID_VALUE: &'static [u8] = b"\x0C\x03";
+const ERROR_EMPTY_STACK: &'static [u8] = b"\x0C\x04";
+const ERROR_DECODING: &'static [u8] = b"\x0C\x05";
+const ERROR_DUPLICATE_KEY: &'static [u8] = b"\x0C\x06";
+const ERROR_UNKNOWN_KEY: &'static [u8] = b"\x0C\x07";
+const ERROR_NO_TX: &'static [u8] = b"\x0C\x08";
+const ERROR_DATABASE: &'static [u8] = b"\x0C\x09";
 
 impl<'a> VM<'a> {
     /// Creates an instance of VM with three communication channels:
@@ -619,7 +619,11 @@ impl<'a> VM<'a> {
         }
         if let nom::IResult::Done(rest, data) = binparser::data(program) {
             if env.aborting_try.is_empty() {
-                env.push(&data[offset_by_size(data.len())..]);
+                if data.len() == 1 && data[0] <= 10u8 {
+                    return handle_error!(env, error_decoding!());
+                } else {
+                    env.push(&data[offset_by_size(data.len())..]);
+                }
             }
             if rest.len() > 0 {
                 env.program.push(rest);
@@ -1108,7 +1112,9 @@ impl<'a> VM<'a> {
     fn handle_eval_validp(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         word_is!(env, word, EVAL_VALIDP);
         let a = stack_pop!(env);
-        if parse_bin(a).is_ok() {
+        if a.len() == 1 && a[0] <= 10u8 {
+            env.push(STACK_FALSE);
+        } else if parse_bin(a).is_ok() {
             env.push(STACK_TRUE);
         } else {
             env.push(STACK_FALSE);
@@ -1355,7 +1361,7 @@ mod tests {
 
     #[test]
     fn error_macro() {
-        if let Error::ProgramError(err) = error_program!("Test".as_bytes(), "123".as_bytes(),b"\x01\x33") {
+        if let Error::ProgramError(err) = error_program!("Test".as_bytes(), "123".as_bytes(), b"\x0C\x33") {
             assert_eq!(err, parsed_data!("[\"Test\" [\"123\"] 0x33]"));
         } else {
             assert!(false);
@@ -1466,6 +1472,7 @@ mod tests {
         });
 
         eval!("1 TRY", env, result, {
+            println!("res: {:?}", env);
             assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Decoding error\" [] 5]"));
             assert_eq!(env.pop(), None);
         });
