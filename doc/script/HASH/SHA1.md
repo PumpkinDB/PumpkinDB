@@ -6,6 +6,9 @@ Input stack: `a`
 
 Output stack: `b`
 
+Please note that a SHA-1 collision technique [has been found](https://shattered.io/).
+Consider using other hashes like [SHA256](SHA256.md).
+
 ## Allocation
 
 Allocates for the result of the hashing
