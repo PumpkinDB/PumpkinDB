@@ -141,23 +141,100 @@ named!(string<Vec<u8>>,  alt!(do_parse!(tag!(b"\"\"") >> (vec![0])) |
                          do_parse!(
                          str: delimited!(char!('"'), is_not!("\""), char!('"')) >>
                               (string_to_vec(str)))));
-named!(code<Vec<u8>>, do_parse!(
-                         prog: delimited!(char!('['), ws!(program), char!(']')) >>
-                               (sized_vec(prog))));
 named!(comment<Vec<u8>>, do_parse!(delimited!(char!('('), is_not!(")"), char!(')')) >> (vec![])));
-named!(item<Vec<u8>>, alt!(comment | binary | string | uint | code | wordref | word));
-named!(program<Vec<u8>>, alt!(do_parse!(
+named!(item<Vec<u8>>, alt!(comment | binary | string | uint | wrap | wordref | word));
+
+fn unwrap_word(mut word: Vec<u8>) -> Vec<u8> {
+    let mut vec = Vec::new();
+    vec.extend_from_slice(b"`");
+    vec.append(&mut word);
+    vec
+}
+
+fn rewrap(prog: Vec<u8>) -> Vec<u8> {
+    let mut program = &prog[..];
+    let mut vec = Vec::new();
+    let mut acc = Vec::new();
+    let mut counter = 0;
+
+    while program.len() > 0 {
+        if let IResult::Done(rest, unwrap) = bin_unwrap(program) {
+            if acc.len() > 0 {
+                vec.append(&mut sized_vec(acc.clone()));
+                acc.clear();
+                counter += 1;
+            }
+            vec.extend_from_slice(&unwrap[1..]);
+            vec.extend_from_slice(b"\x01\x01");
+            vec.append(&mut prefix_word(b"WRAP"));
+
+            counter += 1;
+            program = rest;
+        } else if let IResult::Done(rest, data) = super::binparser::data(program) {
+            acc.extend_from_slice(data);
+            program = rest;
+        } else if let IResult::Done(rest, word) = super::binparser::word(program) {
+            acc.extend_from_slice(word);
+            program = rest;
+        } else {
+            panic!("invalid data {:?}", &program);
+        }
+    }
+    if acc.len() > 0 {
+        counter += 1;
+        vec.append(&mut sized_vec(acc.clone()));
+        acc.clear();
+    }
+    for _ in 0..counter - 1 {
+        vec.append(&mut prefix_word(b"CONCAT"));
+    }
+    if counter == 0 {
+        sized_vec(vec)
+    } else {
+        vec
+    }
+}
+
+use super::binparser::word_tag;
+named!(bin_word<Vec<u8>>, do_parse!(v: length_bytes!(word_tag) >> (Vec::from(v))));
+
+named!(bin_unwrap<Vec<u8>>, do_parse!(
+                              tag!(b"`")                   >>
+                        word: alt!(bin_word | bin_unwrap)  >>
+                              (unwrap_word(word))));
+
+named!(unwrap<Vec<u8>>, do_parse!(
+                              tag!(b"`")                 >>
+                        word: alt!(word | unwrap)        >>
+                              (unwrap_word(word))));
+named!(wrap<Vec<u8>>, do_parse!(
+                         prog: delimited!(char!('['), ws!(wrapped_program), char!(']')) >>
+                               (rewrap(prog))));
+named!(wrapped_item<Vec<u8>>, alt!(item | unwrap));
+named!(wrapped_program<Vec<u8>>, alt!(do_parse!(
                                take_while!(is_multispace)                        >>
-                            v: eof                                          >>
+                            v: eof                                               >>
                                (v))
                               | do_parse!(
                                take_while!(is_multispace)                        >>
-                         item: separated_list!(multispace, item)            >>
+                         item: separated_list!(multispace, wrapped_item)         >>
                                take_while!(is_multispace)                        >>
                                (flatten_program(item)))));
+
+named!(program<Vec<u8>>, alt!(do_parse!(
+                               take_while!(is_multispace)                        >>
+                            v: eof                                               >>
+                               (v))
+                              | do_parse!(
+                               take_while!(is_multispace)                        >>
+                         item: separated_list!(multispace, item)                 >>
+                               take_while!(is_multispace)                        >>
+                               (flatten_program(item)))));
+
 named!(pub programs<Vec<Vec<u8>>>, do_parse!(
-                         item: separated_list!(tag!(b"."), program)  >>
+                         item: separated_list!(tag!(b"."), program)              >>
                                (item)));
+
 
 /// Parses human-readable PumpkinScript
 ///
@@ -174,7 +251,20 @@ named!(pub programs<Vec<Vec<u8>>>, do_parse!(
 /// One additional piece of syntax is code included within square
 /// brackets: `[DUP]`. This means that the parser will take the code inside,
 /// compile it to the binary form and add as a data push. This is useful for
-/// words like EVAL
+/// words like EVAL. Inside of this syntax, you can use so-called "unwrapping"
+/// syntax that can embed a value of a word into this code:
+///
+/// ```norun
+/// PumpkinDB> 1 'a SET [`a] 'b SET 2 'a SET b EVAL
+/// 0x01
+/// ```
+///
+/// It is also possible to unwrap multiple levels:
+///
+/// ```norun
+/// PumpkinDB> "A" 'a SET [[2 ``a DUP] EVAL] 'b SET "B" 'a SET b EVAL
+/// 0x02 "A" "A"
+/// ```
 ///
 /// # Example
 ///
@@ -320,11 +410,17 @@ mod tests {
     }
 
     #[test]
-    fn test_code() {
+    fn test_wrap() {
         let script = parse("[DUP]").unwrap();
         let script_spaced = parse("[ DUP ]").unwrap();
         assert_eq!(script, vec![4, 0x83, b'D', b'U', b'P']);
         assert_eq!(script_spaced, vec![4, 0x83, b'D', b'U', b'P']);
+    }
+
+    #[test]
+    fn test_empty_wrap() {
+        let script = parse("[]").unwrap();
+        assert_eq!(script, vec![0]);
     }
 
     #[test]
@@ -333,6 +429,22 @@ mod tests {
         let (_, mut progs) = programs(str.as_bytes()).unwrap();
         assert_eq!(Vec::from(progs.pop().unwrap()), parse("BURP : DURP").unwrap());
         assert_eq!(Vec::from(progs.pop().unwrap()), parse("SOMETHING : BURP DURP").unwrap());
+    }
+
+
+    #[test]
+    fn unwrapping() {
+        assert_eq!(parse("[`val DUP]").unwrap(), parse("val 1 WRAP [DUP] CONCAT").unwrap());
+        assert_eq!(parse("[`val]").unwrap(), parse("val 1 WRAP").unwrap());
+        assert_eq!(parse("[1 `val DUP]").unwrap(), parse("[1] val 1 WRAP [DUP] CONCAT CONCAT").unwrap());
+        assert_eq!(parse("[1 `val DUP `val]").unwrap(), parse("[1] val 1 WRAP [DUP] val 1 WRAP CONCAT CONCAT CONCAT").unwrap());
+        assert_eq!(parse("[1 `val]").unwrap(), parse("[1] val 1 WRAP CONCAT").unwrap());
+    }
+
+    #[test]
+    fn nested_unwrapping() {
+        assert_eq!(parse("[[``val DUP]]").unwrap(), parse("val 1 WRAP [1 WRAP [DUP] CONCAT] CONCAT").unwrap());
+        assert_eq!(parse("[[2 ``val DUP]]").unwrap(), parse("[[2]] val 1 WRAP [1 WRAP [DUP] CONCAT CONCAT] CONCAT CONCAT").unwrap());
     }
 
 }

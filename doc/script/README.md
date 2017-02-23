@@ -33,10 +33,24 @@ with binaries represented as:
 
 The rest of the instructions considered to be words.
 
+Example: `"Hello" 0x20 "world" CONCAT CONCAT`
+
 One additional piece of syntax is code included within square
 brackets: `[DUP]`. This means that the parser will take the code inside,
 compile it to the binary form and add as a data push. This is useful for
-words like [EVAL](EVAL.md).
+words like [EVAL](EVAL.md). Inside of this syntax, you can use so-called "unwrapping"
+syntax (\`word) that can embed a value of a word into this code:
 
-Example: `"Hello" 0x20 "world" CONCAT CONCAT`
+```test
+unwrapping : 1 'a SET [`a] 'b SET 2 'a SET b EVAL 0x01 EQUAL?.
+```
+
+It is also possible to unwrap multiple levels:
+
+```test
+unwrapping_multiple : 1 'a SET [[``a] EVAL] 'b SET 2 'a SET b EVAL 0x01 EQUAL?.
+```
+
+(this verifies that the closure we save in `b` remains at 1
+while we re-set `a` to 2)
 
