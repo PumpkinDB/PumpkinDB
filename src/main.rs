@@ -10,6 +10,10 @@
 
 include!("crates.rs");
 
+extern crate log4rs;
+#[macro_use]
+extern crate log;
+
 pub mod script;
 pub mod server;
 pub mod timestamp;
@@ -48,10 +52,10 @@ lazy_static! {
                 let statp: *mut statvfs = heap::allocate(size_of::<statvfs>(), size_of::<usize>()) as *mut statvfs;
                 let mut stat = *statp;
                 if statvfs(absolute_path_c.as_ptr(), &mut stat) != 0 {
-                   println!("Can't determine available disk space");
+                   warn!("Can't determine available disk space");
                 } else {
                    let size = (stat.f_frsize * stat.f_bavail as u64) as usize;
-                   println!("Available disk space is approx. {}Gb, setting database map size to it", size / (1024*1024*1024));
+                   info!("Available disk space is approx. {}Gb, setting database map size to it", size / (1024*1024*1024));
                    env_builder.set_mapsize(size).expect("can't set map size");
                 }
                 heap::deallocate(statp as *mut u8, size_of::<statvfs>(), size_of::<usize>());
@@ -81,6 +85,31 @@ fn main() {
     let _ = config::merge(config::File::new("pumpkindb.toml", config::FileFormat::Toml));
 
     let _ = config::set_default("server.port", 9981);
+
+    // Initialize logging
+    let log_config = config::get_str("logging.config");
+    let mut log_configured = false;
+    if log_config.is_some() {
+        let log_file_path = log_config.unwrap().into_owned();
+        if fs::metadata(&log_file_path).is_ok() {
+            log4rs::init_file(&log_file_path, Default::default()).unwrap();
+            log_configured = true;
+        } else {
+            println!("{} not found", &log_file_path);
+        }
+    }
+
+    if !log_configured {
+        let appender = log4rs::config::Appender::builder()
+            .build("console",
+                   Box::new(log4rs::append::console::ConsoleAppender::builder().build()));
+        let root = log4rs::config::Root::builder().appender("console").build(log::LogLevelFilter::Info);
+        let _ = log4rs::init_config(log4rs::config::Config::builder().appender(appender).build(root).unwrap());
+        warn!("No logging configuration specified, switching to console logging");
+    }
+    //
+
+    info!("Starting up");
 
     let mut vm = script::VM::new(&ENV, &DB, PUBLISHER.lock().unwrap().clone());
     let sender = vm.sender();

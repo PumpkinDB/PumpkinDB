@@ -20,7 +20,7 @@ pub fn run(port: i64, sender: script::Sender<script::RequestMessage<'static>>,
                         publisher: pubsub::PublisherAccessor<Vec<u8>>) {
     let addr = format!("0.0.0.0:{}", port).parse().unwrap();
 
-    println!("Listening on {}", addr);
+    info!("Listening on {}", addr);
 
     let sock = TcpListener::bind(&addr).expect("Failed to bind address");
 
