@@ -32,7 +32,10 @@ fn hex_digit(v: u8) -> u8 {
 macro_rules! write_size {
     ($vec : expr, $size : expr) => {
       match $size {
-        0...255 => {
+        0...99 => {
+            $vec.push(($size + 11) as u8);
+        }
+        100...255 => {
             $vec.push(111u8);
             $vec.push($size as u8);
         }
@@ -136,7 +139,7 @@ named!(binary<Vec<u8>>, do_parse!(
                          hex: take_while1!(is_hex_digit)  >>
                               (bin(hex))
 ));
-named!(string<Vec<u8>>,  alt!(do_parse!(tag!(b"\"\"") >> (vec![111, 0])) |
+named!(string<Vec<u8>>,  alt!(do_parse!(tag!(b"\"\"") >> (vec![11])) |
                          do_parse!(
                          str: delimited!(char!('"'), is_not!("\""), char!('"')) >>
                               (string_to_vec(str)))));
@@ -164,7 +167,7 @@ fn rewrap(prog: Vec<u8>) -> Vec<u8> {
                 counter += 1;
             }
             vec.extend_from_slice(&unwrap[1..]);
-            vec.extend_from_slice(b"\x6F\x01\x01");
+            vec.extend_from_slice(b"\x0C\x01");
             vec.append(&mut prefix_word(b"WRAP"));
 
             counter += 1;
@@ -323,13 +326,13 @@ mod tests {
     #[test]
     fn test_wordref() {
         let script = parse("'HELLO").unwrap();
-        assert_eq!(script, vec![0x6F, 0x06, 0x85, b'H', b'E', b'L', b'L', b'O']);
+        assert_eq!(script, vec![17, 0x85, b'H', b'E', b'L', b'L', b'O']);
     }
 
     #[test]
     fn test_one() {
         let script = parse("0xAABB").unwrap();
-        assert_eq!(script, vec![111, 2, 0xaa,0xbb]);
+        assert_eq!(script, vec![13, 0xaa,0xbb]);
         let script = parse("HELLO").unwrap();
         assert_eq!(script, vec![0x85, b'H', b'E', b'L', b'L', b'O']);
     }
@@ -339,8 +342,7 @@ mod tests {
         let script = parse("1234567890").unwrap();
         let mut bytes = BigUint::from_str("1234567890").unwrap().to_bytes_be();
         let mut sized = Vec::new();
-        sized.push(111);
-        sized.push(4);
+        sized.push(15);
         sized.append(&mut bytes);
         assert_eq!(script, sized);
     }
@@ -352,18 +354,15 @@ mod tests {
         let mut vec = Vec::new();
 
         let mut bytes = BigUint::from_str("1").unwrap().to_bytes_be();
-        vec.push(111);
-        vec.push(1);
+        vec.push(12);
         vec.append(&mut bytes);
 
         let mut bytes = BigUint::from_str("2").unwrap().to_bytes_be();
-        vec.push(111);
-        vec.push(1);
+        vec.push(12);
         vec.append(&mut bytes);
 
         let mut bytes = BigUint::from_str("3").unwrap().to_bytes_be();
-        vec.push(111);
-        vec.push(1);
+        vec.push(12);
         vec.append(&mut bytes);
 
         assert_eq!(script, vec);
@@ -391,15 +390,15 @@ mod tests {
     #[test]
     fn test_extra_spaces() {
         let script = parse(" 0xAABB  \"Hi\" ").unwrap();
-        assert_eq!(script, vec![111, 2, 0xaa,0xbb, 111, 2, b'H', b'i']);
+        assert_eq!(script, vec![13, 0xaa,0xbb, 13, b'H', b'i']);
     }
 
     #[test]
     fn test() {
         let script = parse("0xAABB DUP 0xFF00CC \"Hello\"").unwrap();
 
-        assert_eq!(script, vec![111, 0x02, 0xAA, 0xBB, 0x83, b'D', b'U', b'P',
-                                111, 0x03, 0xFF, 0x00, 0xCC, 111, 0x05, b'H', b'e', b'l', b'l', b'o']);
+        assert_eq!(script, vec![13, 0xAA, 0xBB, 0x83, b'D', b'U', b'P',
+                                14, 0xFF, 0x00, 0xCC, 16, b'H', b'e', b'l', b'l', b'o']);
     }
 
 
@@ -407,21 +406,21 @@ mod tests {
     fn test_empty_string() {
         let script = parse("\"\"").unwrap();
 
-        assert_eq!(script, vec![111, 0]);
+        assert_eq!(script, vec![11]);
     }
 
     #[test]
     fn test_wrap() {
         let script = parse("[DUP]").unwrap();
         let script_spaced = parse("[ DUP ]").unwrap();
-        assert_eq!(script, vec![111, 4, 0x83, b'D', b'U', b'P']);
-        assert_eq!(script_spaced, vec![111, 4, 0x83, b'D', b'U', b'P']);
+        assert_eq!(script, vec![15, 0x83, b'D', b'U', b'P']);
+        assert_eq!(script_spaced, vec![15, 0x83, b'D', b'U', b'P']);
     }
 
     #[test]
     fn test_empty_wrap() {
         let script = parse("[]").unwrap();
-        assert_eq!(script, vec![111, 0]);
+        assert_eq!(script, vec![11]);
     }
 
     #[test]

@@ -26,6 +26,12 @@ named!(n_internal_word_length<usize>,
         length: be_u8 >>
         ((length - 128 + 2) as usize))));
 
+named!(micro_length<usize>,
+    peek!(do_parse!(
+        tag: peek!(take!(1)) >>
+        l: cond_reduce!((tag[0] > 10) && (tag[0] < 111), take!(1)) >>
+        ((l[0] - 10) as usize))));
+
 named!(n_small_length<usize>,
     peek!(do_parse!(
         tag!(&[111u8][..]) >>
@@ -45,7 +51,8 @@ named!(n_large_length<usize>,
         ((length + 5) as usize))));
 
 named!(word_size<usize>, alt!(n_word_length | n_internal_word_length));
-named!(pub data_size<usize>, alt!(n_small_length | n_medium_length | n_large_length | mint_length));
+named!(pub data_size<usize>, alt!(n_small_length | n_medium_length | n_large_length | mint_length |
+                                  micro_length));
 named!(pub data, alt!(length_bytes!(data_size)));
 named!(pub word_or_internal_word, length_bytes!(word_size));
 named!(pub word, length_bytes!(n_word_length));
@@ -90,6 +97,16 @@ mod tests {
         // should not be able to parse "internal words"
         let ok: &[u8] = &[];
         assert_eq!(parse(vec![0x80, 0x81, b'A'].as_slice()).unwrap(), ok);
+    }
+
+    #[test]
+    fn test_micro() {
+        let mut byte_sized_sequence: String = "0x".to_owned();
+        for _ in 1..99 {
+            byte_sized_sequence.push_str("AA");
+        }
+        let v = parse_text(byte_sized_sequence.as_ref()).unwrap();
+        assert_eq!(parse(v.as_slice()).unwrap(), parse_text(byte_sized_sequence.as_ref()).unwrap());
     }
 
     #[test]

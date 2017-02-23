@@ -7,7 +7,11 @@
 macro_rules! write_size_into_slice {
     ($size:expr, $slice: expr) => {
      match $size {
-        0...255 => {
+        0...99 => {
+            $slice[0] = ($size + 11) as u8;
+            0
+        }
+        100...255 => {
             $slice[0] = 111u8;
             $slice[1] = $size as u8;
             2

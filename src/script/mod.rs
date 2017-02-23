@@ -376,8 +376,8 @@ use nom;
 #[inline]
 pub fn offset_by_size(size: usize) -> usize {
     match size {
-        //0...255 => 1,
-        0...255 => 2,
+        0...99 => 1,
+        100...255 => 2,
         255...65535 => 3,
         65536...4294967296 => 5,
         _ => unreachable!(),
@@ -480,14 +480,14 @@ type PassResult<'a> = Result<(), Error>;
 const STACK_TRUE: &'static [u8] = b"\x01";
 const STACK_FALSE: &'static [u8] = b"\x00";
 
-const ERROR_UNKNOWN_WORD: &'static [u8] = b"\x6F\x01\x02";
-const ERROR_INVALID_VALUE: &'static [u8] = b"\x6F\x01\x03";
-const ERROR_EMPTY_STACK: &'static [u8] = b"\x6F\x01\x04";
-const ERROR_DECODING: &'static [u8] = b"\x6F\x01\x05";
-const ERROR_DUPLICATE_KEY: &'static [u8] = b"\x6F\x01\x06";
-const ERROR_UNKNOWN_KEY: &'static [u8] = b"\x6F\x01\x07";
-const ERROR_NO_TX: &'static [u8] = b"\x6F\x01\x08";
-const ERROR_DATABASE: &'static [u8] = b"\x6F\x01\x09";
+const ERROR_UNKNOWN_WORD: &'static [u8] = b"\x0C\x02";
+const ERROR_INVALID_VALUE: &'static [u8] = b"\x0C\x03";
+const ERROR_EMPTY_STACK: &'static [u8] = b"\x0C\x04";
+const ERROR_DECODING: &'static [u8] = b"\x0C\x05";
+const ERROR_DUPLICATE_KEY: &'static [u8] = b"\x0C\x06";
+const ERROR_UNKNOWN_KEY: &'static [u8] = b"\x0C\x07";
+const ERROR_NO_TX: &'static [u8] = b"\x0C\x08";
+const ERROR_DATABASE: &'static [u8] = b"\x0C\x09";
 
 impl<'a> VM<'a> {
     /// Creates an instance of VM with three communication channels:
@@ -1361,7 +1361,7 @@ mod tests {
 
     #[test]
     fn error_macro() {
-        if let Error::ProgramError(err) = error_program!("Test".as_bytes(), "123".as_bytes(), b"\x6F\x01\x33") {
+        if let Error::ProgramError(err) = error_program!("Test".as_bytes(), "123".as_bytes(), b"\x0C\x33") {
             assert_eq!(err, parsed_data!("[\"Test\" [\"123\"] 0x33]"));
         } else {
             assert!(false);
