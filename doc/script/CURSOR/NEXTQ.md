@@ -1,5 +1,7 @@
 # CURSOR/NEXT?
 
+{% method -%}
+
 Sets the cursor at the next key value
 
 Input stack: `cursor`
@@ -11,6 +13,15 @@ Otherwise, `0` will be pushed and the cursor will be moved.
 
 Useful in conjunction with [CURSOR/CUR](../QCURSOR/CUR.md)
 
+{% common -%}
+
+```
+PumpkinDB> ["1" "2" ASSOC "2" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c ?CURSOR/FIRST DROP c CURSOR/NEXT?] READ
+1
+```
+
+{% endmethod %}
+
 ## Allocation
 
 Allocates for values to be put onto the stack
@@ -20,12 +31,6 @@ Allocates for values to be put onto the stack
 NoTransaction error if there's no current write transaction
 
 InvalidValue error if the cursor identifier is incorrect or expired
-
-## Examples
-
-```
-["1" "2" ASSOC "2" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c ?CURSOR/FIRST DROP c CURSOR/NEXT?] READ  => 1
-```
 
 ## Tests
 

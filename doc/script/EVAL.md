@@ -1,11 +1,22 @@
 # EVAL
 
+{% method -%}
+
 Takes the topmost item and evaluates it as a PumpkinScript
 program on the current stack
 
 Input stack: `code`
 
 Output stack: result of `code` evaluation
+
+{% common -%}
+
+```
+PumpkinDB> 10 [DUP] EVAL
+10 10
+```
+
+{% endmethod %}
 
 ## Allocation
 
@@ -14,15 +25,9 @@ during the runtime.
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if there is less than one item on the stack
+[EmptyStack](./errors/EmptyStack.md) error if there is less than one item on the stack
 
-[Decoding error](./ERRORS/DECODING.md) error if the code is undecodable.
-
-## Examples
-
-```
-10 [DUP] EVAL => 10 10
-```
+[Decoding error](./errors/DECODING.md) error if the code is undecodable.
 
 ## Tests
 

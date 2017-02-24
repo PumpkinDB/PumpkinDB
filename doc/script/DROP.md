@@ -1,10 +1,20 @@
 # DROP
 
+{% method -%}
+
 Drops an item off the top of the stack
 
 Input stack: `a`
 
-Output stack: 
+Output stack:
+
+{% common -%}
+
+```
+PumpkinDB> 0x10 DROP
+```
+
+{% endmethod %}
 
 ## Allocation
 
@@ -12,13 +22,7 @@ None
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if nothing is available on the stack
-
-## Examples
-
-```
-0x10 DROP =>
-```
+[EmptyStack](./errors/EmptyStack.md) error if nothing is available on the stack
 
 ## Tests
 

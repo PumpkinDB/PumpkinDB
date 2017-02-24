@@ -1,10 +1,21 @@
 # SWAP
 
+{% method -%}
+
 Swaps the order of the two topmost items on the stack
 
 Input stack: `a b`
 
 Output stack: `b a`
+
+{% common -%}
+
+```
+PumpkinScript> 0x10 0x20 SWAP
+0x20 0x10
+```
+
+{% endmethod %}
 
 ## Allocation
 
@@ -12,13 +23,7 @@ None
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than two items on the stack
-
-## Examples
-
-```
-0x10 0x20 SWAP => 0x20 0x10
-```
+[EmptyStack](./errors/EmptyStack.md) error if there are less than two items on the stack
 
 ## Tests
 

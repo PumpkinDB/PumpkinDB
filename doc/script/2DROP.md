@@ -1,10 +1,24 @@
 # 2DROP
 
+{% method -%}
+
 Drops two topmost items off the top of the stack
 
 Input stack: `a b`
 
-Output stack: 
+Output stack: -
+
+{% common -%}
+
+In this example, two items (`1` and `2`) are dropped from the stack,
+leaving the third element on the top of the stack.
+
+```
+PumpkinDB> 0 1 2 2DROP
+0
+```
+
+{% endmethod %}
 
 ## Allocation
 
@@ -12,13 +26,7 @@ None
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than two items available on the stack
-
-## Examples
-
-```
-0x10 0x20 2DROP =>
-```
+[EmptyStack](./errors/EmptyStack.md) error if there are less than two items available on the stack
 
 ## Tests
 

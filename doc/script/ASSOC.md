@@ -1,5 +1,7 @@
 # ASSOC
 
+{% method -%}
+
 Takes the topmost item from the stack as a value and second
 topmost item as a key and associates them in the database
 
@@ -11,6 +13,17 @@ This is the primary way of insert data into the database.
 Only valid within [WRITE's](WRITE.md) scope. Can only be used
 to insert new keys.
 
+{% common -%}
+
+This associates key `hi` and value `there` in the database
+and commits the changes:
+
+```
+PumpkinDB> ["hi" "there" ASSOC COMMIT] WRITE
+```
+
+{% endmethod %}
+
 ## Allocation
 
 None
@@ -20,12 +33,6 @@ None
 EmptyStack error if there are less than two items on the stack
 
 NoTransaction error if there's no current write transaction
-
-## Examples
-
-```
-["hi" "there" ASSOC COMMIT] WRITE
-```
 
 ## Tests
 

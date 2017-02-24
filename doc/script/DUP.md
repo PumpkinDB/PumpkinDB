@@ -1,10 +1,21 @@
 # DUP
 
+{% method -%}
+
 Duplicates an item at the top of the stack
 
 Input stack: `a`
 
 Output stack: `a a`
+
+{% common -%}
+
+```
+PumpkinDB> 0x10 DUP
+0x10 0x10
+```
+
+{% endmethod %}
 
 ## Allocation
 
@@ -12,13 +23,7 @@ None
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if nothing is available on the stack
-
-## Examples
-
-```
-0x10 DUP => 0x10 0x10 
-```
+[EmptyStack](./errors/EmptyStack.md) error if nothing is available on the stack
 
 ## Tests
 

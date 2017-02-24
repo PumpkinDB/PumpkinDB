@@ -1,5 +1,7 @@
 # EVAL/VALID?
 
+{% method -%}
+
 Assesses validity of the code from the perspective of decoding
 
 Input stack: `code`
@@ -14,6 +16,19 @@ Generally speaking, this word is only reserved for
 some special cases as `EVAL` will fail upon trying to
 evaluate incorrect code anyway.
 
+{% common -%}
+
+```
+PumpkinDB> 1 EVAL/VALID?
+0x00
+PumpkinDB> 'DUP EVAL/VALID?
+0x01
+PumpkinDB> [1 DUP] EVAL/VALID?
+0x01
+```
+
+{% endmethod %}
+
 ## Allocation
 
 Allocates for parsing the binary representation of the program.
@@ -23,18 +38,10 @@ Allocates for parsing the binary representation of the program.
 [EmptyStack](./ERRORS/EmptyStack.md) error if there is less than
 one item on the stack
 
-## Examples
-
-```
-1 EVAL/VALID? => 0x00
-'DUP EVAL/VALID? => 0x01
-[1 DUP] EVAL/VALID? => 0x01
-```
-
 ## Tests
 
 ```test
 positive : [1] EVAL/VALID?.
 negative : 1 EVAL/VALID? NOT.
-empty_stack : [EVAL/VALID?] TRY UNWRAP 0x04 EQUAL?. 
+empty_stack : [EVAL/VALID?] TRY UNWRAP 0x04 EQUAL?.
 ```

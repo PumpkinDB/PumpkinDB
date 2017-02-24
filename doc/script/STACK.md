@@ -1,5 +1,7 @@
 # STACK
 
+{% method -%}
+
 Takes the entire stack and pushes it back as a byte array
 
 Input stack: `...`
@@ -10,6 +12,17 @@ Output stack: `a`
 form PumpkinScript onto the stack. If passed to [UNWRAP](UNWRAP.md),
 the same stack will be restored.
 
+{% common -%}
+
+```
+PumpkinDB> 1 2 3 STACK
+0x111213
+PumpkinDB> 1 2 3 STACK UNWRAP
+0x1 0x2 0x3
+```
+
+{% endmethod %}
+
 ## Allocation
 
 Allocates for the new values
@@ -17,13 +30,6 @@ Allocates for the new values
 ## Errors
 
 None
-
-## Examples
-
-```
-1 2 3 STACK => 0x111213
-1 2 3 STACK UNWRAP => 0x1 0x2 0x3
-```
 
 ## Tests
 

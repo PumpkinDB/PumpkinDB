@@ -1,5 +1,7 @@
 # UNWRAP
 
+{% method -%}
+
 Takes the topmost item and evaluates it as a PumpkinScript
 values-only program on the current stack
 
@@ -14,22 +16,24 @@ putting all the data on the stack)
 It's particularly useful in conjunction with [NONE?](NONEQ.md) and
 [SOME?](SOMEQ.md).
 
+{% common -%}
+
+```
+PumpkinDB> [1 2 3] UNWRAP
+1 2 3
+```
+
+{% endmethod %}
+
 ## Allocation
 
 Runtime allocation during parsing
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if there is less than one item on the stack
+[EmptyStack](./errors/EmptyStack.md) error if there is less than one item on the stack
 
-[InvalidValue](./ERRORS/InvalidValue.md) error if there are words in the item
-
-
-## Examples
-
-```
-[1 2 3] UNWRAP => 1 2 3
-```
+[InvalidValue](./errors/InvalidValue.md) error if there are words in the item
 
 ## Tests
 

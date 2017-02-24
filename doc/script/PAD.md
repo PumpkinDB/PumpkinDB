@@ -1,5 +1,7 @@
 # PAD
 
+{% method -%}
+
 Pads a binary with a number of bytes on left.
 
 Input stack: `a size byte`
@@ -10,23 +12,26 @@ Output stack: `b`
 bytes. This is an extremely important tool in building comparable collections over variable-length
 values (such as bigintegers, for example)
 
+{% common -%}
+
+```
+PumpkinDB> 0x01 4 0 PAD
+0x00000001
+```
+
+{% endmethod %}
+
 ## Allocation
 
 Allocates for a result of padding
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than three items on the stack
+[EmptyStack](./errors/EmptyStack.md) error if there are less than three items on the stack
 
-[InvalidValue](./ERRORS/InvalidValue.md) error if `byte` is larger or smaller than one byte
+[InvalidValue](./errors/InvalidValue.md) error if `byte` is larger or smaller than one byte
 
-[InvalidValue](./ERRORS/InvalidValue.md) error if `size` is larger than 1024.
-
-## Examples
-
-```
-0x01 4 0 PAD => 0x00000001
-```
+[InvalidValue](./errors/InvalidValue.md) error if `size` is larger than 1024.
 
 ## Tests
 

@@ -1,10 +1,9 @@
 # ASSOC?
 
+{% method -%}
+
 Takes the topmost item from the stack and pushes `1` to the stack
 if the key is present, `0` if it is not.
-
-Takes the topmost item from the stack as a value and second
-topmost item as a key and associates them in the database
 
 Input stack: `key`
 
@@ -13,21 +12,30 @@ Output stack: `0` or `1`
 This is the primary way of testing presence of a key in the database.
 Only valid within [WRITE's](WRITE.md) or [READ's](READ.md) scopes.
 
+{% common -%}
+
+This example demonstrates testing of the key presence both within
+READ and WRITE transaction scopes:
+
+```
+PumpkinDB> ["hi" "there" ASSOC "hi" ASSOC? COMMIT] WRITE ["hello" ASSOC?] READ
+0x01 0x00
+```
+
+Because `hello` key was not associated (only `hi` was), the second boolean value
+is `0x00` (false).
+
+{% endmethod %}
+
 ## Allocation
 
 None
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than two items on the stack
+[EmptyStack](./errors/EmptyStack.md) error if there are less than two items on the stack
 
-[NoTransaction](./ERRORS/NoTransaction.md) error if there's no current read or write transaction
-
-## Examples
-
-```
-["hi" "there" ASSOC COMMIT] WRITE
-```
+[NoTransaction](./errors/NoTransaction.md) error if there's no current read or write transaction
 
 ## Tests
 

@@ -1,5 +1,7 @@
 # TIMES
 
+{% method -%}
+
 Takes the topmost item and evaluates it as a PumpkinScript
 program on the current stack `n` TIMES
 
@@ -7,21 +9,24 @@ Input stack: `code n`
 
 Output stack: result of `code` evaluation done `n` times
 
+{% common -%}
+
+```
+PumpkinDB> [HLC] 3 TIMES
+0x000014A2D295195171C80000 0x000014A2D295195211F00000 0x000014A2D29519526BC80000
+```
+
+{% endmethod %}
+
 ## Allocation
 
 Allocates for recursion during runtime.
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if there is less than two items on the stack
+[EmptyStack](./errors/EmptyStack.md) error if there is less than two items on the stack
 
-[Decoding error](./ERRORS/DECODING.md) error if the code is undecodable.
-
-## Examples
-
-```
-[HLC] 3 TIMES => 0x000014A2D295195171C80000 0x000014A2D295195211F00000 0x000014A2D29519526BC80000
-```
+[Decoding error](./errors/DECODING.md) error if the code is undecodable.
 
 ## Tests
 

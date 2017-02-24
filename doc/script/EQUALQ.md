@@ -1,5 +1,7 @@
 # EQUAL?
 
+{% method -%}
+
 Compares two topmost items for equality.
 
 Input stack: `a b`
@@ -8,19 +10,22 @@ Output stack: `c`
 
 `EQUAL?` will push `1` if they are equal, `0` otherwise.
 
+{% common -%}
+
+```
+PumpkinDB> "Hello, " "world!" EQUAL?
+0
+```
+
+{% endmethod %}
+
 ## Allocation
 
 None
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than two items on the stack
-
-## Examples
-
-```
-"Hello, " "world!" EQUAL? => 0
-```
+[EmptyStack](./errors/EmptyStack.md) error if there are less than two items on the stack
 
 ## Tests
 

@@ -1,5 +1,7 @@
 # TRY
 
+{% method -%}
+
 Takes the topmost item and safely evaluates it as a PumpkinScript
 program on the current stack
 
@@ -11,6 +13,17 @@ the closure but will not fail the program if there was an error.
 Instead, it will push an error closure onto the stack. If no error
 occurred, `[]` (an empty closure) will be pushed onto the stack.
 
+{% common -%}
+
+```
+PumpkinDB> [DUP] TRY SOME?
+0x1
+PumpkinDB> [1 DUP] TRY SOME?
+0x1 0x1 0x0
+```
+
+{% endmethod %}
+
 ## Allocation
 
 Allocates a copy of the code (this might change in the future)
@@ -19,16 +32,9 @@ from an error that occurred.
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if there is less than one item on the stack
+[EmptyStack](./errors/EmptyStack.md) error if there is less than one item on the stack
 
-[Decoding error](./ERRORS/DECODING.md) error if the code is undecodable.
-
-## Examples
-
-```
-[DUP] TRY SOME? => 0x1
-[1 DUP] TRY SOME? => 0x1 0x1 0x0
-```
+[Decoding error](./errors/DECODING.md) error if the code is undecodable.
 
 ## Tests
 

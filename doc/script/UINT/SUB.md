@@ -1,12 +1,23 @@
 SUB
 ===
 
+{% method -%}
+
 Subtracts one unsigned integer from another
 
 Input stack: `a` `b`
 Output stack: `c`
 
 `SUB` will subtract of `b` from `a` and push it to the top of the stack.
+
+{% common -%}
+
+```
+PumpkinDB> 2 1 UINT/SUB
+1
+```
+
+{% endmethod %}
 
 ## Allocation
 
@@ -15,15 +26,9 @@ for the result.
 
 ## Errors
 
-[EmptyStack](../ERRORS/EmptyStack.md) error if there are less than two items on the stack
+[EmptyStack](../errors/EmptyStack.md) error if there are less than two items on the stack
 
-[InvalidValue](../ERRORS/InvalidValue.md) error if `a` is less than `b`
-
-## Examples
-
-```
-2 1 UINT/SUB => 1
-```
+[InvalidValue](../errors/InvalidValue.md) error if `a` is less than `b`
 
 ## Tests
 
