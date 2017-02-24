@@ -37,7 +37,7 @@ pub struct Connection {
 
     // track whether a read received `WouldBlock` and store the number of
     // byte we are supposed to read
-    read_continuation: Option<u64>,
+    read_continuation: Option<u32>,
 
     // track whether a write received `WouldBlock`
     write_continuation: bool,
@@ -106,7 +106,7 @@ impl Connection {
                 }
                 Err(e) => {
                     if e.kind() == ErrorKind::WouldBlock {
-                        self.read_continuation = Some(msg_len as u64);
+                        self.read_continuation = Some(msg_len as u32);
                         return Ok(None);
                     } else {
                         return Err(e);
@@ -117,12 +117,12 @@ impl Connection {
         Ok(Some(recv_buf.to_vec()))
     }
 
-    fn read_message_length(&mut self) -> io::Result<Option<u64>> {
+    fn read_message_length(&mut self) -> io::Result<Option<u32>> {
         if let Some(n) = self.read_continuation {
             return Ok(Some(n));
         }
 
-        let mut buf = [0u8; 8];
+        let mut buf = [0u8; 4];
 
         let bytes = match self.sock.read(&mut buf) {
             Ok(n) => n,
@@ -135,11 +135,11 @@ impl Connection {
             }
         };
 
-        if bytes < 8 {
+        if bytes < 4 {
             return Err(Error::new(ErrorKind::InvalidData, "Invalid message length"));
         }
 
-        let msg_len = BigEndian::read_u64(buf.as_ref());
+        let msg_len = BigEndian::read_u32(buf.as_ref());
 
         Ok(Some(msg_len))
     }
@@ -192,8 +192,8 @@ impl Connection {
         }
 
         let len = buf.len();
-        let mut send_buf = [0u8; 8];
-        BigEndian::write_u64(&mut send_buf, len as u64);
+        let mut send_buf = [0u8; 4];
+        BigEndian::write_u32(&mut send_buf, len as u32);
 
         match self.sock.write(&send_buf) {
             Ok(_) => {
