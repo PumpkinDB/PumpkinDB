@@ -28,3 +28,4 @@ CURSOR/DOWHILE-PREFIXED : ['closure SET
                             CURSOR 'c SET
                             c prefix CURSOR/SEEK?
                             [`c `closure1 'CURSOR/NEXT? ?CURSOR/DOWHILE] IF] EVAL/SCOPED.
+JSON/EMPTY : "{}" .
