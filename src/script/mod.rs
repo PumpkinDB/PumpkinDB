@@ -1398,6 +1398,8 @@ impl<'a> VM<'a> {
 
 }
 
+pub mod compose;
+
 #[cfg(test)]
 #[allow(unused_variables, unused_must_use, unused_mut)]
 mod tests {

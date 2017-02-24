@@ -13,6 +13,8 @@ extern crate ansi_term;
 extern crate uuid;
 
 use pumpkindb::script;
+use pumpkindb::script::compose::*;
+use pumpkindb::script::compose::Item::*;
 
 extern crate byteorder;
 
@@ -41,25 +43,28 @@ fn main() {
     let mut stream = TcpStream::connect("0.0.0.0:9981").unwrap();
 
     let mut rl = Editor::<()>::new();
-
     let mut r = Vec::new();
 
     loop {
         match rl.readline(format!("{}", config::get_str("prompt").unwrap()).as_str()) {
             Ok(text) => {
                 rl.add_history_entry(&text);
-                let uuid = Uuid::new_v4();
-                match script::parse(format!("[{}] TRY \"{}\" 'topic SET topic SUBSCRIBE STACK topic SEND topic UNSUBSCRIBE",
-                                            text, uuid.hyphenated().to_string()).as_str()) {
+                match script::parse(text.as_str()) {
                     Ok(compiled) => {
-                        let msg = compiled;
+                        let uuid = Uuid::new_v4();
+                        let msg : Vec<u8> = Program(vec![
+                            Data(&compiled), Word("TRY"),
+                            Data(uuid.as_bytes()), WordRef("topic"), Word("SET"),
+                            Word("topic"),
+                            Word("SUBSCRIBE"), Word("STACK"), Word("topic"), Word("SEND"),
+                            Word("topic"), Word("UNSUBSCRIBE")
+                        ]).into();
                         let mut buf = [0u8; 4];
 
                         BigEndian::write_u32(&mut buf, msg.len() as u32);
                         stream.write_all(buf.as_ref()).unwrap();
                         stream.write_all(msg.as_ref()).unwrap();
 
-                        let mut buf = [0u8; 4];
                         stream.read(&mut buf).unwrap();
 
                         let msg_len = BigEndian::read_u32(&mut buf);
