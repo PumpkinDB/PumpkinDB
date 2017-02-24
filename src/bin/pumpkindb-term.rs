@@ -53,22 +53,22 @@ fn main() {
                                             text, uuid.hyphenated().to_string()).as_str()) {
                     Ok(compiled) => {
                         let msg = compiled;
-                        let mut buf = [0u8; 8];
+                        let mut buf = [0u8; 4];
 
-                        BigEndian::write_u64(&mut buf, msg.len() as u64);
+                        BigEndian::write_u32(&mut buf, msg.len() as u32);
                         stream.write_all(buf.as_ref()).unwrap();
                         stream.write_all(msg.as_ref()).unwrap();
 
-                        let mut buf = [0u8; 8];
+                        let mut buf = [0u8; 4];
                         stream.read(&mut buf).unwrap();
 
-                        let msg_len = BigEndian::read_u64(&mut buf);
+                        let msg_len = BigEndian::read_u32(&mut buf);
 
                         let s_ref = <TcpStream as Read>::by_ref(&mut stream);
 
                         r.clear();
 
-                        match s_ref.take(msg_len).read_to_end(&mut r) {
+                        match s_ref.take(msg_len as u64).read_to_end(&mut r) {
                             Ok(0) => {
                             },
                             Ok(_) => {
