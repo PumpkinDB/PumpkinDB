@@ -1,5 +1,7 @@
 # CONCAT
 
+{% method -%}
+
 Takes two topmost items and concatenates them, pushes the
 result to the top of the stack
 
@@ -7,19 +9,20 @@ Input stack: `a b`
 
 Output stack: `ab`
 
+{% common -%}
+
+```
+PumpkinDB> "Hello, " "world!" CONCAT
+"Hello, world!"
+```
+
+{% endmethod %}
+
 ## Allocation
 
 Allocates for a result of concatenation
 
-## Errors
-
-[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than two items on the stack
-
-## Examples
-
-```
-"Hello, " "world!" => "Hello, world!"
-```
+[EmptyStack](./errors/EmptyStack.md) error if there are less than two items on the stack
 
 ## Tests
 

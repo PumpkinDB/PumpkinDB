@@ -1,5 +1,7 @@
 # NONE?
 
+{% method -%}
+
 Tests if the topmost stack item's length is equal to zero.
 
 Input stack: `a`
@@ -11,20 +13,24 @@ Output stack: `c`
 It has a "sister" word of [SOME?](SOMEQ.md). Together they allow to
 express a concept of an optional value.
 
+{% common -%}
+
+```
+PumpkinDB> [] NONE?
+1
+PumpkinDB> [1] NONE?
+0
+```
+
+{% endmethod %}
+
 ## Allocation
 
 None
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if there is less than one items on the stack
-
-## Examples
-
-```
-[] NONE? => 1
-[1] NONE? => 0
-```
+[EmptyStack](./errors/EmptyStack.md) error if there is less than one items on the stack
 
 ## Tests
 

@@ -1,10 +1,21 @@
 # 2TUCK
 
+{% method -%}
+
 Copy the top pair of items below the second pair of items.
 
 Input stack: `a b c d`
 
 Output stack: `c d a b c d`
+
+{% common -%}
+
+```
+PumpkinDB> 1 2 3 4 2TUCK
+3 4 1 2 3 4
+```
+
+{% endmethod %}
 
 ## Allocation
 
@@ -12,13 +23,7 @@ None
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than four items on the stack
-
-## Examples
-
-```
-1 2 3 4 2TUCK => 3 4 1 2 3 4
-```
+[EmptyStack](./errors/EmptyStack.md) error if there are less than four items on the stack
 
 ## Tests
 

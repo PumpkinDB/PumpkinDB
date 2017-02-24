@@ -1,4 +1,6 @@
-# ROT
+# -ROT
+
+{% method -%}
 
 Moves first item on the top to the third position
 
@@ -6,19 +8,22 @@ Input stack: `a b c`
 
 Output stack: `c a b`
 
+{% common -%}
+
+```
+PumpkinDB> 0x10 0x20 0x30 -ROT
+0x30 0x10 0x20
+```
+
+{% endmethod %}
+
 ## Allocation
 
 None
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than three items on the stack
-
-## Examples
-
-```
-0x10 0x20 0x30 -ROT => 0x30 0x10 0x20
-```
+[EmptyStack](./errors/EmptyStack.md) error if there are less than three items on the stack
 
 ## Tests
 

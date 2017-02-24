@@ -1,5 +1,7 @@
 # SEND
 
+{% method -%}
+
 Sends data to a topic
 
 Input stack: `data topic`
@@ -11,21 +13,22 @@ actors in the database. It will send a data message to a particular
 topic, pushing nothing back to the stack. All topic subscribers will
 receive it.
 
+{% common -%}
+
+```
+PumpkinDB> "Hi" "MAIN" SEND
+```
+
+{% endmethod %}
+
 ## Allocation
 
 Allocates for sending data copies.
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if stack is less than two items on the stack.
+[EmptyStack](./errors/EmptyStack.md) error if stack is less than two items on the stack.
 
-
-## Examples
-
-```
-"Hi" "MAIN" SEND => 
-```
-  
 ## Tests
 
 ```test

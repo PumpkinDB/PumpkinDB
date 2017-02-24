@@ -1,10 +1,21 @@
 # 2SWAP
 
+{% method -%}
+
 Swaps the order of the top two pairs.
 
 Input stack: `a b c d`
 
 Output stack: `c d a b`
+
+{% common -%}
+
+```
+PumpkinDB> 0x00 0x00 0x10 0x20 2SWAP
+0x20 0x10 0x00 0x00
+```
+
+{% endmethod %}
 
 ## Allocation
 
@@ -12,13 +23,7 @@ None
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than four items on the stack
-
-## Examples
-
-```
-0x00 0x00 0x10 0x20 2SWAP => 0x20 0x10 0x00 0x00
-```
+[EmptyStack](./errors/EmptyStack.md) error if there are less than four items on the stack
 
 ## Tests
 

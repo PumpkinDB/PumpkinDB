@@ -1,5 +1,7 @@
 # CURSOR/SEEK?
 
+{% method -%}
+
 Sets the cursor at the key value pair with a greater or equal key
 
 Input stack: `cursor key`
@@ -12,6 +14,15 @@ Otherwise, `0` will be pushed and the cursor will be moved.
 
 Useful in conjunction with [CURSOR/CUR](../QCURSOR/CUR.md)
 
+{% common -%}
+
+```
+PumpkinDB> ["3" "3" ASSOC COMMIT] WRITE [CURSOR 'c SET c "2" CURSOR/SEEK?] READ
+1
+```
+
+{% endmethod %}
+
 ## Allocation
 
 Allocates for values to be put onto the stack
@@ -21,12 +32,6 @@ Allocates for values to be put onto the stack
 NoTransaction error if there's no current write transaction
 
 InvalidValue error if the cursor identifier is incorrect or expired
-
-## Examples
-
-```
-["3" "3" ASSOC COMMIT] WRITE [CURSOR 'c SET c "2" CURSOR/SEEK?] READ => 1
-```
 
 ## Tests
 

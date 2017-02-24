@@ -1,11 +1,24 @@
 # AND
 
-Compares two booleans values and return a `1` if both are true.
+{% method -%}
+
+Compares two boolean values and push `1` if both are true, `0` otherwise.
 
 Input stack: `a` `b`
+
 Output stack: `c`
 
-`AND` will push `1` if `a` is `1` and `b` is `1`, otherwise it will push `0`.
+{% common -%}
+
+Pretty much how you would expect boolean values to behave:
+```
+PumpkinDB> 1 1 AND
+0x01
+PumpkinDB> 0 1 AND
+0x00
+```
+
+{% endmethod %}
 
 ## Allocation
 
@@ -13,14 +26,7 @@ None
 
 ## Errors
 
-[InvalidValue](./ERRORS/InvalidValue.md) error if the both values are not booleans.
-
-## Examples
-
-```
-0x01 0x01 AND => 1
-0x00 0x01 AND => 0
-```
+[InvalidValue](./errors/InvalidValue.md) error if the both values are not booleans.
 
 ## Tests
 

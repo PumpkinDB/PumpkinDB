@@ -1,8 +1,10 @@
 # CURSOR
 
+{% method -%}
+
 Creates a read cursor
 
-Input stack: 
+Input stack: -
 
 Output stack: `cursor`
 
@@ -12,6 +14,13 @@ identifier onto the stack.
 
 Only valid within [WRITE's](WRITE.md) or [READ](READ.md) scope.
 
+{% common -%}
+
+```
+PumpkinDB> [CURSOR 'c SET ...] READ
+```
+{% endmethod %}
+
 ## Allocation
 
 None
@@ -19,12 +28,6 @@ None
 ## Errors
 
 NoTransaction error if there's no current write transaction
-
-## Examples
-
-```
-[CURSOR 'c SET ...] READ
-```
 
 ## Tests
 

@@ -1,12 +1,23 @@
 # UNSUBSCRIBE
 
+{% method -%}
+
 Unsubscribes the connection from a topic
 
 Input stack: `topic`
+
 Output stack: ``
 
 `UNSUBSCRIBE` stops connected client to from receiving messages from a
 topic it previously subscribed to.
+
+{% common -%}
+
+```
+PumpkinDB> "topic" SUBSCRIBE
+```
+
+{% endmethod %}
 
 ## Allocation
 
@@ -14,13 +25,7 @@ Runtime allocations necessary for the server
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if there is less than one item on the stack
-
-## Examples
-
-```
-"topic" SUBSCRIBE =>
-```
+[EmptyStack](./errors/EmptyStack.md) error if there is less than one item on the stack
 
 ## Tests
 

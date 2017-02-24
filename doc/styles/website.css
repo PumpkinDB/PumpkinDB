@@ -1,0 +1,81 @@
+@font-face {
+    font-family: 'charterbold_italic';
+    src: url('charter_bold_italic-webfont.eot');
+    src: url('charter_bold_italic-webfont.eot?#iefix') format('embedded-opentype'),
+    url('charter_bold_italic-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+
+}
+
+@font-face {
+    font-family: 'charterbold';
+    src: url('charter_bold-webfont.eot');
+    src: url('charter_bold-webfont.eot?#iefix') format('embedded-opentype'),
+    url('charter_bold-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+
+}
+
+
+@font-face {
+    font-family: 'charteritalic';
+    src: url('charter_italic-webfont.eot');
+    src: url('charter_italic-webfont.eot?#iefix') format('embedded-opentype'),
+    url('charter_italic-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+
+}
+
+@font-face {
+    font-family: 'charterregular';
+    src: url('charter_regular-webfont.eot');
+    src: url('charter_regular-webfont.eot?#iefix') format('embedded-opentype'),
+    url('charter_regular-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+
+}
+
+.book.font-family-0 {
+    font-family: 'charterregular', serif !important;
+}
+
+.book.font-family-1 {
+    font-family: 'charterregular', serif !important;
+}
+
+.book-summary {
+    font-family: 'charterregular', serif !important;
+}
+
+h1 {
+    font-family: 'charterbold', serif !important;
+}
+
+/* Smartphones (portrait and landscape) ----------- */
+@media only screen and (min-device-width : 320px) and (max-device-width : 480px) {
+
+
+    .api-method-definition {
+        float: none !important;;
+        width: 100% !important;;
+    }
+
+    .api-method-code {
+        float: none !important;
+        width: 100% !important;;
+    }
+
+    .markdown-section {
+        padding-left: 2% !important;
+        padding-right: 2% !important;
+    }
+}
+
+.markdown-section {
+    padding-left: 15%;
+    padding-right: 15%;
+}

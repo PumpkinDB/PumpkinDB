@@ -1,10 +1,24 @@
 # 2DUP
 
+{% method -%}
+
 Duplicates the pair of two topmost items
 
 Input stack: `a b`
 
 Output stack: `a b a b`
+
+{% common -%}
+
+In this example, a pair of two items (`0x10` and `0x20`) is
+duplicated.
+
+```
+PumpkinDB> 0x10 0x20 2DUP
+0x10 0x20 0x10 0x20 
+```
+
+{% endmethod %}
 
 ## Allocation
 
@@ -12,13 +26,7 @@ None
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than two items available on the stack
-
-## Examples
-
-```
-0x10 0x20 2DUP => 0x10 0x20 0x10 0x20 
-```
+[EmptyStack](./errors/EmptyStack.md) error if there are less than two items available on the stack
 
 ## Tests
 

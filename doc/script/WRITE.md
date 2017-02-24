@@ -1,5 +1,7 @@
 # WRITE
 
+{% method -%}
+
 Evaluates code in a context of a new write transaction
 
 Input stack: `code`
@@ -12,6 +14,14 @@ a WRITE. If changes are to be saved, [COMMIT](COMMIT.md) has to be
 used as well. Read-transaction related words (such as [RETR](RETR.md))
 can also be used.
 
+{% common -%}
+
+```
+PumpkinDB> ["hi" "there" ASSOC COMMIT] WRITE
+```
+
+{% endmethod %}
+
 ## Allocation
 
 Will allocate for `code` appended with an internal transaction end
@@ -19,22 +29,16 @@ marker word.
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if stack is less than two items on the stack.
+[EmptyStack](./errors/EmptyStack.md) error if stack is less than two items on the stack.
 
-[DatabaseError](./ERRORS/DatabaseError.md) error if there's a problem with underlying storage.
+[DatabaseError](./errors/DatabaseError.md) error if there's a problem with underlying storage.
 
-[Decoding error](./ERRORS/DECODING.md) error if the code is undecodable.
+[Decoding error](./errors/DECODING.md) error if the code is undecodable.
 
-## Examples
-
-```
-["hi" "there" ASSOC COMMIT] WRITE 
-```
-  
 ## Tests
 
 ```test
 evals : [1] WRITE.
 invalid_code : [1 WRITE] TRY UNWRAP 0x05 EQUAL?.
-empty_stack : [WRITE] TRY UNWRAP 0x04 EQUAL?. 
+empty_stack : [WRITE] TRY UNWRAP 0x04 EQUAL?.
 ```

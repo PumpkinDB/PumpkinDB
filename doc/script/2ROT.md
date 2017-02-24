@@ -1,10 +1,21 @@
 # 2ROT
 
+{% method -%}
+
 Rotate the top three pairs on the stack bringing pair `a b` to the top of the stack.
 
 Input stack: `a b c d e f`
 
 Output stack: `c d e f a b`
+
+{% common -%}
+
+```
+PumpkinDB> 1 2 3 4 5 6 2ROT
+3 4 5 6 1 2
+```
+
+{% endmethod %}
 
 ## Allocation
 
@@ -12,13 +23,7 @@ None
 
 ## Errors
 
-[EmptyStack](./ERRORS/EmptyStack.md) error if there are less than six items on the stack
-
-## Examples
-
-```
-1 2 3 4 5 6 2ROT => 3 4 5 6 1 2
-```
+[EmptyStack](./errors/EmptyStack.md) error if there are less than six items on the stack
 
 ## Tests
 

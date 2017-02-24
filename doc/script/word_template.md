@@ -1,5 +1,7 @@
 # [NAME]
 
+{% method -%}
+
 [One-line description]
 
 Input stack: [stack notation]
@@ -7,6 +9,12 @@ Input stack: [stack notation]
 Output stack: [stack notation]
 
 [Multi-line description (if any necessary)]
+
+{% common -%}
+
+[Provide useful examples]
+
+{% endmethod %}
 
 ## Allocation
 
@@ -16,10 +24,6 @@ Output stack: [stack notation]
 
 [Describe in which cases this word will fail the program]
 
-## Examples
-
-[Provide useful examples]
-  
 ## Tests
 
 ```test

@@ -1,5 +1,7 @@
 # ?CURSOR/PREV
 
+{% method -%}
+
 Sets the cursor at the previous key value
 
 Input stack: `cursor`
@@ -10,6 +12,14 @@ If there is a previous key/value pair in the database, `[key value]` will be pus
 Otherwise, `[]` will be pushed. Useful in conjunction with [UNWRAP](../UNWRAP.md),
 [SOME?](../SOMEQ.md) and [NONE?](../NONEQ.md).
 
+{% common -%}
+
+```
+PumpkinDB> ["1" "2" ASSOC "2" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c ?CURSOR/LAST DROP c ?CURSOR/PREV] READ UNWRAP
+"1" "2"
+```
+
+{% endmethod %}
 ## Allocation
 
 Allocates for values to be put onto the stack
@@ -19,12 +29,6 @@ Allocates for values to be put onto the stack
 NoTransaction error if there's no current write transaction
 
 InvalidValue error if the cursor identifier is incorrect or expired
-
-## Examples
-
-```
-["1" "2" ASSOC "2" "2" ASSOC COMMIT] WRITE [CURSOR 'c SET c ?CURSOR/LAST DROP c ?CURSOR/PREV] READ UNWRAP => "1" "2"
-```
 
 ## Tests
 

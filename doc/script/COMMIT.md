@@ -1,5 +1,7 @@
 # COMMIT
 
+{% method -%}
+
 Commits current write transaction
 
 Input stack: 
@@ -9,20 +11,25 @@ Output stack:
 If not used, write transaction, once finished, will be discarded.
 Only valid within [WRITE's](WRITE.md) scope. 
 
+{% common -%}
+
+```
+PumpkinDB> ["hi" "there" ASSOC] WRITE ["hi" "there" ASSOC COMMIT] WRITE
+```
+
+In this example, the second transaction did not fail with a duplicate
+key error because the first one never committed the change.
+
+{% endmethod %}
+
 ## Allocation
 
 None
 
 ## Errors
 
-[NoTransaction](./ERRORS/NoTransaction.md) error if there's no current write transaction
+[NoTransaction](./errors/NoTransaction.md) error if there's no current write transaction
 
-
-## Examples
-
-```
-["hi" "there" ASSOC COMMIT] WRITE
-```
 
 ## Tests
 
