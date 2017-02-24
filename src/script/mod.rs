@@ -99,8 +99,11 @@ macro_rules! word {
 word!(DROP, (a => ), b"\x84DROP");
 word!(DUP, (a => a, a), b"\x83DUP");
 word!(SWAP, (a, b => b, a), b"\x84SWAP");
+word!(TWOSWAP, (a, b, c, d => c, d, a, b), b"\x852SWAP");
 word!(ROT, (a, b, c  => b, c, a), b"\x83ROT");
+word!(TWOROT, (a, b, c, d, e, f  => c, d, e, f, a, b), b"\x842ROT");
 word!(OVER, (a, b => a, b, a), b"\x84OVER");
+word!(TWOOVER, (a, b, c, d => a, b, c, d, a, b), b"\x852OVER");
 word!(DEPTH, b"\x85DEPTH");
 word!(UNWRAP, b"\x86UNWRAP");
 word!(WRAP, b"\x84WRAP");
@@ -638,8 +641,11 @@ impl<'a> VM<'a> {
                            self => handle_drop,
                            self => handle_dup,
                            self => handle_swap,
+                           self => handle_2swap,
                            self => handle_rot,
+                           self => handle_2rot,
                            self => handle_over,
+                           self => handle_2over,
                            self => handle_depth,
                            self => handle_wrap,
                            self => handle_ltp,
@@ -738,12 +744,47 @@ impl<'a> VM<'a> {
     }
 
     #[inline]
+    fn handle_2swap(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, TWOSWAP);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+        let c = stack_pop!(env);
+        let d = stack_pop!(env);
+
+        env.push(b);
+        env.push(a);
+
+        env.push(d);
+        env.push(c);
+
+        Ok(())
+    }
+
+    #[inline]
     fn handle_over(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         word_is!(env, word, OVER);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
         env.push(b);
+        env.push(a);
+        env.push(b);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_2over(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, TWOOVER);
+        let d = stack_pop!(env);
+        let c = stack_pop!(env);
+        let b = stack_pop!(env);
+        let a = stack_pop!(env);
+
+        env.push(a);
+        env.push(b);
+        env.push(c);
+        env.push(d);
         env.push(a);
         env.push(b);
 
@@ -760,6 +801,26 @@ impl<'a> VM<'a> {
         env.push(b);
         env.push(a);
         env.push(c);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_2rot(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, TWOROT);
+        let f = stack_pop!(env);
+        let e = stack_pop!(env);
+        let d = stack_pop!(env);
+        let c = stack_pop!(env);
+        let b = stack_pop!(env);
+        let a = stack_pop!(env);
+
+        env.push(c);
+        env.push(d);
+        env.push(e);
+        env.push(f);
+        env.push(a);
+        env.push(b);
 
         Ok(())
     }

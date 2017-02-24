@@ -4,6 +4,11 @@ IF : [] IFELSE.
 NONE? : LENGTH 0 EQUAL?.
 SOME? : NONE? NOT.
 STACK : DEPTH WRAP.
+NIP : SWAP DROP.
+TUCK : SWAP OVER.
+2NIP : 2SWAP 2DROP.
+2TUCK : 2SWAP 2OVER.
+-ROT : ROT ROT.
 ( Cursor-related functionality )
 CURSOR/DOWHILE : ['iterator SET 'closure SET 'c SET
                    [c `closure EVAL [c ``iterator EVAL] [0] IFELSE] DOWHILE] EVAL/SCOPED.
