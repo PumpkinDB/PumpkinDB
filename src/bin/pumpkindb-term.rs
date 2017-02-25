@@ -65,7 +65,7 @@ fn main() {
                         println!("Further help online at http://pumpkindb.org/doc/");
                         println!("Missing a feature? Let us know at https://github.com/PumpkinDB/PumpkinDB/issues/\n");
                     }
-                } else if text_bytes[text_str.len() - 1] == 46u8 {
+                } else if text_str.len() > 0 && text_bytes[text_str.len() - 1] == 46u8 {
                     let rest = str::from_utf8(&text.as_bytes()[..text_str.len() - 1]).unwrap();
                     multine.add(&rest);
                     for i in 0..multine.len() {
