@@ -50,7 +50,7 @@ fn main() {
         .arg(Arg::with_name("address")
             .help("Address to connect to")
             .required(true)
-            .default_value("0.0.0.0:9981")
+            .default_value("127.0.0.1:9981")
             .index(1))
         .get_matches();
 
