@@ -1,5 +1,5 @@
 ( Constants )
-$SYSTEM/VERSION : "0.1".
+$SYSTEM/VERSION : "0.2-wip".
 ( Basic built-ins )
 2DUP : OVER OVER.
 2DROP : DROP DROP.
