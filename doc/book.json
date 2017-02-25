@@ -1,6 +1,6 @@
 {
     "title": "PumpkinDB",
-    "plugins": ["theme-api", "fontsettings", "github-buttons"],
+    "plugins": ["theme-api", "fontsettings", "github-buttons", "expandable-chapters"],
     "pluginsConfig": {
       "theme-api": {
          "split": true,
