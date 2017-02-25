@@ -145,7 +145,11 @@ fn main() {
                                                 if rest.len() == 0 && top_level {
                                                     top_level = false;
                                                     if data.len() > 0 {
-                                                        let _ = write!(&mut s, "{}", Red.paint("Error: "));
+                                                        if cfg!(target_os = "windows") {
+                                                            let _ = write!(&mut s, "Error: ");
+                                                        } else {
+                                                            let _ = write!(&mut s, "{}", Red.paint("Error: "));
+                                                        }
                                                         input = Vec::from(data);
                                                     }
                                                 } else {
