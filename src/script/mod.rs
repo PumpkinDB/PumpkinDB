@@ -314,6 +314,12 @@ impl<'a> Env<'a> {
         &self.stack.as_slice()[0..self.stack_size as usize]
     }
 
+    /// Returns a copy of the entire stack
+    #[inline]
+    pub fn stack_copy(&self) -> Vec<Vec<u8>> {
+        self.stack.clone().into_iter().map(|v| Vec::from(v)).collect()
+    }
+
     /// Returns top of the stack without removing it
     #[inline]
     pub fn stack_top(&self) -> Option<&'a [u8]> {
@@ -403,24 +409,24 @@ pub type Receiver<T> = mpsc::Receiver<T>;
 pub enum RequestMessage<'a> {
     /// Requests scheduling a new environment with a given
     /// id and a program.
-    ScheduleEnv(EnvId, Vec<u8>, Sender<ResponseMessage<'a>>),
+    ScheduleEnv(EnvId, Vec<u8>, Sender<ResponseMessage>),
     /// An internal message that schedules an execution of
     /// the next instruction in an identified environment on
     /// the next 'tick'
-    RescheduleEnv(EnvId, Env<'a>, Sender<ResponseMessage<'a>>),
+    RescheduleEnv(EnvId, Env<'a>, Sender<ResponseMessage>),
     /// Requests VM shutdown
     Shutdown,
 }
 
 /// Messages received from the [VM](struct.VM.html) thread.
 #[derive(Debug)]
-pub enum ResponseMessage<'a> {
+pub enum ResponseMessage {
     /// Notifies of successful environment termination with
     /// an id, stack and top of the stack pointer.
-    EnvTerminated(EnvId, Vec<&'a [u8]>, usize),
+    EnvTerminated(EnvId, Vec<Vec<u8>>, usize),
     /// Notifies of abnormal environment termination with
     /// an id, error, stack and top of the stack pointer.
-    EnvFailed(EnvId, Error, Option<Vec<&'a [u8]>>, Option<usize>),
+    EnvFailed(EnvId, Error, Option<Vec<Vec<u8>>>, Option<usize>),
 }
 
 pub type TrySendError<T> = std::sync::mpsc::TrySendError<T>;
@@ -528,7 +534,7 @@ impl<'a> VM<'a> {
     /// Once an environment execution has been terminated, a message will be sent,
     /// depending on the result (`EnvTerminated` or `EnvFailed`)
     pub fn run(&mut self) {
-        let mut envs: VecDeque<(EnvId, Env<'a>, Sender<ResponseMessage<'a>>)> = VecDeque::new();
+        let mut envs: VecDeque<(EnvId, Env<'a>, Sender<ResponseMessage>)> = VecDeque::new();
 
         loop {
 
@@ -541,13 +547,13 @@ impl<'a> VM<'a> {
                         Err(err) => {
                             let _ = chan.send(ResponseMessage::EnvFailed(pid,
                                                                          err,
-                                                                         Some(Vec::from(env.stack())),
+                                                                         Some(env.stack_copy()),
                                                                          Some(env.stack_size)));
                         }
                         Ok(()) => {
                             if env.program.is_empty() || (env.program.len() == 1 && env.program[0].len() == 0) {
                                 let _ = chan.send(ResponseMessage::EnvTerminated(pid,
-                                                                                 Vec::from(env.stack()),
+                                                                                 env.stack_copy(),
                                                                                  env.stack_size));
                             } else {
                                 envs.push_back((pid, env, chan));

@@ -34,7 +34,7 @@ use std::collections::BTreeMap;
 
 pub struct Server {
     sender: Sender<RequestMessage<'static>>,
-    response_sender: Sender<ResponseMessage<'static>>,
+    response_sender: Sender<ResponseMessage>,
     evented_sender: mio_chan::Sender<(Token, Vec<u8>, Vec<u8>)>,
     receiver: mio_chan::Receiver<(Token, Vec<u8>, Vec<u8>)>,
     publisher: pubsub::PublisherAccessor<Vec<u8>>,
