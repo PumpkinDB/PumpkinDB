@@ -1,6 +1,6 @@
 {
     "title": "PumpkinDB",
-    "plugins": ["theme-api", "fontsettings", "github-buttons", "expandable-chapters"],
+    "plugins": ["theme-api", "fontsettings", "github-buttons", "expandable-chapters", "ga"],
     "pluginsConfig": {
       "theme-api": {
          "split": true,
@@ -18,6 +18,9 @@
           "watch"
         ],
         "size": "large"
+      },
+      "ga": {
+        "token": "UA-92644407-1"
       }
     }
 }
