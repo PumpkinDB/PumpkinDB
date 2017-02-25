@@ -1,4 +1,4 @@
-SUB
+UINT/SUB
 ===
 
 {% method -%}
