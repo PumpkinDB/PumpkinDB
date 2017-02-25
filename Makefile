@@ -1,4 +1,4 @@
-.PHONY: test
+.PHONY: test doc
 
 test:
 	cargo test -- --nocapture
@@ -6,3 +6,6 @@ test:
 	cargo test --features="scoped_dictionary" -- --nocapture
 	cargo run --bin pumpkindb-doctests
 	cargo run --bin pumpkindb-doctests --features="experimental"
+
+doc:
+	cargo doc --lib
