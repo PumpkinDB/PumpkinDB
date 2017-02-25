@@ -28,6 +28,7 @@ rust-crypto = "^0.2"
 log = "0.3.6"
 log4rs = { version = "0.6.1", features = ["toml_format"] }
 serde_json = "0.9.8"
+clap = "2.20.5"
 
 [dev-dependencies]
 quickcheck = "0.4.1"
