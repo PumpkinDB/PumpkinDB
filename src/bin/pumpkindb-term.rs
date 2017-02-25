@@ -11,6 +11,8 @@ extern crate nom;
 extern crate rustyline;
 extern crate ansi_term;
 extern crate uuid;
+#[macro_use]
+extern crate clap;
 
 use pumpkindb::script;
 use pumpkindb::script::compose::*;
@@ -37,19 +39,40 @@ use std::str;
 
 use uuid::Uuid;
 
+use clap::{Arg, App};
+
 fn main() {
+
+    let args = App::new("PumpkinDB Terminal")
+        .version(crate_version!())
+        .about("Command-line access to PumpkinDB")
+        .setting(clap::AppSettings::ColoredHelp)
+        .arg(Arg::with_name("address")
+            .help("Address to connect to")
+            .required(true)
+            .default_value("0.0.0.0:9981")
+            .index(1))
+        .get_matches();
+
     let _ = config::merge(config::Environment::new("pumpkindb"));
     let _ = config::set_default("prompt", "PumpkinDB> ");
     let formatted_prompt = format!("{}", config::get_str("prompt").unwrap());
     let mut current_prompt = formatted_prompt.as_str();
 
-    let mut stream = TcpStream::connect("0.0.0.0:9981").unwrap();
+    let address = args.value_of("address").unwrap();
+    let mut stream = match TcpStream::connect(address) {
+        Ok(s) => s,
+        Err(err) => {
+            println!("Can't connect to {}, error: {}", address, err);
+            return;
+        }
+    };
 
     let mut rl = Editor::<()>::new();
     let mut r = Vec::new();
 
     let mut multine = History::new();
-    println!("Connected to PumpkinDB at 0.0.0.0:9981");
+    println!("Connected to PumpkinDB at {}", address);
     println!("To send an expression, end it with `.`");
     println!("Type \\h for help.");
     loop {
