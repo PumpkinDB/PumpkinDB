@@ -6,6 +6,7 @@ UINT/SUB
 Subtracts one unsigned integer from another
 
 Input stack: `a` `b`
+
 Output stack: `c`
 
 `SUB` will subtract of `b` from `a` and push it to the top of the stack.
