@@ -69,17 +69,22 @@ After that, you can run PumpkinDB server this way:
 
 ```
 $ cargo run --bin pumpkindb
-...
-Listening on 0.0.0.0:9981
+2017-02-25T09:19:25.848993+07:00 WARN pumpkindb - No logging configuration specified, switching to console logging
+2017-02-25T09:19:25.850079+07:00 INFO pumpkindb - Starting up
+2017-02-25T09:19:25.851175+07:00 INFO pumpkindb - Available disk space is approx. 25Gb, setting database map size to it
+2017-02-25T09:19:25.853860+07:00 INFO pumpkindb::server - Listening on 0.0.0.0:9981
 ```
 
 You can connect to it using `pumpkindb-term`:
 
 ```
 $ cargo run --bin pumpkindb-term
-...
-PumpkinDB> ["Hello" "world" ASSOC COMMIT] WRITE
-PumpkinDB> ["Hello" RETR] READ
+Connected to PumpkinDB at 0.0.0.0:9981
+To send an expression, end it with `.`
+Type \h for help.
+PumpkinDB> ["Hello" "world" ASSOC COMMIT] WRITE.
+
+PumpkinDB> ["Hello" RETR] READ.
 "world"
 PumpkinDB>
 ```
