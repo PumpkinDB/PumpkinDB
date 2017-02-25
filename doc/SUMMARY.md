@@ -108,6 +108,7 @@
    * [HLC/TICK](script/HLC/TICK.md)
  * Miscellaneous
    * [FEATURE?](script/FEATUREQ.md)
+   * [$SYSTEM/VERSION](script/_SYSTEM/VERSION.md)
  * Errors
      * [Unknown word](script/errors/UNKNOWN_WORD.md)
      * [Invalid value](script/errors/InvalidValue.md)
