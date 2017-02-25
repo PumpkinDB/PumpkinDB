@@ -1,3 +1,6 @@
+( Constants )
+$SYSTEM/VERSION : "0.1".
+( Basic built-ins )
 2DUP : OVER OVER.
 2DROP : DROP DROP.
 IF : [] IFELSE.
