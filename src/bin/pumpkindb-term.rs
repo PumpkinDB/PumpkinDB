@@ -60,7 +60,7 @@ fn main() {
                 if text_bytes.len() >= 2 && text_bytes[0] == 92u8 {
                     if text_bytes[1] == 104u8 {
                         println!("\nTo end a statement, type `.`.");
-                        println!("To quit, hit ^C");
+                        println!("To quit, hit ^D");
                         println!("Further help online at http://pumpkindb.org/doc/");
                         println!("Missing a feature? Let us know at https://github.com/PumpkinDB/PumpkinDB/issues/\n");
                     }
