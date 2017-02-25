@@ -81,7 +81,7 @@ fn eval(name: &[u8], script: &[u8]) {
 }
 
 fn main() {
-    let re = Regex::new(r"```test\n((.+\n?)+)```").unwrap();
+    let re = Regex::new(r"```test\r?\n((.+\r?\n?)+)```").unwrap();
     for entry in glob("doc/script/**/*.md").expect("Failed to read glob pattern") {
         match entry {
             Ok(path) => {
