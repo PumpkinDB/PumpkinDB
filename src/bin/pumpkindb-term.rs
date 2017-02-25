@@ -50,14 +50,14 @@ fn main() {
 
     let mut multine = History::new();
     println!("Connected to PumpkinDB at 0.0.0.0:9981");
-    println!("Type ?h for help.");
+    println!("Type \\h for help.");
     loop {
         match rl.readline(current_prompt) {
             Ok(text) => {
                 let mut program = String::new();
                 let text_str = text.as_str();
                 let text_bytes = text_str.as_bytes();
-                if text_bytes.len() >= 2 && text_bytes[0] == 63u8 {
+                if text_bytes.len() >= 2 && text_bytes[0] == 92u8 {
                     if text_bytes[1] == 104u8 {
                         println!("\nTo end a statement, type `.`.");
                         println!("To quit, hit ^C");
