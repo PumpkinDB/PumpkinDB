@@ -4,6 +4,21 @@ version = "0.1.0"
 authors = ["Ómar Yasin <omarkj@gmail.com>",
            "Yurii Rashkovskii <yrashk@gmail.com>"]
 
+
+[[bin]]
+doc = false
+name = "pumpkindb"
+
+[[bin]]
+doc = false
+name = "pumpkindb-term"
+path = "src/bin/pumpkindb-term.rs"
+
+[[bin]]
+doc = false
+name = "pumpkindb-doctests"
+path = "src/bin/pumpkindb-doctests.rs"
+
 [dependencies]
 nom = "^2.1"
 snowflake = { git = "https://github.com/yrashk/snowflake.git", branch="pub-fields" }
