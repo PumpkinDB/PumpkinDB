@@ -50,6 +50,7 @@ fn main() {
 
     let mut multine = History::new();
     println!("Connected to PumpkinDB at 0.0.0.0:9981");
+    println!("To send an expression, end it with `.`");
     println!("Type \\h for help.");
     loop {
         match rl.readline(current_prompt) {
@@ -59,7 +60,7 @@ fn main() {
                 let text_bytes = text_str.as_bytes();
                 if text_bytes.len() >= 2 && text_bytes[0] == 92u8 {
                     if text_bytes[1] == 104u8 {
-                        println!("\nTo end a statement, type `.`.");
+                        println!("\nTo send an expression, end it with `.`");
                         println!("To quit, hit ^D");
                         println!("Further help online at http://pumpkindb.org/doc/");
                         println!("Missing a feature? Let us know at https://github.com/PumpkinDB/PumpkinDB/issues/\n");
