@@ -102,7 +102,7 @@ fn main() {
                     current_prompt = "..> ";
                 }
                 if program.len() > 0 {
-                    rl.add_history_entry(&program);
+                    rl.add_history_entry(format!("{}.", &program).as_str());
                     match script::parse(&program) {
                         Ok(compiled) => {
                             let uuid = Uuid::new_v4();
