@@ -33,7 +33,7 @@ use mio::channel as mio_chan;
 use std::collections::BTreeMap;
 
 pub struct Server {
-    sender: Sender<RequestMessage<'static>>,
+    sender: Sender<RequestMessage>,
     response_sender: Sender<ResponseMessage>,
     evented_sender: mio_chan::Sender<(Token, Vec<u8>, Vec<u8>)>,
     receiver: mio_chan::Receiver<(Token, Vec<u8>, Vec<u8>)>,
@@ -46,7 +46,7 @@ pub struct Server {
 
 
 impl Server {
-    pub fn new(sock: TcpListener, sender: Sender<RequestMessage<'static>>, publisher: pubsub::PublisherAccessor<Vec<u8>>) -> Server {
+    pub fn new(sock: TcpListener, sender: Sender<RequestMessage>, publisher: pubsub::PublisherAccessor<Vec<u8>>) -> Server {
         let (response_sender, _) = mpsc::channel();
         let (evented_sender, receiver) = mio_chan::channel();
 
