@@ -6,7 +6,8 @@
 #![feature(slice_patterns, advanced_slice_patterns)]
 #![cfg_attr(test, feature(test))]
 
-#![feature(alloc, heap_api)]
+#![cfg_attr(not(target_os = "windows"), feature(alloc, heap_api))]
+#![cfg_attr(target_os = "windows", feature(alloc))]
 
 include!("crates.rs");
 
@@ -23,12 +24,17 @@ use std::thread;
 use std::sync::Arc;
 
 use std::fs;
+#[cfg(not(target_os = "windows"))]
 use std::path;
 
+#[cfg(not(target_os = "windows"))]
 use std::ffi::CString;
+#[cfg(not(target_os = "windows"))]
 use libc::statvfs;
 
+#[cfg(not(target_os = "windows"))]
 use alloc::heap;
+#[cfg(not(target_os = "windows"))]
 use core::mem::size_of;
 
 use std::sync::Mutex;
@@ -44,21 +50,34 @@ lazy_static! {
                 .expect("can't create env builder");
 
             // Configure map size
-            if !cfg!(target_os = "windows") {
-                let path = path::PathBuf::from(path.as_str());
-                let canonical = fs::canonicalize(&path).unwrap();
-                let absolute_path = canonical.as_path().to_str().unwrap();
-                let absolute_path_c = CString::new(absolute_path).unwrap();
-                let statp: *mut statvfs = heap::allocate(size_of::<statvfs>(), size_of::<usize>()) as *mut statvfs;
-                let mut stat = *statp;
-                if statvfs(absolute_path_c.as_ptr(), &mut stat) != 0 {
-                   warn!("Can't determine available disk space");
-                } else {
-                   let size = (stat.f_frsize * stat.f_bavail as u64) as usize;
-                   info!("Available disk space is approx. {}Gb, setting database map size to it", size / (1024*1024*1024));
-                   env_builder.set_mapsize(size).expect("can't set map size");
+            if !cfg!(target_os = "windows") && config::get_int("storage.mapsize").is_none() {
+                #[cfg(not(target_os = "windows"))]
+                {
+                    let path = path::PathBuf::from(path.as_str());
+                    let canonical = fs::canonicalize(&path).unwrap();
+                    let absolute_path = canonical.as_path().to_str().unwrap();
+                    let absolute_path_c = CString::new(absolute_path).unwrap();
+                    let statp: *mut statvfs = heap::allocate(size_of::<statvfs>(), size_of::<usize>()) as *mut statvfs;
+                    let mut stat = *statp;
+                    if statvfs(absolute_path_c.as_ptr(), &mut stat) != 0 {
+                       warn!("Can't determine available disk space");
+                    } else {
+                       let size = (stat.f_frsize * stat.f_bavail as u64) as usize;
+                       info!("Available disk space is approx. {}Gb, setting database map size to it", size / (1024*1024*1024));
+                       env_builder.set_mapsize(size).expect("can't set map size");
+                    }
+                    heap::deallocate(statp as *mut u8, size_of::<statvfs>(), size_of::<usize>());
                 }
-                heap::deallocate(statp as *mut u8, size_of::<statvfs>(), size_of::<usize>());
+            } else {
+                match config::get_int("storage.mapsize") {
+                   Some(mapsize) => {
+                       env_builder.set_mapsize(1024 * mapsize as usize).expect("can't set map size");
+                   },
+                   None => {
+                       warn!("No default storage.mapsize set, setting it to 1Gb");
+                       env_builder.set_mapsize(1024 * 1024 * 1024).expect("can't set map size");
+                   }
+                }
             }
             Arc::new(env_builder
                 .open(path.as_str(), lmdb::open::Flags::empty(), 0o600)

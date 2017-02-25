@@ -97,6 +97,15 @@ You can change some of the server's parameters by creating `pumpkindb.toml`:
 ```toml
 [storage]
 path = "path/to/db"
+# By default, mapsize will equal to the size of
+# available space on the disk, except on Windows,
+# where default would be 1Gb.
+# `mapsize` is a theoretical limit the database can
+# grow to. However, on Windows, this also means that
+# the database file will take that space.
+# This parameter allows to specify the mapsize
+# in megabytes.
+# mapsize = 2048
 
 [server]
 port = 9981
