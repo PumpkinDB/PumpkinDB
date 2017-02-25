@@ -406,14 +406,10 @@ pub type Receiver<T> = mpsc::Receiver<T>;
 
 /// Communication messages used to talk with the [VM](struct.VM.html) thread.
 #[derive(Debug)]
-pub enum RequestMessage<'a> {
+pub enum RequestMessage {
     /// Requests scheduling a new environment with a given
     /// id and a program.
     ScheduleEnv(EnvId, Vec<u8>, Sender<ResponseMessage>),
-    /// An internal message that schedules an execution of
-    /// the next instruction in an identified environment on
-    /// the next 'tick'
-    RescheduleEnv(EnvId, Env<'a>, Sender<ResponseMessage>),
     /// Requests VM shutdown
     Shutdown,
 }
@@ -475,8 +471,8 @@ pub mod json;
 use std::collections::VecDeque;
 
 pub struct VM<'a> {
-    inbox: Receiver<RequestMessage<'a>>,
-    sender: Sender<RequestMessage<'a>>,
+    inbox: Receiver<RequestMessage>,
+    sender: Sender<RequestMessage>,
     publisher: pubsub::PublisherAccessor<Vec<u8>>,
     storage: storage::Handler<'a>,
     hlc: timestamp_hlc::Handler<'a>,
@@ -508,7 +504,7 @@ impl<'a> VM<'a> {
     /// * Request receiver
     pub fn new(db_env: &'a lmdb::Environment, db: &'a lmdb::Database<'a>,
                publisher: pubsub::PublisherAccessor<Vec<u8>>) -> Self {
-        let (sender, receiver) = mpsc::channel::<RequestMessage<'a>>();
+        let (sender, receiver) = mpsc::channel::<RequestMessage>();
         VM {
             inbox: receiver,
             sender: sender.clone(),
@@ -520,7 +516,7 @@ impl<'a> VM<'a> {
         }
     }
 
-    pub fn sender(&self) -> Sender<RequestMessage<'a>> {
+    pub fn sender(&self) -> Sender<RequestMessage> {
         self.sender.clone()
     }
 
@@ -600,7 +596,6 @@ impl<'a> VM<'a> {
                         }
                     }
                 }
-                Ok(_) => {}
             }
         }
     }

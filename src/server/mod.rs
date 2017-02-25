@@ -16,7 +16,7 @@ use self::server::*;
 
 use pubsub;
 
-pub fn run(port: i64, sender: script::Sender<script::RequestMessage<'static>>,
+pub fn run(port: i64, sender: script::Sender<script::RequestMessage>,
                         publisher: pubsub::PublisherAccessor<Vec<u8>>) {
     let addr = format!("0.0.0.0:{}", port).parse().unwrap();
 
