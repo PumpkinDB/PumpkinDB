@@ -22,7 +22,7 @@ path = "src/bin/pumpkindb-doctests.rs"
 [dependencies]
 nom = "^2.1"
 snowflake = { git = "https://github.com/yrashk/snowflake.git", branch="pub-fields" }
-lmdb-zero = { git = "https://github.com/AltSysrq/lmdb-zero.git", branch="ergonomics" }
+lmdb-zero = "0.4.0"
 mio = "0.6.4"
 slab = "0.3.0"
 config = "0.3.1"
