@@ -30,7 +30,7 @@
    * [IFELSE](script/IFELSE.md)
    * [NOT](script/NOT.md)
    * [OR](script/OR.md)
- * Data Structures  
+ * Data structures
    * [NONE?](script/NONEQ.md)
    * [SOME?](script/SOMEQ.md)
  * Storage  
