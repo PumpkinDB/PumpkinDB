@@ -59,7 +59,11 @@ fn eval(name: &[u8], script: &[u8]) {
             Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
                 let _ = sender.send(RequestMessage::Shutdown);
                 publisher_accessor.shutdown();
-                let mut script_env = Env::new_with_stack(stack, stack_size).unwrap();
+                let mut stack_ = Vec::with_capacity(stack.len());
+                for i in 0..(&stack).len() {
+                    stack_.push((&stack[i]).as_slice());
+                }
+                let mut script_env = Env::new_with_stack(stack_, stack_size).unwrap();
                 let val = script_env.pop().unwrap();
                 assert_eq!(Vec::from(val), vec![1], "{} was expected to succeeed", &name);
                 println!(" * {}", &name);

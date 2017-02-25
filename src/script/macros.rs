@@ -314,14 +314,23 @@ macro_rules! eval {
                       let _ = sender.send(RequestMessage::Shutdown);
                       $publisher_accessor.shutdown();
                       let $result = Ok::<(), Error>(());
-                      let mut $env = Env::new_with_stack(stack, stack_size).unwrap();
+                      let mut stack_ = Vec::with_capacity(stack.len());
+                      for i in 0..(&stack).len() {
+                          stack_.push((&stack[i]).as_slice());
+                      }
+                      let mut $env = Env::new_with_stack(stack_, stack_size).unwrap();
                       $expr;
                    }
                    Ok(ResponseMessage::EnvFailed(_, err, stack, stack_size)) => {
                       let _ = sender.send(RequestMessage::Shutdown);
                       $publisher_accessor.shutdown();
                       let $result = Err::<(), Error>(err);
-                      let mut $env = Env::new_with_stack(stack.unwrap(), stack_size.unwrap()).unwrap();
+                      let stack = stack.unwrap();
+                      let mut stack_ = Vec::with_capacity(stack.len());
+                      for i in 0..(&stack).len() {
+                          stack_.push((&stack)[i].as_slice());
+                      }
+                      let mut $env = Env::new_with_stack(stack_, stack_size.unwrap()).unwrap();
                       $expr;
                    }
                    Err(err) => {
