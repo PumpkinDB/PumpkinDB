@@ -27,17 +27,27 @@ pub fn internal_word_tag(i: &[u8]) -> IResult<&[u8], u8> {
     }
 }
 
+pub fn small_numbers(i: &[u8]) -> IResult<&[u8], &[u8]> {
+    if i.len() < 1 {
+        IResult::Incomplete(Needed::Size(1))
+    } else if i[0] > 10 {
+        IResult::Error(ErrorKind::Custom(0))
+    } else {
+        IResult::Done(&i[1..], &i[0..1])
+    }
+}
+
 pub fn micro_length(i: &[u8]) -> IResult<&[u8], usize> {
     if i.len() < 1 {
         IResult::Incomplete(Needed::Size(1))
-    } else if i[0] > 120 {
-        IResult::Error(ErrorKind::Custom(120))
+    } else if i[0] < 11 || i[0] > 110 {
+        IResult::Error(ErrorKind::Custom(10))
     } else {
         let size = i[0] as usize;
-        if size > i.len() - 1 {
+        if size - 11 > i.len() - 1 {
             IResult::Incomplete(Needed::Size(1 + size))
         } else {
-            IResult::Done(&i[0..], size + 1)
+            IResult::Done(&i[0..], size - 10)
         }
     }
 }
@@ -45,8 +55,8 @@ pub fn micro_length(i: &[u8]) -> IResult<&[u8], usize> {
 pub fn byte_length(i: &[u8]) -> IResult<&[u8], usize> {
     if i.len() < 2 {
         IResult::Incomplete(Needed::Size(2))
-    } else if i[0] != 121 {
-        IResult::Error(ErrorKind::Custom(121))
+    } else if i[0] != 111 {
+        IResult::Error(ErrorKind::Custom(111))
     } else {
         let size = i[1] as usize;
         if size > i.len() - 2 {
@@ -60,8 +70,8 @@ pub fn byte_length(i: &[u8]) -> IResult<&[u8], usize> {
 pub fn small_length(i: &[u8]) -> IResult<&[u8], usize> {
     if i.len() < 3 {
         IResult::Incomplete(Needed::Size(3))
-    } else if i[0] != 122 {
-        IResult::Error(ErrorKind::Custom(122))
+    } else if i[0] != 112 {
+        IResult::Error(ErrorKind::Custom(112))
     } else {
         let size = (i[1] as usize) << 8 | i[2] as usize;
         if size > i.len() - 3 {
@@ -75,8 +85,8 @@ pub fn small_length(i: &[u8]) -> IResult<&[u8], usize> {
 pub fn big_length(i: &[u8]) -> IResult<&[u8], usize> {
     if i.len() < 5 {
         IResult::Incomplete(Needed::Size(5))
-    } else if i[0] != 123 {
-        IResult::Error(ErrorKind::Custom(123))
+    } else if i[0] != 113 {
+        IResult::Error(ErrorKind::Custom(113))
     } else {
         let size = (i[1] as usize) << 24 | (i[2] as usize) << 16 | (i[3] as usize) << 8 |
                    (i[4] as usize);
@@ -97,7 +107,7 @@ fn flatten_program(p: Vec<&[u8]>) -> Vec<u8> {
 }
 
 named!(pub data_size<usize>, alt!(micro_length | byte_length | small_length | big_length));
-named!(pub data, length_bytes!(data_size));
+named!(pub data, alt!(small_numbers | length_bytes!(data_size)));
 named!(pub word, length_bytes!(word_tag));
 named!(pub internal_word, length_bytes!(internal_word_tag));
 named!(pub word_or_internal_word, alt!(internal_word | word));
@@ -124,7 +134,7 @@ mod tests {
     use script::binparser::parse;
 
     #[test]
-    fn test() {
+    fn test_basic() {
         let v = parse_text("0x10 DUP").unwrap();
         assert_eq!(parse(v.as_slice()).unwrap(), parse_text("0x10 DUP").unwrap());
     }
@@ -163,6 +173,12 @@ mod tests {
         }
         let v = parse_text(byte_sized_sequence.as_ref()).unwrap();
         assert_eq!(parse(v.as_slice()).unwrap(), parse_text(byte_sized_sequence.as_ref()).unwrap());
+    }
+
+    #[test]
+    fn test_reserved_numbers() {
+        let s = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        assert_eq!(parse(&s).unwrap(), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     }
 
 }
