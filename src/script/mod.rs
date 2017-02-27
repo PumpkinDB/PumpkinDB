@@ -59,8 +59,8 @@
 //!   from carrying these references outside of the scope of the transaction)
 //!
 
-use num_bigint::BigUint;
-use num_traits::{Zero, One};
+use num_bigint::{BigUint, BigInt, Sign, };
+use num_traits::{Zero, One, Signed};
 use num_traits::ToPrimitive;
 use core::ops::{Add, Sub};
 
@@ -120,6 +120,8 @@ word!(PAD, (a, b, c => d), b"\x83PAD");
 // Category: arithmetics
 word!(UINT_ADD, (a, b => c), b"\x88UINT/ADD");
 word!(UINT_SUB, (a, b => c), b"\x88UINT/SUB");
+word!(INT_ADD, (a, b => c), b"\x87INT/ADD");
+word!(INT_SUB, (a, b => c), b"\x87INT/SUB");
 
 // Category: Control flow
 #[cfg(feature = "scoped_dictionary")]
@@ -393,6 +395,14 @@ pub fn offset_by_size(size: usize) -> usize {
     }
 }
 
+pub fn bytes_to_bigint(bytes: &[u8]) -> BigInt {
+    let sign = match bytes[0] {
+        0x01 => Sign::Minus,
+        _ => Sign::Plus
+    };
+    BigInt::from_bytes_be(sign, &bytes[1..])
+}
+
 include!("macros.rs");
 
 use std::sync::mpsc;
@@ -660,6 +670,8 @@ impl<'a> VM<'a> {
                            self => handle_pad,
                            self => handle_uint_add,
                            self => handle_uint_sub,
+                           self => handle_int_add,
+                           self => handle_int_sub,
                            self => handle_length,
                            self => handle_dowhile,
                            self => handle_times,
@@ -1152,6 +1164,50 @@ impl<'a> VM<'a> {
         Ok(())
     }
 
+    fn handle_int_add(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, INT_ADD);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+
+        let a_int = bytes_to_bigint(a);
+        let b_int = bytes_to_bigint(b);
+
+        let c_int = a_int.add(b_int);
+
+        let mut bytes = if c_int.is_negative() {
+            vec![0x01]
+        } else {
+            vec![0x00]
+        };
+        let (_, c_bytes) = c_int.to_bytes_be();
+        bytes.extend_from_slice(&c_bytes);
+        let slice = alloc_and_write!(bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    fn handle_int_sub(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, INT_SUB);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+
+        let a_int = bytes_to_bigint(a);
+        let b_int = bytes_to_bigint(b);
+
+        let c_int = b_int.sub(a_int);
+
+        let mut bytes = if c_int.is_negative() {
+            vec![0x01]
+        } else {
+            vec![0x00]
+        };
+        let (_, c_bytes) = c_int.to_bytes_be();
+        bytes.extend_from_slice(&c_bytes);
+        let slice = alloc_and_write!(bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
     #[inline]
     fn handle_uint_sub(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         word_is!(env, word, UINT_SUB);
@@ -1172,7 +1228,6 @@ impl<'a> VM<'a> {
         env.push(slice);
         Ok(())
     }
-
 
     #[inline]
     fn handle_eval(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {

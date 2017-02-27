@@ -7,7 +7,7 @@
 use nom::{IResult, ErrorKind};
 use nom::{is_hex_digit, multispace, is_digit};
 
-use num_bigint::BigUint;
+use num_bigint::{BigUint, Sign};
 use core::str::FromStr;
 use std::str;
 
@@ -87,7 +87,6 @@ fn sized_vec(s: Vec<u8>) -> Vec<u8> {
     write_size!(vec, size);
     vec.extend_from_slice(s.as_slice());
     vec
-
 }
 
 fn is_word_char(s: u8) -> bool {
@@ -126,11 +125,42 @@ fn is_multispace(s: u8) -> bool {
     s == b'\n' || s == b'\r' || s == b'\t' || s == b' '
 }
 
-named!(uint<Vec<u8>>, do_parse!(
-                     biguint: take_while1!(is_digit)      >>
-                              delim_or_end                >>
-                              (sized_vec(BigUint::from_str(str::from_utf8(biguint).unwrap())
-                                         .unwrap().to_bytes_be()))));
+named!(sign<Sign>,
+    do_parse!(
+        sign: alt!(tag!("+") | tag!("-")) >>
+        ({
+            if sign[0] == 45 {
+                Sign::Minus
+            } else {
+                Sign::Plus
+            }
+        })));
+
+named!(biguint<BigUint>,
+    do_parse!(
+        biguint: take_while1!(is_digit) >>
+        delim_or_end                    >>
+        (BigUint::from_str(str::from_utf8(biguint).unwrap()).unwrap())));
+
+named!(sint<Vec<u8>>,
+    do_parse!(
+        sign: sign        >>
+        biguint: biguint  >>
+        ({
+           let mut bytes = if sign == Sign::Minus {
+                vec![0x01]
+           } else {
+                vec![0x00]
+           };
+           bytes.extend_from_slice(&biguint.to_bytes_be());
+           (sized_vec(bytes))
+        })));
+
+named!(uint<Vec<u8>>,
+    do_parse!(
+        biguint: biguint >>
+        (sized_vec(biguint.to_bytes_be()))));
+
 named!(word<Vec<u8>>, do_parse!(
                         word: take_while1!(is_word_char)  >>
                               (prefix_word(word))));
@@ -145,7 +175,7 @@ named!(string<Vec<u8>>,  alt!(do_parse!(tag!(b"\"\"") >> (vec![0])) |
                          str: delimited!(char!('"'), escaped!(is_not!("\"\\"), '\\', one_of!("\"n\\")), char!('"')) >>
                               (string_to_vec(str)))));
 named!(comment<Vec<u8>>, do_parse!(delimited!(char!('('), is_not!(")"), char!(')')) >> (vec![])));
-named!(item<Vec<u8>>, alt!(comment | binary | string | uint | wrap | wordref | word));
+named!(item<Vec<u8>>, alt!(comment | binary | string | uint | sint | wrap | wordref | word));
 
 fn unwrap_word(mut word: Vec<u8>) -> Vec<u8> {
     let mut vec = Vec::new();
@@ -457,6 +487,12 @@ mod tests {
     fn nested_unwrapping() {
         assert_eq!(parse("[[``val DUP]]").unwrap(), parse("val 1 WRAP [1 WRAP [DUP] CONCAT] CONCAT").unwrap());
         assert_eq!(parse("[[2 ``val DUP]]").unwrap(), parse("[[2]] val 1 WRAP [1 WRAP [DUP] CONCAT CONCAT] CONCAT CONCAT").unwrap());
+    }
+
+    #[test]
+    fn test_signed_ints() {
+        assert_eq!(parse("+1").unwrap(), vec![2, 0, 1]);
+        assert_eq!(parse("-1").unwrap(), vec![2, 1, 1]);
     }
 
 }
