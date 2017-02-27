@@ -73,6 +73,7 @@
  * Numbers
    * [UINT/ADD](script/UINT/ADD.md)
    * [UINT/SUB](script/UINT/SUB.md)
+   * [INT](script/INT/README.md)
    * [INT/ADD](script/INT/ADD.md)
    * [INT/SUB](script/INT/SUB.md)
  * Data formats

@@ -8,6 +8,7 @@ use nom::{IResult, ErrorKind};
 use nom::{is_hex_digit, multispace, is_digit};
 
 use num_bigint::{BigUint, Sign};
+use num_traits::Zero;
 use core::str::FromStr;
 use std::str;
 
@@ -147,10 +148,10 @@ named!(sint<Vec<u8>>,
         sign: sign        >>
         biguint: biguint  >>
         ({
-           let mut bytes = if sign == Sign::Minus {
-                vec![0x01]
-           } else {
+           let mut bytes = if sign == Sign::Minus && !biguint.is_zero() {
                 vec![0x00]
+           } else {
+                vec![0x01]
            };
            bytes.extend_from_slice(&biguint.to_bytes_be());
            (sized_vec(bytes))
@@ -491,8 +492,10 @@ mod tests {
 
     #[test]
     fn test_signed_ints() {
-        assert_eq!(parse("+1").unwrap(), vec![2, 0, 1]);
-        assert_eq!(parse("-1").unwrap(), vec![2, 1, 1]);
+        assert_eq!(parse("+0").unwrap(), parse("-0").unwrap());
+        assert_eq!(parse("+0").unwrap(), vec![2, 1, 0]);
+        assert_eq!(parse("+1").unwrap(), vec![2, 1, 1]);
+        assert_eq!(parse("-1").unwrap(), vec![2, 0, 1]);
     }
 
 }
