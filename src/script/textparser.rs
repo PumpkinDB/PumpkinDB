@@ -147,13 +147,13 @@ named!(sint<Vec<u8>>,
         sign: sign        >>
         biguint: biguint  >>
         ({
-           let mut b = biguint.to_bytes_be();
-           if sign == Sign::Minus {
-                b.push(0x01);
+           let mut bytes = if sign == Sign::Minus {
+                vec![0x01]
            } else {
-                b.push(0x00);
-           }
-           (sized_vec(b))
+                vec![0x00]
+           };
+           bytes.extend_from_slice(&biguint.to_bytes_be());
+           (sized_vec(bytes))
         })));
 
 named!(uint<Vec<u8>>,
@@ -491,7 +491,7 @@ mod tests {
 
     #[test]
     fn test_signed_ints() {
-        assert_eq!(parse("+1").unwrap(), vec![2, 1, 0]);
+        assert_eq!(parse("+1").unwrap(), vec![2, 0, 1]);
         assert_eq!(parse("-1").unwrap(), vec![2, 1, 1]);
     }
 

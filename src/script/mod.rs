@@ -59,8 +59,8 @@
 //!   from carrying these references outside of the scope of the transaction)
 //!
 
-use num_bigint::{BigUint, BigInt, Sign};
-use num_traits::{Zero, One};
+use num_bigint::{BigUint, BigInt, Sign, };
+use num_traits::{Zero, One, Signed};
 use num_traits::ToPrimitive;
 use core::ops::{Add, Sub};
 
@@ -396,11 +396,11 @@ pub fn offset_by_size(size: usize) -> usize {
 }
 
 pub fn bytes_to_bigint(bytes: &[u8]) -> BigInt {
-    let sign = match bytes[bytes.len()-1] {
+    let sign = match bytes[0] {
         0x01 => Sign::Minus,
         _ => Sign::Plus
     };
-    BigInt::from_bytes_be(sign, &bytes[..bytes.len()-1])
+    BigInt::from_bytes_be(sign, &bytes[1..])
 }
 
 include!("macros.rs");
@@ -1174,14 +1174,14 @@ impl<'a> VM<'a> {
 
         let c_int = a_int.add(b_int);
 
-        let (sign, mut c_bytes) = c_int.to_bytes_be();
-        if sign == Sign::Minus {
-            c_bytes.push(0x01);
+        let mut bytes = if c_int.is_negative() {
+            vec![0x01]
         } else {
-            c_bytes.push(0x00);
-        }
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+            vec![0x00]
+        };
+        let (_, c_bytes) = c_int.to_bytes_be();
+        bytes.extend_from_slice(&c_bytes);
+        let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
         Ok(())
     }
@@ -1196,14 +1196,14 @@ impl<'a> VM<'a> {
 
         let c_int = b_int.sub(a_int);
 
-        let (sign, mut c_bytes) = c_int.to_bytes_be();
-        if sign == Sign::Minus {
-            c_bytes.push(0x01);
+        let mut bytes = if c_int.is_negative() {
+            vec![0x01]
         } else {
-            c_bytes.push(0x00);
-        }
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+            vec![0x00]
+        };
+        let (_, c_bytes) = c_int.to_bytes_be();
+        bytes.extend_from_slice(&c_bytes);
+        let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
         Ok(())
     }
