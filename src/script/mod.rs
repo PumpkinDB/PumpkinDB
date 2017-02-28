@@ -361,6 +361,53 @@ pub trait Module<'a> {
     fn handle(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a>;
 }
 
+#[cfg(not(feature = "static_module_dispatch"))]
+macro_rules! for_each_module {
+    ($module: ident, $vm : expr, $expr: expr) => {
+        for mut $module in $vm.modules.iter_mut() {
+            $expr
+        }
+    };
+}
+
+#[cfg(feature = "static_module_dispatch")]
+macro_rules! for_each_module {
+    ($module: ident, $vm : expr, $expr: expr) => {{
+        {
+           let ref mut $module = $vm.core;
+           $expr
+        }
+        {
+           let ref mut $module = $vm.stack;
+           $expr
+        }
+        {
+           let ref mut $module = $vm.binaries;
+           $expr
+        }
+        {
+           let ref mut $module = $vm.numbers;
+           $expr
+        }
+        {
+           let ref mut $module = $vm.storage;
+           $expr
+        }
+        {
+           let ref mut $module = $vm.hash;
+           $expr
+        }
+        {
+           let ref mut $module = $vm.hlc;
+           $expr
+        }
+        {
+           let ref mut $module = $vm.json;
+           $expr
+        }
+    }};
+}
+
 /// VM is a PumpkinScript scheduler and interpreter. This is the
 /// most central part of this module.
 ///
@@ -398,7 +445,24 @@ use std::collections::VecDeque;
 pub struct VM<'a> {
     inbox: Receiver<RequestMessage>,
     sender: Sender<RequestMessage>,
+    #[cfg(not(feature = "static_module_dispatch"))]
     modules: Vec<Box<Module<'a> + 'a>>,
+    #[cfg(feature = "static_module_dispatch")]
+    core: core::Handler<'a>,
+    #[cfg(feature = "static_module_dispatch")]
+    stack: stack::Handler<'a>,
+    #[cfg(feature = "static_module_dispatch")]
+    binaries: binaries::Handler<'a>,
+    #[cfg(feature = "static_module_dispatch")]
+    numbers: numbers::Handler<'a>,
+    #[cfg(feature = "static_module_dispatch")]
+    storage: storage::Handler<'a>,
+    #[cfg(feature = "static_module_dispatch")]
+    hash: hash::Handler<'a>,
+    #[cfg(feature = "static_module_dispatch")]
+    hlc: timestamp_hlc::Handler<'a>,
+    #[cfg(feature = "static_module_dispatch")]
+    json: json::Handler<'a>,
 }
 
 unsafe impl<'a> Send for VM<'a> {}
@@ -426,7 +490,8 @@ impl<'a> VM<'a> {
     pub fn new(db_env: &'a lmdb::Environment, db: &'a lmdb::Database<'a>,
                publisher: pubsub::PublisherAccessor<Vec<u8>>) -> Self {
         let (sender, receiver) = mpsc::channel::<RequestMessage>();
-        VM {
+        #[cfg(not(feature = "static_module_dispatch"))]
+        return VM {
             inbox: receiver,
             sender: sender.clone(),
             modules: vec![Box::new(core::Handler::new(publisher)),
@@ -438,7 +503,20 @@ impl<'a> VM<'a> {
                           Box::new(timestamp_hlc::Handler::new()),
                           Box::new(json::Handler::new()),
             ],
-        }
+        };
+        #[cfg(feature = "static_module_dispatch")]
+        return VM {
+            inbox: receiver,
+            sender: sender.clone(),
+            core: core::Handler::new(publisher),
+            stack: stack::Handler::new(),
+            binaries: binaries::Handler::new(),
+            numbers: numbers::Handler::new(),
+            storage: storage::Handler::new(db_env, db),
+            hash: hash::Handler::new(),
+            hlc: timestamp_hlc::Handler::new(),
+            json: json::Handler::new()
+        };
     }
 
     pub fn sender(&self) -> Sender<RequestMessage> {
@@ -467,9 +545,7 @@ impl<'a> VM<'a> {
                             envs.push_back((pid, env, chan));
                         },
                         Err(err) => {
-                            for mut module in self.modules.iter_mut() {
-                                module.done(&mut env, pid);
-                            }
+                            for_each_module!(module, self, module.done(&mut env, pid));
                             let _ = chan.send(ResponseMessage::EnvFailed(pid,
                                                                          err,
                                                                          Some(env.stack_copy()),
@@ -477,9 +553,7 @@ impl<'a> VM<'a> {
                         }
                         Ok(()) => {
                             if env.program.is_empty() || (env.program.len() == 1 && env.program[0].len() == 0) {
-                                for mut module in self.modules.iter_mut() {
-                                    module.done(&mut env, pid);
-                                }
+                                for_each_module!(module, self, module.done(&mut env, pid));
                                 let _ = chan.send(ResponseMessage::EnvTerminated(pid,
                                                                                  env.stack_copy(),
                                                                                  env.stack_size));
@@ -510,9 +584,7 @@ impl<'a> VM<'a> {
                                 Ok(slice) => {
                                     slice.copy_from_slice(program.as_slice());
                                     env.program.push(slice);
-                                    for mut module in self.modules.iter_mut() {
-                                        module.init(&mut env, pid);
-                                    }
+                                    for_each_module!(module, self, module.init(&mut env, pid));
                                     envs.push_back((pid, env, chan));
                                 }
                                 Err(err) => {
@@ -578,9 +650,7 @@ impl<'a> VM<'a> {
             try_word!(env, self.handle_try(env, word, pid));
             try_word!(env, self.handle_try_end(env, word, pid));
 
-            for mut module in self.modules.iter_mut() {
-                try_word!(env, module.handle(env, word, pid));
-            }
+            for_each_module!(module, self, try_word!(env, module.handle(env, word, pid)));
 
             // catch-all (NB: keep it last)
             try_word!(env, self.handle_dictionary(env, word, pid));
@@ -642,9 +712,7 @@ impl<'a> VM<'a> {
             env.push(_EMPTY);
             Ok(())
         } else if let Some(Error::ProgramError(err)) = env.aborting_try.pop() {
-            for mut module in self.modules.iter_mut() {
-                module.done(env, pid);
-            }
+            for_each_module!(module, self, module.done(env, pid));
             let slice = alloc_and_write!(err.as_slice(), env);
             env.push(slice);
             Ok(())

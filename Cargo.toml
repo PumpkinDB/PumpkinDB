@@ -54,3 +54,4 @@ matches = "0.1.4"
 default = ["scoped_dictionary"]
 experimental = []
 scoped_dictionary = []
+static_module_dispatch = []
