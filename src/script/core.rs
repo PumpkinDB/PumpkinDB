@@ -13,7 +13,7 @@ use std::marker::PhantomData;
 use std::collections::BTreeMap;
 
 use nom;
-use num_bigint::{BigUint, BigInt, Sign, };
+use num_bigint::BigUint;
 use num_traits::{Zero, One};
 use core::ops::Sub;
 
@@ -41,19 +41,6 @@ word!(SEND, (a => ), b"\x84SEND");
 
 // Category: experimental features
 word!(FEATUREQ, (a => b), b"\x88FEATURE?");
-
-pub fn bytes_to_bigint(bytes: &[u8]) -> Option<BigInt> {
-    if bytes.len() >= 2 {
-        match bytes[0] {
-            0x00 => Some(Sign::Minus),
-            0x01 => Some(Sign::Plus),
-            _ => None
-        }.and_then(|sign| Some(BigInt::from_bytes_be(sign, &bytes[1..])))
-    } else {
-        None
-    }
-
-}
 
 // Builtin words that are implemented in PumpkinScript
 lazy_static! {
