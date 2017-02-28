@@ -348,6 +348,7 @@ use pubsub;
 
 pub mod basic;
 pub mod stack;
+pub mod numbers;
 pub mod storage;
 pub mod timestamp_hlc;
 pub mod hash;
@@ -429,6 +430,7 @@ impl<'a> VM<'a> {
             sender: sender.clone(),
             modules: vec![Box::new(basic::Handler::new(publisher)),
                           Box::new(stack::Handler::new()),
+                          Box::new(numbers::Handler::new()),
                           Box::new(storage::Handler::new(db_env, db)),
                           Box::new(hash::Handler::new()),
                           Box::new(timestamp_hlc::Handler::new()),
