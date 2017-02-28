@@ -617,6 +617,7 @@ impl<'a> VM<'a> {
                     match rcvr.try_recv() {
                         Err(mpsc::TryRecvError::Empty) => {
                             env.send_ack = Some(rcvr);
+                            let _ = env.program.pop(); // reschedule will push it back
                             return Err(Error::Reschedule)
                         },
                         Err(mpsc::TryRecvError::Disconnected) => (),
