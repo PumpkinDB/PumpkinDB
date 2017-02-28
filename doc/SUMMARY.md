@@ -33,6 +33,9 @@
  * Data structures
    * [NONE?](script/NONEQ.md)
    * [SOME?](script/SOMEQ.md)
+   * [INT?](script/INT/INTQ.md)
+   * [INT->UINT](script/INT/TOUINT.md)
+   * [UINT->INT](script/INT/TOINT.md)
  * Storage  
    * [ASSOC](script/ASSOC.md)
    * [ASSOC?](script/ASSOCQ.md)
