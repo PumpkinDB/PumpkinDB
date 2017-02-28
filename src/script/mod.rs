@@ -346,7 +346,7 @@ use lmdb;
 
 use pubsub;
 
-pub mod basic;
+pub mod core;
 pub mod stack;
 pub mod numbers;
 pub mod binaries;
@@ -429,7 +429,7 @@ impl<'a> VM<'a> {
         VM {
             inbox: receiver,
             sender: sender.clone(),
-            modules: vec![Box::new(basic::Handler::new(publisher)),
+            modules: vec![Box::new(core::Handler::new(publisher)),
                           Box::new(stack::Handler::new()),
                           Box::new(binaries::Handler::new()),
                           Box::new(numbers::Handler::new()),
