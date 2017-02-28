@@ -127,8 +127,6 @@ word!(INT_SUB, (a, b => c), b"\x87INT/SUB");
 word!(INT_TO_UINT, (a => b), b"\x89INT->UINT");
 word!(UINT_TO_INT, (a => b), b"\x89UINT->INT");
 
-word!(INTQ, (a => b), b"\x84INT?");
-
 // Category: Control flow
 #[cfg(feature = "scoped_dictionary")]
 word!(EVAL_SCOPED, b"\x8BEVAL/SCOPED");
@@ -685,7 +683,6 @@ impl<'a> VM<'a> {
                            self => handle_int_sub,
                            self => handle_int_to_uint,
                            self => handle_uint_to_int,
-                           self => handle_intq,
                            self => handle_length,
                            self => handle_dowhile,
                            self => handle_times,
@@ -1271,21 +1268,6 @@ impl<'a> VM<'a> {
         let slice = alloc_and_write!(bytes.as_slice(), env);
 
         env.push(slice);
-        Ok(())
-    }
-
-    fn handle_intq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, INTQ);
-        let a = stack_pop!(env);
-
-        match bytes_to_bigint(a) {
-            Some(_) => {
-                env.push(STACK_TRUE)
-            },
-            None => {
-                env.push(STACK_FALSE)
-            }
-        }
         Ok(())
     }
 
