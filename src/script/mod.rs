@@ -123,6 +123,10 @@ word!(UINT_SUB, (a, b => c), b"\x88UINT/SUB");
 word!(INT_ADD, (a, b => c), b"\x87INT/ADD");
 word!(INT_SUB, (a, b => c), b"\x87INT/SUB");
 
+// Casting
+word!(INT_TO_UINT, (a => b), b"\x89INT->UINT");
+word!(UINT_TO_INT, (a => b), b"\x89UINT->INT");
+
 // Category: Control flow
 #[cfg(feature = "scoped_dictionary")]
 word!(EVAL_SCOPED, b"\x8BEVAL/SCOPED");
@@ -395,12 +399,17 @@ pub fn offset_by_size(size: usize) -> usize {
     }
 }
 
-pub fn bytes_to_bigint(bytes: &[u8]) -> BigInt {
-    let sign = match bytes[0] {
-        0x01 => Sign::Minus,
-        _ => Sign::Plus
-    };
-    BigInt::from_bytes_be(sign, &bytes[1..])
+pub fn bytes_to_bigint(bytes: &[u8]) -> Option<BigInt> {
+    if bytes.len() >= 2 {
+        match bytes[0] {
+            0x00 => Some(Sign::Minus),
+            0x01 => Some(Sign::Plus),
+            _ => None
+        }.and_then(|sign| Some(BigInt::from_bytes_be(sign, &bytes[1..])))
+    } else {
+        None
+    }
+
 }
 
 include!("macros.rs");
@@ -672,6 +681,8 @@ impl<'a> VM<'a> {
                            self => handle_uint_sub,
                            self => handle_int_add,
                            self => handle_int_sub,
+                           self => handle_int_to_uint,
+                           self => handle_uint_to_int,
                            self => handle_length,
                            self => handle_dowhile,
                            self => handle_times,
@@ -1172,12 +1183,19 @@ impl<'a> VM<'a> {
         let a_int = bytes_to_bigint(a);
         let b_int = bytes_to_bigint(b);
 
-        let c_int = a_int.add(b_int);
+        if a_int == None {
+            return Err(error_invalid_value!(a))
+        }
+        if b_int == None {
+            return Err(error_invalid_value!(b))
+        }
+
+        let c_int = a_int.unwrap().add(b_int.unwrap());
 
         let mut bytes = if c_int.is_negative() {
-            vec![0x01]
-        } else {
             vec![0x00]
+        } else {
+            vec![0x01]
         };
         let (_, c_bytes) = c_int.to_bytes_be();
         bytes.extend_from_slice(&c_bytes);
@@ -1194,16 +1212,61 @@ impl<'a> VM<'a> {
         let a_int = bytes_to_bigint(a);
         let b_int = bytes_to_bigint(b);
 
-        let c_int = b_int.sub(a_int);
+        if a_int == None {
+            return Err(error_invalid_value!(a))
+        }
+        if b_int == None {
+            return Err(error_invalid_value!(b))
+        }
+
+        let c_int = b_int.unwrap().sub(a_int.unwrap());
 
         let mut bytes = if c_int.is_negative() {
-            vec![0x01]
-        } else {
             vec![0x00]
+        } else {
+            vec![0x01]
         };
         let (_, c_bytes) = c_int.to_bytes_be();
         bytes.extend_from_slice(&c_bytes);
         let slice = alloc_and_write!(bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    fn handle_int_to_uint(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId)
+        -> PassResult<'a> {
+        word_is!(env, word, INT_TO_UINT);
+        let a = stack_pop!(env);
+        let a_int = bytes_to_bigint(a);
+
+        if a_int == None {
+            return Err(error_invalid_value!(a))
+        }
+
+        match a_int.unwrap().to_biguint() {
+            Some(a_uint) => {
+                let a_bytes = a_uint.to_bytes_be();
+                let slice = alloc_and_write!(a_bytes.as_slice(), env);
+                env.push(slice);
+                Ok(())
+            },
+            None => {
+                Err(error_invalid_value!(a))
+            }
+        }
+    }
+
+    fn handle_uint_to_int(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId)
+                          -> PassResult<'a> {
+        word_is!(env, word, UINT_TO_INT);
+        let a = stack_pop!(env);
+        let a_uint = BigUint::from_bytes_be(a);
+
+        let mut bytes = vec![0x01];
+        let a_bytes = a_uint.to_bytes_be();
+        bytes.extend_from_slice(&a_bytes);
+        let slice = alloc_and_write!(bytes.as_slice(), env);
+
         env.push(slice);
         Ok(())
     }
