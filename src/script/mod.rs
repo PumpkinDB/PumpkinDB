@@ -124,7 +124,8 @@ word!(INT_ADD, (a, b => c), b"\x87INT/ADD");
 word!(INT_SUB, (a, b => c), b"\x87INT/SUB");
 
 // Casting
-word!(INT_UINT, (a => b), b"\x89INT->UINT");
+word!(INT_TO_UINT, (a => b), b"\x89INT->UINT");
+word!(UINT_TO_INT, (a => b), b"\x89UINT->INT");
 
 // Category: Control flow
 #[cfg(feature = "scoped_dictionary")]
@@ -676,6 +677,7 @@ impl<'a> VM<'a> {
                            self => handle_int_add,
                            self => handle_int_sub,
                            self => handle_int_to_uint,
+                           self => handle_uint_to_int,
                            self => handle_length,
                            self => handle_dowhile,
                            self => handle_times,
@@ -1214,7 +1216,7 @@ impl<'a> VM<'a> {
 
     fn handle_int_to_uint(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId)
         -> PassResult<'a> {
-        word_is!(env, word, INT_UINT);
+        word_is!(env, word, INT_TO_UINT);
         let a = stack_pop!(env);
         let a_int = bytes_to_bigint(a);
 
@@ -1229,6 +1231,21 @@ impl<'a> VM<'a> {
                 Err(error_invalid_value!(a))
             }
         }
+    }
+
+    fn handle_uint_to_int(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId)
+                          -> PassResult<'a> {
+        word_is!(env, word, UINT_TO_INT);
+        let a = stack_pop!(env);
+        let a_uint = BigUint::from_bytes_be(a);
+
+        let mut bytes = vec![0x01];
+        let a_bytes = a_uint.to_bytes_be();
+        bytes.extend_from_slice(&a_bytes);
+        let slice = alloc_and_write!(bytes.as_slice(), env);
+
+        env.push(slice);
+        Ok(())
     }
 
     #[inline]
