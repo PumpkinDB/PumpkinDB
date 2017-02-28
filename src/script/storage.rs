@@ -13,7 +13,7 @@ use lmdb;
 use lmdb::traits::LmdbResultExt;
 use std::mem;
 use std::error::Error as StdError;
-use super::{Env, EnvId, PassResult, Error, STACK_TRUE, STACK_FALSE, offset_by_size,
+use super::{Env, EnvId, Module, PassResult, Error, STACK_TRUE, STACK_FALSE, offset_by_size,
             ERROR_EMPTY_STACK, ERROR_INVALID_VALUE, ERROR_DUPLICATE_KEY, ERROR_NO_TX,
             ERROR_UNKNOWN_KEY, ERROR_DATABASE};
 use core::ops::Deref;
@@ -172,17 +172,9 @@ macro_rules! cursorq_op {
     };
 }
 
-impl<'a> Handler<'a> {
+impl<'a> Module<'a> for Handler<'a> {
 
-    pub fn new(db_env: &'a lmdb::Environment, db: &'a lmdb::Database<'a>) -> Self {
-        Handler {
-            db: db, db_env: db_env,
-            db_write_txn: None, db_read_txn: None,
-            cursors: BTreeMap::new()
-        }
-    }
-
-    pub fn cleanup(&mut self, pid: EnvId) {
+    fn done(&mut self, _: &mut Env, pid: EnvId) {
         let mut is_in_read = false;
         let mut is_in_write = false;
 
@@ -209,6 +201,35 @@ impl<'a> Handler<'a> {
         }
 
     }
+
+    fn handle(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        try_word!(env, self.handle_write(env, word, pid));
+        try_word!(env, self.handle_read(env, word, pid));
+        try_word!(env, self.handle_assoc(env, word, pid));
+        try_word!(env, self.handle_assocq(env, word, pid));
+        try_word!(env, self.handle_retr(env, word, pid));
+        try_word!(env, self.handle_commit(env, word, pid));
+        try_word!(env, self.handle_cursor(env, word, pid));
+        try_word!(env, self.handle_cursor_first(env, word, pid));
+        try_word!(env, self.handle_cursor_next(env, word, pid));
+        try_word!(env, self.handle_cursor_prev(env, word, pid));
+        try_word!(env, self.handle_cursor_last(env, word, pid));
+        try_word!(env, self.handle_cursor_seek(env, word, pid));
+        try_word!(env, self.handle_cursor_cur(env, word, pid));
+        Err(Error::UnknownWord)
+    }
+}
+
+impl<'a> Handler<'a> {
+
+    pub fn new(db_env: &'a lmdb::Environment, db: &'a lmdb::Database<'a>) -> Self {
+        Handler {
+            db: db, db_env: db_env,
+            db_write_txn: None, db_read_txn: None,
+            cursors: BTreeMap::new()
+        }
+    }
+
 
     #[inline]
     pub fn handle_write(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {

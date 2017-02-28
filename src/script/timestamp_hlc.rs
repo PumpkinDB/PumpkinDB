@@ -13,7 +13,7 @@ word!(HLC, b"\x83HLC");
 word!(HLC_LC, b"\x86HLC/LC");
 word!(HLC_TICK, b"\x88HLC/TICK");
 
-use super::{Env, EnvId, PassResult, Error, ERROR_EMPTY_STACK,
+use super::{Env, EnvId, Module, PassResult, Error, ERROR_EMPTY_STACK,
             ERROR_INVALID_VALUE, offset_by_size};
 use timestamp;
 
@@ -23,6 +23,15 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 pub struct Handler<'a> {
     phantom: PhantomData<&'a ()>
+}
+
+impl<'a> Module<'a> for Handler<'a> {
+    fn handle(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        try_word!(env, self.handle_hlc(env, word, pid));
+        try_word!(env, self.handle_hlc_lc(env, word, pid));
+        try_word!(env, self.handle_hlc_tick(env, word, pid));
+        Err(Error::UnknownWord)
+    }
 }
 
 impl<'a> Handler<'a> {

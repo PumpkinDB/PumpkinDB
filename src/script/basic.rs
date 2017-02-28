@@ -1,0 +1,1003 @@
+// Copyright (c) 2017, All Contributors (see CONTRIBUTORS file)
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+use super::{Env, EnvId, Module, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
+            offset_by_size, STACK_TRUE, STACK_FALSE, binparser, textparser, parse_bin};
+use super::super::pubsub;
+
+use std::marker::PhantomData;
+
+use std::collections::BTreeMap;
+
+use nom;
+use num_bigint::{BigUint, BigInt, Sign, };
+use num_traits::{Zero, One, Signed};
+use num_traits::ToPrimitive;
+use core::ops::{Add, Sub};
+
+// Category: Stack
+word!(DROP, (a => ), b"\x84DROP");
+word!(DUP, (a => a, a), b"\x83DUP");
+word!(SWAP, (a, b => b, a), b"\x84SWAP");
+word!(TWOSWAP, (a, b, c, d => c, d, a, b), b"\x852SWAP");
+word!(ROT, (a, b, c  => b, c, a), b"\x83ROT");
+word!(TWOROT, (a, b, c, d, e, f  => c, d, e, f, a, b), b"\x842ROT");
+word!(OVER, (a, b => a, b, a), b"\x84OVER");
+word!(TWOOVER, (a, b, c, d => a, b, c, d, a, b), b"\x852OVER");
+word!(DEPTH, b"\x85DEPTH");
+word!(UNWRAP, b"\x86UNWRAP");
+word!(WRAP, b"\x84WRAP");
+
+// Category: Byte arrays
+word!(EQUALQ, (a, b => c), b"\x86EQUAL?");
+word!(LTQ, (a, b => c), b"\x83LT?");
+word!(GTQ, (a, b => c), b"\x83GT?");
+word!(LENGTH, (a => b), b"\x86LENGTH");
+word!(CONCAT, (a, b => c), b"\x86CONCAT");
+word!(SLICE, (a, b, c => d), b"\x85SLICE");
+word!(PAD, (a, b, c => d), b"\x83PAD");
+
+// Category: arithmetics
+word!(UINT_ADD, (a, b => c), b"\x88UINT/ADD");
+word!(UINT_SUB, (a, b => c), b"\x88UINT/SUB");
+word!(INT_ADD, (a, b => c), b"\x87INT/ADD");
+word!(INT_SUB, (a, b => c), b"\x87INT/SUB");
+
+// Casting
+word!(INT_TO_UINT, (a => b), b"\x89INT->UINT");
+word!(UINT_TO_INT, (a => b), b"\x89UINT->INT");
+
+// Category: Control flow
+#[cfg(feature = "scoped_dictionary")]
+word!(EVAL_SCOPED, b"\x8BEVAL/SCOPED");
+#[cfg(feature = "scoped_dictionary")]
+word!(SCOPE_END, b"\x80\x8BEVAL/SCOPED"); // internal word
+word!(DOWHILE, b"\x87DOWHILE");
+word!(TIMES, b"\x85TIMES");
+word!(EVAL, b"\x84EVAL");
+word!(EVAL_VALIDP, b"\x8BEVAL/VALID?");
+word!(SET, b"\x83SET");
+word!(DEF, b"\x83DEF");
+word!(IF, b"\x82IF"); // for reference, implemented in builtins
+word!(IFELSE, b"\x86IFELSE");
+
+// Category: Logical operations
+word!(NOT, (a => c), b"\x83NOT");
+word!(AND, (a, b => c), b"\x83AND");
+word!(OR, (a, b => c), b"\x82OR");
+
+// Category: pubsub
+word!(SEND, (a => ), b"\x84SEND");
+
+// Category: experimental features
+word!(FEATUREQ, (a => b), b"\x88FEATURE?");
+
+pub fn bytes_to_bigint(bytes: &[u8]) -> Option<BigInt> {
+    if bytes.len() >= 2 {
+        match bytes[0] {
+            0x00 => Some(Sign::Minus),
+            0x01 => Some(Sign::Plus),
+            _ => None
+        }.and_then(|sign| Some(BigInt::from_bytes_be(sign, &bytes[1..])))
+    } else {
+        None
+    }
+
+}
+
+// Builtin words that are implemented in PumpkinScript
+lazy_static! {
+  static ref BUILTIN_FILE: &'static [u8] = include_bytes!("builtins");
+
+  static ref BUILTIN_DEFS: Vec<Vec<u8>> = textparser::programs(*BUILTIN_FILE).unwrap().1;
+
+  static ref BUILTINS: BTreeMap<&'static [u8], Vec<u8>> = {
+      let mut map = BTreeMap::new();
+      let ref defs : Vec<Vec<u8>> = *BUILTIN_DEFS;
+      for definition in defs {
+          match binparser::word(definition.as_slice()) {
+              nom::IResult::Done(&[0x81, b':', ref rest..], _) => {
+                  let word = &definition[0..definition.len() - rest.len() - 2];
+                  map.insert(word, Vec::from(rest));
+              },
+              other => panic!("builtin definition parse error {:?}", other)
+          }
+      }
+      map
+  };
+}
+
+pub struct Handler<'a> {
+    publisher: pubsub::PublisherAccessor<Vec<u8>>,
+    phantom: PhantomData<&'a ()>
+}
+
+impl<'a> Module<'a> for Handler<'a> {
+    fn handle(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        try_word!(env, self.handle_builtins(env, word, pid));
+        try_word!(env, self.handle_drop(env, word, pid));
+        try_word!(env, self.handle_dup(env, word, pid));
+        try_word!(env, self.handle_swap(env, word, pid));
+        try_word!(env, self.handle_2swap(env, word, pid));
+        try_word!(env, self.handle_rot(env, word, pid));
+        try_word!(env, self.handle_2rot(env, word, pid));
+        try_word!(env, self.handle_over(env, word, pid));
+        try_word!(env, self.handle_2over(env, word, pid));
+        try_word!(env, self.handle_depth(env, word, pid));
+        try_word!(env, self.handle_wrap(env, word, pid));
+        try_word!(env, self.handle_ltp(env, word, pid));
+        try_word!(env, self.handle_gtp(env, word, pid));
+        try_word!(env, self.handle_equal(env, word, pid));
+        try_word!(env, self.handle_concat(env, word, pid));
+        try_word!(env, self.handle_slice(env, word, pid));
+        try_word!(env, self.handle_pad(env, word, pid));
+        try_word!(env, self.handle_uint_add(env, word, pid));
+        try_word!(env, self.handle_uint_sub(env, word, pid));
+        try_word!(env, self.handle_int_add(env, word, pid));
+        try_word!(env, self.handle_int_sub(env, word, pid));
+        try_word!(env, self.handle_int_to_uint(env, word, pid));
+        try_word!(env, self.handle_uint_to_int(env, word, pid));
+        try_word!(env, self.handle_length(env, word, pid));
+        try_word!(env, self.handle_dowhile(env, word, pid));
+        try_word!(env, self.handle_times(env, word, pid));
+        try_word!(env, self.handle_scope_end(env, word, pid));
+        try_word!(env, self.handle_eval(env, word, pid));
+        try_word!(env, self.handle_eval_validp(env, word, pid));
+        try_word!(env, self.handle_eval_scoped(env, word, pid));
+        try_word!(env, self.handle_unwrap(env, word, pid));
+        try_word!(env, self.handle_set(env, word, pid));
+        try_word!(env, self.handle_def(env, word, pid));
+        try_word!(env, self.handle_not(env, word, pid));
+        try_word!(env, self.handle_and(env, word, pid));
+        try_word!(env, self.handle_or(env, word, pid));
+        try_word!(env, self.handle_ifelse(env, word, pid));
+        try_word!(env, self.handle_send(env, word, pid));
+        try_word!(env, self.handle_featurep(env, word, pid));
+        Err(Error::UnknownWord)
+    }
+}
+
+impl<'a> Handler<'a> {
+
+    pub fn new(publisher: pubsub::PublisherAccessor<Vec<u8>>) -> Self {
+        Handler { publisher: publisher, phantom: PhantomData }
+    }
+
+    #[inline]
+    fn handle_builtins(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if BUILTINS.contains_key(word) {
+            let vec = BUILTINS.get(word).unwrap();
+            env.program.push(vec.as_slice());
+            Ok(())
+        } else {
+            Err(Error::UnknownWord)
+        }
+    }
+
+    #[inline]
+    fn handle_dup(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, DUP);
+        let v = stack_pop!(env);
+
+        env.push(v);
+        env.push(v);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_swap(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, SWAP);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+
+        env.push(a);
+        env.push(b);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_2swap(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, TWOSWAP);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+        let c = stack_pop!(env);
+        let d = stack_pop!(env);
+
+        env.push(b);
+        env.push(a);
+
+        env.push(d);
+        env.push(c);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_over(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, OVER);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+
+        env.push(b);
+        env.push(a);
+        env.push(b);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_2over(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, TWOOVER);
+        let d = stack_pop!(env);
+        let c = stack_pop!(env);
+        let b = stack_pop!(env);
+        let a = stack_pop!(env);
+
+        env.push(a);
+        env.push(b);
+        env.push(c);
+        env.push(d);
+        env.push(a);
+        env.push(b);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_rot(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, ROT);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+        let c = stack_pop!(env);
+
+        env.push(b);
+        env.push(a);
+        env.push(c);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_2rot(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, TWOROT);
+        let f = stack_pop!(env);
+        let e = stack_pop!(env);
+        let d = stack_pop!(env);
+        let c = stack_pop!(env);
+        let b = stack_pop!(env);
+        let a = stack_pop!(env);
+
+        env.push(c);
+        env.push(d);
+        env.push(e);
+        env.push(f);
+        env.push(a);
+        env.push(b);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_drop(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, DROP);
+        let _ = stack_pop!(env);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_depth(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, DEPTH);
+        let bytes = BigUint::from(env.stack_size).to_bytes_be();
+        let slice = alloc_and_write!(bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_wrap(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, WRAP);
+        let n = stack_pop!(env);
+
+        let mut n_int = BigUint::from_bytes_be(n).to_u64().unwrap() as usize;
+
+        let mut vec = Vec::new();
+
+        while n_int > 0 {
+            let item = stack_pop!(env);
+            vec.insert(0, item);
+            n_int -= 1;
+        }
+
+        let size = vec.clone().into_iter()
+            .fold(0, |a, item| a + item.len() + offset_by_size(item.len()));
+
+        let mut slice = alloc_slice!(size, env);
+
+        let mut offset = 0;
+        for item in vec {
+            write_size_into_slice!(item.len(), &mut slice[offset..]);
+            offset += offset_by_size(item.len());
+            slice[offset..offset + item.len()].copy_from_slice(item);
+            offset += item.len();
+        }
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_equal(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, EQUALQ);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+
+        if a == b {
+            env.push(STACK_TRUE);
+        } else {
+            env.push(STACK_FALSE);
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_not(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, NOT);
+        let a = stack_pop!(env);
+
+        if a == STACK_TRUE {
+            env.push(STACK_FALSE);
+        } else if a == STACK_FALSE {
+            env.push(STACK_TRUE);
+        } else {
+            return Err(error_invalid_value!(a));
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_and(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, AND);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+
+        if !(a == STACK_TRUE || a == STACK_FALSE) {
+            return Err(error_invalid_value!(a));
+        }
+        if !(b == STACK_TRUE || b == STACK_FALSE) {
+            return Err(error_invalid_value!(b));
+        }
+
+        if a == STACK_TRUE && b == STACK_TRUE {
+            env.push(STACK_TRUE);
+        } else if a == STACK_FALSE || b == STACK_FALSE {
+            env.push(STACK_FALSE);
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_or(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, OR);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+
+        if !(a == STACK_TRUE || a == STACK_FALSE) {
+            return Err(error_invalid_value!(a));
+        }
+        if !(b == STACK_TRUE || b == STACK_FALSE) {
+            return Err(error_invalid_value!(b));
+        }
+
+        if a == STACK_TRUE || b == STACK_TRUE {
+            env.push(STACK_TRUE);
+        } else {
+            env.push(STACK_FALSE);
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_ifelse(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, IFELSE);
+        let else_ = stack_pop!(env);
+        let then = stack_pop!(env);
+        let cond = stack_pop!(env);
+
+        if cond == STACK_TRUE {
+            env.program.push(then);
+            Ok(())
+        } else if cond == STACK_FALSE {
+            env.program.push(else_);
+            Ok(())
+        } else {
+            Err(error_invalid_value!(cond))
+        }
+    }
+
+    #[inline]
+    fn handle_ltp(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, LTQ);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+
+        if b < a {
+            env.push(STACK_TRUE);
+        } else {
+            env.push(STACK_FALSE);
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_gtp(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, GTQ);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+
+        if b > a {
+            env.push(STACK_TRUE);
+        } else {
+            env.push(STACK_FALSE);
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_concat(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, CONCAT);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+
+        let slice = alloc_slice!(a.len() + b.len(), env);
+
+        slice[0..b.len()].copy_from_slice(b);
+        slice[b.len()..b.len()+a.len()].copy_from_slice(a);
+
+        env.push(slice);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_slice(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, SLICE);
+        let end = stack_pop!(env);
+        let start = stack_pop!(env);
+        let slice = stack_pop!(env);
+
+        let start_int = BigUint::from_bytes_be(start).to_u64().unwrap() as usize;
+        let end_int = BigUint::from_bytes_be(end).to_u64().unwrap() as usize;
+
+        // range conditions
+        if start_int > end_int {
+            return Err(error_invalid_value!(start));
+        }
+
+        if start_int > slice.len() - 1 {
+            return Err(error_invalid_value!(start));
+        }
+
+        if end_int > slice.len() {
+            return Err(error_invalid_value!(end));
+        }
+
+        env.push(&slice[start_int..end_int]);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_pad(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, PAD);
+        let byte = stack_pop!(env);
+        let size = stack_pop!(env);
+        let value = stack_pop!(env);
+
+        if byte.len() != 1 {
+            return Err(error_invalid_value!(byte));
+        }
+
+        let size_int = BigUint::from_bytes_be(size).to_u64().unwrap() as usize;
+
+        if size_int > 1024 {
+            return Err(error_invalid_value!(size));
+        }
+
+        let slice = alloc_slice!(size_int, env);
+
+        for i in 0..size_int-value.len() {
+            slice[i] = byte[0];
+        }
+        slice[size_int-value.len()..].copy_from_slice(value);
+
+        env.push(slice);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_length(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, LENGTH);
+        let a = stack_pop!(env);
+
+        let len = BigUint::from(a.len() as u64);
+        let len_bytes = len.to_bytes_be();
+
+        let slice = alloc_and_write!(len_bytes.as_slice(), env);
+
+        env.push(slice);
+
+        Ok(())
+    }
+
+    #[inline]
+    #[cfg(feature = "scoped_dictionary")]
+    fn handle_eval_scoped(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, EVAL_SCOPED);
+        env.push_dictionary();
+        let a = stack_pop!(env);
+        env.program.push(SCOPE_END);
+        env.program.push(a);
+        Ok(())
+    }
+
+    #[inline]
+    #[cfg(not(feature = "scoped_dictionary"))]
+    fn handle_eval_scoped(&mut self, _: &Env<'a>, _: &'a [u8], _: EnvId) -> PassResult<'a> {
+        Err(Error::UnknownWord)
+    }
+
+
+    #[inline]
+    #[cfg(feature = "scoped_dictionary")]
+    fn handle_scope_end(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, SCOPE_END);
+        env.pop_dictionary();
+        Ok(())
+    }
+
+
+    #[inline]
+    #[cfg(not(feature = "scoped_dictionary"))]
+    fn handle_scope_end(&mut self, _: &mut Env<'a>, _: &'a [u8], _: EnvId) -> PassResult<'a> {
+        Err(Error::UnknownWord)
+    }
+
+    #[inline]
+    fn handle_uint_add(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, UINT_ADD);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+
+        let a_uint = BigUint::from_bytes_be(a);
+        let b_uint = BigUint::from_bytes_be(b);
+
+        let c_uint = a_uint.add(b_uint);
+
+        let c_bytes = c_uint.to_bytes_be();
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    fn handle_int_add(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, INT_ADD);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+
+        let a_int = bytes_to_bigint(a);
+        let b_int = bytes_to_bigint(b);
+
+        if a_int == None {
+            return Err(error_invalid_value!(a))
+        }
+        if b_int == None {
+            return Err(error_invalid_value!(b))
+        }
+
+        let c_int = a_int.unwrap().add(b_int.unwrap());
+
+        let mut bytes = if c_int.is_negative() {
+            vec![0x00]
+        } else {
+            vec![0x01]
+        };
+        let (_, c_bytes) = c_int.to_bytes_be();
+        bytes.extend_from_slice(&c_bytes);
+        let slice = alloc_and_write!(bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    fn handle_int_sub(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, INT_SUB);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+
+        let a_int = bytes_to_bigint(a);
+        let b_int = bytes_to_bigint(b);
+
+        if a_int == None {
+            return Err(error_invalid_value!(a))
+        }
+        if b_int == None {
+            return Err(error_invalid_value!(b))
+        }
+
+        let c_int = b_int.unwrap().sub(a_int.unwrap());
+
+        let mut bytes = if c_int.is_negative() {
+            vec![0x00]
+        } else {
+            vec![0x01]
+        };
+        let (_, c_bytes) = c_int.to_bytes_be();
+        bytes.extend_from_slice(&c_bytes);
+        let slice = alloc_and_write!(bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    fn handle_int_to_uint(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId)
+                          -> PassResult<'a> {
+        word_is!(env, word, INT_TO_UINT);
+        let a = stack_pop!(env);
+        let a_int = bytes_to_bigint(a);
+
+        if a_int == None {
+            return Err(error_invalid_value!(a))
+        }
+
+        match a_int.unwrap().to_biguint() {
+            Some(a_uint) => {
+                let a_bytes = a_uint.to_bytes_be();
+                let slice = alloc_and_write!(a_bytes.as_slice(), env);
+                env.push(slice);
+                Ok(())
+            },
+            None => {
+                Err(error_invalid_value!(a))
+            }
+        }
+    }
+
+    fn handle_uint_to_int(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId)
+                          -> PassResult<'a> {
+        word_is!(env, word, UINT_TO_INT);
+        let a = stack_pop!(env);
+        let a_uint = BigUint::from_bytes_be(a);
+
+        let mut bytes = vec![0x01];
+        let a_bytes = a_uint.to_bytes_be();
+        bytes.extend_from_slice(&a_bytes);
+        let slice = alloc_and_write!(bytes.as_slice(), env);
+
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_uint_sub(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, UINT_SUB);
+        let a = stack_pop!(env);
+        let b = stack_pop!(env);
+
+        let a_uint = BigUint::from_bytes_be(a);
+        let b_uint = BigUint::from_bytes_be(b);
+
+        if a_uint > b_uint {
+            return Err(error_invalid_value!(a));
+        }
+
+        let c_uint = b_uint.sub(a_uint);
+
+        let c_bytes = c_uint.to_bytes_be();
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_eval(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, EVAL);
+        let a = stack_pop!(env);
+        env.program.push(a);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_eval_validp(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, EVAL_VALIDP);
+        let a = stack_pop!(env);
+        if parse_bin(a).is_ok() {
+            env.push(STACK_TRUE);
+        } else {
+            env.push(STACK_FALSE);
+        }
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_unwrap(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, UNWRAP);
+        let mut current = stack_pop!(env);
+        while current.len() > 0 {
+            match binparser::data(current) {
+                nom::IResult::Done(rest, val) => {
+                    env.push(&val[offset_by_size(val.len())..]);
+                    current = rest
+                },
+                _ => {
+                    return Err(error_invalid_value!(current))
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_dowhile(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, DOWHILE);
+        let v = stack_pop!(env);
+
+        let mut vec = Vec::new();
+
+        let mut header = vec![0;offset_by_size(v.len() + DOWHILE.len() + offset_by_size(v.len()))];
+        write_size_into_slice!(offset_by_size(v.len()) + v.len() + DOWHILE.len(), header.as_mut_slice());
+        vec.append(&mut header);
+
+        // inject code closure size
+        let mut header = vec![0;offset_by_size(v.len())];
+        write_size_into_slice!(v.len(), header.as_mut_slice());
+        vec.append(&mut header);
+
+        // inject code closure
+        vec.extend_from_slice(v);
+        // inject DOWHILE
+        vec.extend_from_slice(DOWHILE);
+        // inject IF
+        vec.extend_from_slice(IF);
+
+        let slice = alloc_and_write!(vec.as_slice(), env);
+        env.program.push(slice);
+        env.program.push(v);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_times(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, TIMES);
+        let count = stack_pop!(env);
+
+        let v = stack_pop!(env);
+
+        let counter = BigUint::from_bytes_be(count);
+        if counter.is_zero() {
+            Ok(())
+        } else {
+            let mut vec = Vec::new();
+            if counter != BigUint::one() {
+                // inject the prefix for the code
+                let mut header = vec![0;offset_by_size(v.len())];
+                write_size_into_slice!(v.len(), header.as_mut_slice());
+                vec.append(&mut header);
+                vec.extend_from_slice(v);
+                // inject the decremented counter
+                let counter = counter.sub(BigUint::one());
+                let mut counter_bytes = counter.to_bytes_be();
+                let mut header = vec![0;offset_by_size(counter_bytes.len())];
+                write_size_into_slice!(counter_bytes.len(), header.as_mut_slice());
+                vec.append(&mut header);
+                vec.append(&mut counter_bytes);
+                // inject TIMES
+                vec.extend_from_slice(TIMES);
+            }
+            let slice = alloc_and_write!(vec.as_slice(), env);
+            env.program.push(slice);
+            env.program.push(v);
+            Ok(())
+        }
+    }
+
+    #[inline]
+    fn handle_set(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, SET);
+        let word = stack_pop!(env);
+        let value = stack_pop!(env);
+        match binparser::word(word) {
+            nom::IResult::Done(_, _) => {
+                let slice = alloc_slice!(value.len() + offset_by_size(value.len()), env);
+                write_size_into_slice!(value.len(), slice);
+                let offset = offset_by_size(value.len());
+                slice[offset..offset + value.len()].copy_from_slice(value);
+                #[cfg(feature = "scoped_dictionary")]
+                {
+                    let mut dict = env.dictionary.pop().unwrap();
+                    dict.insert(word, slice);
+                    env.dictionary.push(dict);
+                }
+                #[cfg(not(feature = "scoped_dictionary"))]
+                env.dictionary.insert(word, slice);
+                Ok(())
+            },
+            _ => Err(error_invalid_value!(word))
+        }
+    }
+
+    fn handle_def(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, DEF);
+        let word = stack_pop!(env);
+        let value = stack_pop!(env);
+        match binparser::word(word) {
+            nom::IResult::Done(_, _) => {
+                #[cfg(feature = "scoped_dictionary")]
+                {
+                    let mut dict = env.dictionary.pop().unwrap();
+                    dict.insert(word, value);
+                    env.dictionary.push(dict);
+                }
+                #[cfg(not(feature = "scoped_dictionary"))]
+                env.dictionary.insert(word, value);
+                Ok(())
+            },
+            _ => Err(error_invalid_value!(word))
+        }
+    }
+
+
+    #[inline]
+    fn handle_send(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, SEND);
+        let topic = stack_pop!(env);
+        let data = stack_pop!(env);
+
+        let receiver = self.publisher.send_async(Vec::from(topic), Vec::from(data));
+
+        env.send_ack = Some(receiver);
+
+        Ok(())
+    }
+
+    #[inline]
+    #[allow(unused_variables)]
+    fn handle_featurep(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        word_is!(env, word, FEATUREQ);
+        let name = stack_pop!(env);
+
+        #[cfg(feature = "scoped_dictionary")]
+        {
+            if name == "scoped_dictionary".as_bytes() {
+                env.push(STACK_TRUE);
+                return Ok(())
+            }
+        }
+
+        env.push(STACK_FALSE);
+
+        Ok(())
+    }
+
+}
+
+#[cfg(test)]
+#[allow(unused_variables, unused_must_use, unused_mut)]
+mod tests {
+
+    use script::{Env, VM, Error, RequestMessage, ResponseMessage, EnvId, parse, offset_by_size};
+    use std::sync::mpsc;
+    use std::fs;
+    use std::thread;
+    use tempdir::TempDir;
+    use lmdb;
+    use crossbeam;
+    use super::binparser;
+    use pubsub;
+
+    const _EMPTY: &'static [u8] = b"";
+
+    use std::time::Duration;
+
+    #[test]
+    fn send() {
+        eval!("\"Hello\" \"Topic\" SEND", env, result, publisher_accessor, {
+            let (sender1, receiver1) = mpsc::channel();
+            publisher_accessor.subscribe(Vec::from("Topic"), sender1);
+
+            let (sender0, receiver0) = mpsc::channel();
+            thread::spawn(move ||  {
+               match receiver1.recv() {
+                  Ok((topic, message, callback)) => {
+                     callback.send(());
+                     sender0.send((topic, message));
+                  },
+                  e => panic!("unexpected result {:?}", e)
+               };
+
+            });
+
+        }, {
+            assert!(!result.is_err());
+
+            let result = receiver0.recv_timeout(Duration::from_secs(1)).unwrap();
+            assert_eq!(result, (Vec::from("Topic"), Vec::from("Hello")));
+        });
+
+        eval!("\"Hello\" \"Topic1\" SEND", env, result, publisher_accessor, {
+            let (sender, receiver) = mpsc::channel();
+            publisher_accessor.subscribe(Vec::from("Topic"), sender);
+        }, {
+            assert!(!result.is_err());
+            assert!(receiver.recv_timeout(Duration::from_secs(1)).is_err());
+        });
+
+        eval!("\"Topic\" SEND", env, result, {
+            assert_error!(result, "[\"Empty stack\" [] 4]");
+        });
+
+        eval!("SEND", env, result, {
+            assert_error!(result, "[\"Empty stack\" [] 4]");
+        });
+    }
+
+    #[test]
+    fn try() {
+        eval!("[1 DUP] TRY", env, result, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[]"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("[DUP] TRY", env, result, {
+            assert!(!result.is_err());
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Empty stack\" [] 4]"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("[NOTAWORD] TRY", env, result, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Unknown word: NOTAWORD\" ['NOTAWORD] 2]"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("[[DUP] TRY 0x20 NOT] TRY", env, result, {
+            assert!(!result.is_err());
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Invalid value\" [0x20] 3]"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Empty stack\" [] 4]"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("[1 DUP] TRY STACK DROP DUP", env, result, {
+            assert!(result.is_err());
+        });
+
+        eval!("[DUP] TRY STACK DROP DUP", env, result, {
+            assert!(result.is_err());
+        });
+
+        eval!("1 TRY", env, result, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Decoding error\" [] 5]"));
+            assert_eq!(env.pop(), None);
+        });
+
+    }
+
+    use test::Bencher;
+
+    #[bench]
+    fn times(b: &mut Bencher) {
+        bench_eval!("[1 DROP] 1000 TIMES", b);
+    }
+
+}
