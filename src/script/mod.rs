@@ -123,6 +123,9 @@ word!(UINT_SUB, (a, b => c), b"\x88UINT/SUB");
 word!(INT_ADD, (a, b => c), b"\x87INT/ADD");
 word!(INT_SUB, (a, b => c), b"\x87INT/SUB");
 
+// Casting
+word!(INT_UINT, (a => b), b"\x89INT->UINT");
+
 // Category: Control flow
 #[cfg(feature = "scoped_dictionary")]
 word!(EVAL_SCOPED, b"\x8BEVAL/SCOPED");
@@ -672,6 +675,7 @@ impl<'a> VM<'a> {
                            self => handle_uint_sub,
                            self => handle_int_add,
                            self => handle_int_sub,
+                           self => handle_int_to_uint,
                            self => handle_length,
                            self => handle_dowhile,
                            self => handle_times,
@@ -1206,6 +1210,25 @@ impl<'a> VM<'a> {
         let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
         Ok(())
+    }
+
+    fn handle_int_to_uint(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId)
+        -> PassResult<'a> {
+        word_is!(env, word, INT_UINT);
+        let a = stack_pop!(env);
+        let a_int = bytes_to_bigint(a);
+
+        match a_int.to_biguint() {
+            Some(a_uint) => {
+                let a_bytes = a_uint.to_bytes_be();
+                let slice = alloc_and_write!(a_bytes.as_slice(), env);
+                env.push(slice);
+                Ok(())
+            },
+            None => {
+                Err(error_invalid_value!(a))
+            }
+        }
     }
 
     #[inline]
