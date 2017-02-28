@@ -704,6 +704,48 @@ mod tests {
         });
     }
 
+    #[test]
+    fn try() {
+        eval!("[1 DUP] TRY", env, result, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[]"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("[DUP] TRY", env, result, {
+            assert!(!result.is_err());
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Empty stack\" [] 4]"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("[NOTAWORD] TRY", env, result, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Unknown word: NOTAWORD\" ['NOTAWORD] 2]"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("[[DUP] TRY 0x20 NOT] TRY", env, result, {
+            assert!(!result.is_err());
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Invalid value\" [0x20] 3]"));
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Empty stack\" [] 4]"));
+            assert_eq!(env.pop(), None);
+        });
+
+        eval!("[1 DUP] TRY STACK DROP DUP", env, result, {
+            assert!(result.is_err());
+        });
+
+        eval!("[DUP] TRY STACK DROP DUP", env, result, {
+            assert!(result.is_err());
+        });
+
+        eval!("1 TRY", env, result, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Decoding error\" [] 5]"));
+            assert_eq!(env.pop(), None);
+        });
+
+    }
+
     use test::Bencher;
 
     #[bench]
