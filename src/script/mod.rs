@@ -397,7 +397,7 @@ pub fn offset_by_size(size: usize) -> usize {
 
 pub fn bytes_to_bigint(bytes: &[u8]) -> BigInt {
     let sign = match bytes[0] {
-        0x01 => Sign::Minus,
+        0x00 => Sign::Minus,
         _ => Sign::Plus
     };
     BigInt::from_bytes_be(sign, &bytes[1..])
@@ -1175,9 +1175,9 @@ impl<'a> VM<'a> {
         let c_int = a_int.add(b_int);
 
         let mut bytes = if c_int.is_negative() {
-            vec![0x01]
-        } else {
             vec![0x00]
+        } else {
+            vec![0x01]
         };
         let (_, c_bytes) = c_int.to_bytes_be();
         bytes.extend_from_slice(&c_bytes);
@@ -1197,9 +1197,9 @@ impl<'a> VM<'a> {
         let c_int = b_int.sub(a_int);
 
         let mut bytes = if c_int.is_negative() {
-            vec![0x01]
-        } else {
             vec![0x00]
+        } else {
+            vec![0x01]
         };
         let (_, c_bytes) = c_int.to_bytes_be();
         bytes.extend_from_slice(&c_bytes);
