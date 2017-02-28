@@ -49,36 +49,15 @@ macro_rules! handle_error {
     }};
 }
 
-macro_rules! handle_words {
-    ($it: expr, $env: expr, $program: expr, $word: expr, $res: ident,
-     $pid: ident, { $($me: expr => $name: ident),* }) => {
-    {
-      let mut env = $env;
-      if $word != TRY_END && !env.aborting_try.is_empty() {
-         Ok(())
-      } else {
-          $(
-            match $me.$name(env, $word, $pid) {
-              Err(Error::Reschedule) => {
-                // restore original program
-                let _ = env.program.pop().unwrap();
-                env.program.push($program);
-                return Ok(());
-              },
-              Err(Error::UnknownWord) => (),
-              Err(err @ Error::ProgramError(_)) => {
-                $it.storage.cleanup($pid.clone());
-                return handle_error!(env, err)
-              },
-              Err(err) => return Err(err),
-              Ok(()) => return Ok(())
-            };
-          )*
-          $it.storage.cleanup($pid.clone());
-          handle_error!(env, error_unknown_word!($word))
-      }
+macro_rules! try_word {
+  ($env: expr, $handler : expr) => {
+    match $handler {
+        Err(Error::UnknownWord) => (),
+        Err(err @ Error::ProgramError(_)) => return handle_error!($env, err),
+        Err(err) => return Err(err),
+        Ok(()) => return Ok(())
     }
-    };
+  };
 }
 
 macro_rules! validate_lockout {

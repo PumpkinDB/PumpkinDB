@@ -25,7 +25,7 @@ word!(HASH_SHA512_256, b"\x8FHASH/SHA512-256");
  * `Sha512Trunc256`, which is the 64-bit `Sha512` algorithm with the result truncated to 256 bits.
 */
 
-use super::{Env, EnvId, PassResult, Error, ERROR_EMPTY_STACK, offset_by_size};
+use super::{Env, EnvId, Module, PassResult, Error, ERROR_EMPTY_STACK, offset_by_size};
 use crypto::digest::Digest;
 use crypto::sha1::Sha1;
 use crypto::sha2::*;
@@ -50,6 +50,19 @@ macro_rules! hash_word {
         Ok(())
     }
     };
+}
+
+impl<'a> Module<'a> for Handler<'a> {
+    fn handle(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        try_word!(env, self.handle_hash_sha1(env, word, pid));
+        try_word!(env, self.handle_hash_sha224(env, word, pid));
+        try_word!(env, self.handle_hash_sha256(env, word, pid));
+        try_word!(env, self.handle_hash_sha384(env, word, pid));
+        try_word!(env, self.handle_hash_sha512(env, word, pid));
+        try_word!(env, self.handle_hash_sha512_224(env, word, pid));
+        try_word!(env, self.handle_hash_sha512_256(env, word, pid));
+        Err(Error::UnknownWord)
+    }
 }
 
 impl<'a> Handler<'a> {
