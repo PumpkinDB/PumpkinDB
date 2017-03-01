@@ -60,38 +60,6 @@ macro_rules! try_word {
   };
 }
 
-macro_rules! validate_read_lockout {
-    ($locks: expr, $env_id: expr) => {
-        if $locks.len() > 0 {
-            if !$locks.contains_key(&$env_id) {
-                return Err(Error::Reschedule)
-            }
-        }
-    };
-}
-
-macro_rules! validate_lockout {
-    ($env: expr, $name: expr, $pid: expr) => {
-        if let Some((pid_, _)) = $name {
-            if pid_ != $pid {
-                return Err(Error::Reschedule)
-            }
-        }
-    };
-}
-
-macro_rules! read_or_write_transaction {
-    ($me: expr, $env: expr) => {
-        if let Some((_, ref txn)) = $me.db_write_txn {
-            txn.deref()
-        } else if let Some((_, ref txn)) = $me.db_read_txn {
-            txn.deref()
-        } else {
-            return Err(error_no_transaction!());
-        };
-    };
-}
-
 macro_rules! stack_pop {
     ($env: expr) => {
         match $env.pop() {

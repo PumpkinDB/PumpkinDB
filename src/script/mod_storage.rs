@@ -88,6 +88,26 @@ macro_rules! tx_type {
     };
 }
 
+macro_rules! validate_read_lockout {
+    ($locks: expr, $env_id: expr) => {
+        if $locks.len() > 0 {
+            if !$locks.contains_key(&$env_id) {
+                return Err(Error::Reschedule)
+            }
+        }
+    };
+}
+
+macro_rules! validate_lockout {
+    ($env: expr, $name: expr, $pid: expr) => {
+        if let Some((pid_, _)) = $name {
+            if pid_ != $pid {
+                return Err(Error::Reschedule)
+            }
+        }
+    };
+}
+
 const STACK_EMPTY_CLOSURE: &'static [u8] = b"";
 
 macro_rules! qcursor_op {
