@@ -279,10 +279,10 @@ macro_rules! eval {
                 let $publisher_accessor = publisher.accessor();
                 let publisher_thread = scope.spawn(move || publisher.run());
                 $($init)*
-                let mut vm = VM::new(&env, &db, $publisher_accessor.clone());
-                let sender = vm.sender();
+                let mut scheduler = Scheduler::new(&env, &db, $publisher_accessor.clone());
+                let sender = scheduler.sender();
                 let handle = scope.spawn(move || {
-                    vm.run();
+                    scheduler.run();
                 });
                 let script = parse($script).unwrap();
                 let (callback, receiver) = mpsc::channel::<ResponseMessage>();
@@ -348,11 +348,11 @@ macro_rules! bench_eval {
                 let publisher_accessor = publisher.accessor();
                 let publisher_accessor_ = publisher.accessor();
                 let publisher_thread = scope.spawn(move || publisher.run());
-                let mut vm = VM::new(&env, &db, publisher_accessor.clone());
-                let sender = vm.sender();
+                let mut scheduler = Scheduler::new(&env, &db, publisher_accessor.clone());
+                let sender = scheduler.sender();
                 let sender_ = sender.clone();
                 let handle = scope.spawn(move || {
-                    vm.run();
+                    scheduler.run();
                 });
                 let script = parse($script).unwrap();
                 $b.iter(move || {

@@ -24,7 +24,7 @@ use regex::Regex;
 use glob::glob;
 
 
-use pumpkindb::script::{RequestMessage, ResponseMessage, EnvId, Env, VM};
+use pumpkindb::script::{RequestMessage, ResponseMessage, EnvId, Env, Scheduler};
 use pumpkindb::script::{textparser, binparser};
 use pumpkindb::pubsub;
 
@@ -50,9 +50,9 @@ fn eval(name: &[u8], script: &[u8]) {
         let mut publisher = pubsub::Publisher::new();
         let publisher_accessor = publisher.accessor();
         let publisher_thread = scope.spawn(move || publisher.run());
-        let mut vm = VM::new(&env, &db, publisher_accessor.clone());
-        let sender = vm.sender();
-        let handle = scope.spawn(move || vm.run());
+        let mut scheduler = Scheduler::new(&env, &db, publisher_accessor.clone());
+        let sender = scheduler.sender();
+        let handle = scope.spawn(move || scheduler.run());
         let (callback, receiver) = mpsc::channel::<ResponseMessage>();
         let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(), Vec::from(script), callback));
         match receiver.recv() {
