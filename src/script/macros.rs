@@ -60,6 +60,16 @@ macro_rules! try_word {
   };
 }
 
+macro_rules! validate_read_lockout {
+    ($locks: expr, $env_id: expr) => {
+        if $locks.len() > 0 {
+            if !$locks.contains_key(&$env_id) {
+                return Err(Error::Reschedule)
+            }
+        }
+    };
+}
+
 macro_rules! validate_lockout {
     ($env: expr, $name: expr, $pid: expr) => {
         if let Some((pid_, _)) = $name {
