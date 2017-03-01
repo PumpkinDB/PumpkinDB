@@ -1,5 +1,6 @@
 [![Gitter chat](https://badges.gitter.im/PumpkinDB.png)](https://gitter.im/PumpkinDB/Lobby)
 [![Build Status](https://travis-ci.org/PumpkinDB/PumpkinDB.svg?branch=master)](https://travis-ci.org/PumpkinDB/PumpkinDB)
+[![Code Triagers](https://www.codetriage.com/pumpkindb/pumpkindb/badges/users.svg)](https://www.codetriage.com/pumpkindb/pumpkindb)
 
 PumpkinDB
 =========
