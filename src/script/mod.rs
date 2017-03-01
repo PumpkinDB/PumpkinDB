@@ -346,14 +346,14 @@ use lmdb;
 
 use pubsub;
 
-pub mod core;
-pub mod stack;
-pub mod numbers;
-pub mod binaries;
-pub mod storage;
-pub mod timestamp_hlc;
-pub mod hash;
-pub mod json;
+pub mod mod_core;
+pub mod mod_stack;
+pub mod mod_numbers;
+pub mod mod_binaries;
+pub mod mod_storage;
+pub mod mod_hlc;
+pub mod mod_hash;
+pub mod mod_json;
 
 pub trait Module<'a> {
     fn init(&mut self, _: &mut Env<'a>, _: EnvId) {}
@@ -448,21 +448,21 @@ pub struct VM<'a> {
     #[cfg(not(feature = "static_module_dispatch"))]
     modules: Vec<Box<Module<'a> + 'a>>,
     #[cfg(feature = "static_module_dispatch")]
-    core: core::Handler<'a>,
+    core: mod_core::Handler<'a>,
     #[cfg(feature = "static_module_dispatch")]
-    stack: stack::Handler<'a>,
+    stack: mod_stack::Handler<'a>,
     #[cfg(feature = "static_module_dispatch")]
-    binaries: binaries::Handler<'a>,
+    binaries: mod_binaries::Handler<'a>,
     #[cfg(feature = "static_module_dispatch")]
-    numbers: numbers::Handler<'a>,
+    numbers: mod_numbers::Handler<'a>,
     #[cfg(feature = "static_module_dispatch")]
-    storage: storage::Handler<'a>,
+    storage: mod_storage::Handler<'a>,
     #[cfg(feature = "static_module_dispatch")]
-    hash: hash::Handler<'a>,
+    hash: mod_hash::Handler<'a>,
     #[cfg(feature = "static_module_dispatch")]
-    hlc: timestamp_hlc::Handler<'a>,
+    hlc: mod_hlc::Handler<'a>,
     #[cfg(feature = "static_module_dispatch")]
-    json: json::Handler<'a>,
+    json: mod_json::Handler<'a>,
 }
 
 unsafe impl<'a> Send for VM<'a> {}
@@ -494,28 +494,28 @@ impl<'a> VM<'a> {
         return VM {
             inbox: receiver,
             sender: sender.clone(),
-            modules: vec![Box::new(core::Handler::new(publisher)),
-                          Box::new(stack::Handler::new()),
-                          Box::new(binaries::Handler::new()),
-                          Box::new(numbers::Handler::new()),
-                          Box::new(storage::Handler::new(db_env, db)),
-                          Box::new(hash::Handler::new()),
-                          Box::new(timestamp_hlc::Handler::new()),
-                          Box::new(json::Handler::new()),
+            modules: vec![Box::new(mod_core::Handler::new(publisher)),
+                          Box::new(mod_stack::Handler::new()),
+                          Box::new(mod_binaries::Handler::new()),
+                          Box::new(mod_numbers::Handler::new()),
+                          Box::new(mod_storage::Handler::new(db_env, db)),
+                          Box::new(mod_hash::Handler::new()),
+                          Box::new(mod_hlc::Handler::new()),
+                          Box::new(mod_json::Handler::new()),
             ],
         };
         #[cfg(feature = "static_module_dispatch")]
         return VM {
             inbox: receiver,
             sender: sender.clone(),
-            core: core::Handler::new(publisher),
-            stack: stack::Handler::new(),
-            binaries: binaries::Handler::new(),
-            numbers: numbers::Handler::new(),
-            storage: storage::Handler::new(db_env, db),
-            hash: hash::Handler::new(),
-            hlc: timestamp_hlc::Handler::new(),
-            json: json::Handler::new()
+            core: mod_core::Handler::new(publisher),
+            stack: mod_stack::Handler::new(),
+            binaries: mod_binaries::Handler::new(),
+            numbers: mod_numbers::Handler::new(),
+            storage: mod_storage::Handler::new(db_env, db),
+            hash: mod_hash::Handler::new(),
+            hlc: mod_hlc::Handler::new(),
+            json: mod_json::Handler::new()
         };
     }
 
