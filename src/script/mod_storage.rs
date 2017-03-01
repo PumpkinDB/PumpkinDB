@@ -488,7 +488,7 @@ impl<'a> Handler<'a> {
 #[cfg(test)]
 #[allow(unused_variables, unused_must_use, unused_mut, unused_imports)]
 mod tests {
-    use script::{Env, VM, Error, RequestMessage, ResponseMessage, EnvId, parse, offset_by_size};
+    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, parse, offset_by_size};
     use std::sync::mpsc;
     use std::fs;
     use tempdir::TempDir;
