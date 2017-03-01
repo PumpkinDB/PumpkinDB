@@ -24,7 +24,7 @@ word!(JSON_HASQ, b"\x89JSON/HAS?");
 word!(JSON_STRING_TO, b"\x8dJSON/STRING->");
 word!(JSON_TO_STRING, b"\x8dJSON/->STRING");
 
-use super::{Env, EnvId, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
+use super::{Env, EnvId, Module, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
             offset_by_size, STACK_TRUE, STACK_FALSE};
 use serde_json as json;
 
@@ -59,6 +59,23 @@ macro_rules! json_is_a {
     }};
 }
 
+impl<'a> Module<'a> for Handler<'a> {
+    fn handle(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        try_word!(env, self.handle_jsonq(env, word, pid));
+        try_word!(env, self.handle_json_objectq(env, word, pid));
+        try_word!(env, self.handle_json_stringq(env, word, pid));
+        try_word!(env, self.handle_json_numberq(env, word, pid));
+        try_word!(env, self.handle_json_booleanq(env, word, pid));
+        try_word!(env, self.handle_json_arrayq(env, word, pid));
+        try_word!(env, self.handle_json_nullq(env, word, pid));
+        try_word!(env, self.handle_json_get(env, word, pid));
+        try_word!(env, self.handle_json_hasq(env, word, pid));
+        try_word!(env, self.handle_json_set(env, word, pid));
+        try_word!(env, self.handle_json_string_to(env, word, pid));
+        try_word!(env, self.handle_json_to_string(env, word, pid));
+        Err(Error::UnknownWord)
+    }
+}
 
 impl<'a> Handler<'a> {
     pub fn new() -> Self {
