@@ -150,6 +150,10 @@ impl<'a> Handler<'a> {
             return Err(error_invalid_value!(size));
         }
 
+        if size_int < value.len() {
+            return Err(error_invalid_value!(size));
+        }
+
         let slice = alloc_slice!(size_int, env);
 
         for i in 0..size_int-value.len() {
