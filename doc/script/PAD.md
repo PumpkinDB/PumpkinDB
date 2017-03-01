@@ -33,6 +33,8 @@ Allocates for a result of padding
 
 [InvalidValue](./errors/InvalidValue.md) error if `size` is larger than 1024.
 
+[InvalidValue](./errors/InvalidValue.md) error if `size` is lesser than the length of `a`.
+
 ## Tests
 
 ```test
@@ -43,4 +45,5 @@ requires_three_items_1 : [1 PAD] TRY UNWRAP 0x04 EQUAL?.
 requires_three_items_2 : [1 1 PAD] TRY UNWRAP 0x04 EQUAL?.
 invalid_value : [0x01 4 "test" PAD] TRY UNWRAP 0x03 EQUAL?.
 too_big : [0x01 1025 0 PAD] TRY UNWRAP 0x03 EQUAL?.
+too_small : [0x0102 1 0 PAD] TRY UNWRAP 0x03 EQUAL?.
 ```
