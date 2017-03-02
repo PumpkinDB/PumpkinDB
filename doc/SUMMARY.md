@@ -65,6 +65,7 @@
    * [LT?](script/LTQ.md)
    * [PAD](script/PAD.md)
    * [SLICE](script/SLICE.md)
+   * [STARTSWITH?](script/STARTSWITHQ.md)
  * Control flow
    * [DOWHILE](script/DOWHILE.md)
    * [EVAL](script/EVAL.md)

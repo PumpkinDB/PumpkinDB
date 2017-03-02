@@ -12,11 +12,12 @@ TUCK : SWAP OVER.
 2NIP : 2SWAP 2DROP.
 2TUCK : 2SWAP 2OVER.
 -ROT : ROT ROT.
+STARTSWITH? : 2DUP LENGTH SWAP LENGTH SWAP UINT/LT? [2DROP 0] [DUP LENGTH 0 SWAP 2SWAP SWAP 2SWAP SLICE EQUAL?] IFELSE.
 ( Cursor-related functionality )
 ?CURSOR/SEEKLAST : ['key SET 'c SET
                    key [] 511 key LENGTH UINT/SUB 0xff PAD CONCAT 'padded SET
                    c padded CURSOR/SEEK?
-                   [`c ?CURSOR/CUR UNWRAP DROP 0 `key LENGTH SLICE `key EQUAL?
+                   [`c ?CURSOR/CUR UNWRAP DROP `key STARTSWITH?
                                       [`c ?CURSOR/CUR] [c ?CURSOR/PREV] IFELSE] 'positioning SET
                    positioning [`c CURSOR/LAST? DROP `positioning EVAL] IFELSE
                   ] EVAL/SCOPED.
@@ -26,7 +27,7 @@ CURSOR/DOWHILE : ['iterator SET 'closure SET 'c SET
                    c [?CURSOR/CUR `closure EVAL] iterator CURSOR/DOWHILE] EVAL/SCOPED.
 CURSOR/DOWHILE-PREFIXED : ['closure SET
                             'prefix SET
-                            [UNWRAP OVER 0 `prefix LENGTH SLICE `prefix EQUAL? [``closure EVAL] [2DROP 0] IFELSE]
+                            [UNWRAP OVER `prefix STARTSWITH? [``closure EVAL] [2DROP 0] IFELSE]
                             'closure1 SET
                             CURSOR 'c SET
                             c prefix CURSOR/SEEK?
