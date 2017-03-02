@@ -5,7 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use super::{Env, EnvId, Module, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size};
+            offset_by_size, STACK_TRUE, STACK_FALSE};
 
 use std::marker::PhantomData;
 
@@ -23,6 +23,14 @@ word!(INT_SUB, (a, b => c), b"\x87INT/SUB");
 word!(INT_TO_UINT, (a => b), b"\x89INT->UINT");
 word!(UINT_TO_INT, (a => b), b"\x89UINT->INT");
 
+// Comparison
+word!(UINT_EQUALQ, (a, b => c), b"\x8BUINT/EQUAL?");
+word!(UINT_GTQ, (a, b => c), b"\x88UINT/GT?");
+word!(UINT_LTQ, (a, b => c), b"\x88UINT/LT?");
+word!(INT_EQUALQ, (a, b => c), b"\x8AINT/EQUAL?");
+word!(INT_GTQ, (a, b => c), b"\x87INT/GT?");
+word!(INT_LTQ, (a, b => c), b"\x87INT/LT?");
+
 pub fn bytes_to_bigint(bytes: &[u8]) -> Option<BigInt> {
     if bytes.len() >= 2 {
         match bytes[0] {
@@ -36,6 +44,58 @@ pub fn bytes_to_bigint(bytes: &[u8]) -> Option<BigInt> {
 
 }
 
+macro_rules! bytes_to_bigint {
+   ($bytes: expr) => {
+       match bytes_to_bigint($bytes) {
+         Some(v) => v,
+         None => return Err(error_invalid_value!($bytes))
+       }
+   };
+}
+
+macro_rules! uint_comparison {
+    ($env: expr, $word: expr, $word_const: expr, $cmp: ident) => {{
+        word_is!($env, $word, $word_const);
+        let b = stack_pop!($env);
+        let a = stack_pop!($env);
+
+        let a_ = BigUint::from_bytes_be(a);
+        let b_ = BigUint::from_bytes_be(b);
+
+        if a_.$cmp(&b_) {
+            $env.push(STACK_TRUE);
+        } else {
+            $env.push(STACK_FALSE);
+        }
+        Ok(())
+    }};
+}
+
+macro_rules! int_comparison {
+    ($env: expr, $word: expr, $word_const: expr, $cmp: ident) => {{
+        word_is!($env, $word, $word_const);
+        let b = stack_pop!($env);
+        let a = stack_pop!($env);
+
+        let a_ = bytes_to_bigint(a);
+        let b_ = bytes_to_bigint(b);
+
+        if a_.is_none() {
+            return Err(error_invalid_value!(a));
+        }
+
+        if b_.is_none() {
+            return Err(error_invalid_value!(b));
+        }
+
+        if a_.unwrap().$cmp(&b_.unwrap()) {
+            $env.push(STACK_TRUE);
+        } else {
+            $env.push(STACK_FALSE);
+        }
+        Ok(())
+    }};
+}
 
 pub struct Handler<'a> {
     phantom: PhantomData<&'a ()>
@@ -49,6 +109,12 @@ impl<'a> Module<'a> for Handler<'a> {
         try_word!(env, self.handle_int_sub(env, word, pid));
         try_word!(env, self.handle_int_to_uint(env, word, pid));
         try_word!(env, self.handle_uint_to_int(env, word, pid));
+        try_word!(env, self.handle_uint_equalq(env, word, pid));
+        try_word!(env, self.handle_uint_gtq(env, word, pid));
+        try_word!(env, self.handle_uint_ltq(env, word, pid));
+        try_word!(env, self.handle_int_equalq(env, word, pid));
+        try_word!(env, self.handle_int_gtq(env, word, pid));
+        try_word!(env, self.handle_int_ltq(env, word, pid));
         Err(Error::UnknownWord)
     }
 }
@@ -195,5 +261,34 @@ impl<'a> Handler<'a> {
         Ok(())
     }
 
+    #[inline]
+    fn handle_uint_equalq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        uint_comparison!(env, word, UINT_EQUALQ, eq)
+    }
+
+    #[inline]
+    fn handle_uint_gtq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        uint_comparison!(env, word, UINT_GTQ, gt)
+    }
+
+    #[inline]
+    fn handle_uint_ltq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        uint_comparison!(env, word, UINT_LTQ, lt)
+    }
+
+    #[inline]
+    fn handle_int_equalq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        int_comparison!(env, word, INT_EQUALQ, eq)
+    }
+
+    #[inline]
+    fn handle_int_gtq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        int_comparison!(env, word, INT_GTQ, gt)
+    }
+
+    #[inline]
+    fn handle_int_ltq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+        int_comparison!(env, word, INT_LTQ, lt)
+    }
 
 }
