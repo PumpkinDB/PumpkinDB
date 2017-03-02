@@ -29,6 +29,8 @@ for the result.
 
 [EmptyStack](../errors/EmptyStack.md) error if there are less than two items on the stack
 
+[InvalidValue](../errors/InvalidValue.md) error if `a` or `b` cannot be signed integers
+
 ## Tests
 
 ```test
