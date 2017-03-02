@@ -13,6 +13,7 @@ use lmdb;
 use lmdb::traits::LmdbResultExt;
 use std::mem;
 use std::error::Error as StdError;
+use std::collections::HashMap;
 use super::{Env, EnvId, Module, PassResult, Error, STACK_TRUE, STACK_FALSE, offset_by_size,
             ERROR_EMPTY_STACK, ERROR_INVALID_VALUE, ERROR_DUPLICATE_KEY, ERROR_NO_TX,
             ERROR_UNKNOWN_KEY, ERROR_DATABASE};
@@ -59,10 +60,43 @@ pub struct Handler<'a> {
     db: &'a lmdb::Database<'a>,
     db_env: &'a lmdb::Environment,
     db_write_txn: Option<(EnvId, lmdb::WriteTransaction<'a>)>,
-    db_read_txn: Option<(EnvId, lmdb::ReadTransaction<'a>)>,
+    db_read_txns: HashMap<EnvId, lmdb::ReadTransaction<'a>>,
     cursors: BTreeMap<(EnvId, Vec<u8>), (TxType, lmdb::Cursor<'a, 'a>)>
 }
 
+macro_rules! read_or_write_transaction {
+    ($me: expr, $env_id: expr) => {
+        if let Some((_, ref txn)) = $me.db_write_txn {
+            txn.deref()
+        } else if $me.db_read_txns.contains_key(&$env_id) {
+            $me.db_read_txns.get(&$env_id).unwrap()
+        } else {
+            return Err(error_no_transaction!());
+        };
+    };
+}
+
+macro_rules! tx_type {
+    ($me: expr, $env_id: expr) => {
+        if let Some((_, _)) = $me.db_write_txn {
+            TxType::Write
+        } else if $me.db_read_txns.contains_key(&$env_id) {
+            TxType::Read
+        } else {
+            return Err(error_no_transaction!());
+        };
+    };
+}
+
+macro_rules! validate_read_lockout {
+    ($locks: expr, $env_id: expr) => {
+        if $locks.len() > 0 {
+            if !$locks.contains_key(&$env_id) {
+                return Err(Error::Reschedule)
+            }
+        }
+    };
+}
 
 macro_rules! validate_lockout {
     ($env: expr, $name: expr, $pid: expr) => {
@@ -74,42 +108,18 @@ macro_rules! validate_lockout {
     };
 }
 
-macro_rules! read_or_write_transaction {
-    ($me: expr, $env: expr) => {
-        if let Some((_, ref txn)) = $me.db_write_txn {
-            txn.deref()
-        } else if let Some((_, ref txn)) = $me.db_read_txn {
-            txn.deref()
-        } else {
-            return Err(error_no_transaction!());
-        };
-    };
-}
-
-macro_rules! tx_type {
-    ($me: expr, $env: expr) => {
-        if let Some((_, _)) = $me.db_write_txn {
-            TxType::Write
-        } else if let Some((_, _)) = $me.db_read_txn {
-            TxType::Read
-        } else {
-            return Err(error_no_transaction!());
-        };
-    };
-}
-
 const STACK_EMPTY_CLOSURE: &'static [u8] = b"";
 
 macro_rules! qcursor_op {
-    ($me: expr, $env: expr, $pid: expr, $op: ident, ($($arg: expr),*)) => {
+    ($me: expr, $env: expr, $env_id: expr, $op: ident, ($($arg: expr),*)) => {
     {
-        validate_lockout!($env, $me.db_read_txn, $pid);
-        validate_lockout!($env, $me.db_write_txn, $pid);
+        validate_read_lockout!($me.db_read_txns, &$env_id);
+        validate_lockout!($env, $me.db_write_txn, $env_id);
 
         let c = stack_pop!($env);
 
-        let txn = read_or_write_transaction!($me, $env);
-        let tuple = ($pid, Vec::from(c));
+        let txn = read_or_write_transaction!($me, &$env_id);
+        let tuple = ($env_id, Vec::from(c));
         let mut cursor = match $me.cursors.remove(&tuple) {
             Some((_, cursor)) => cursor,
             None => return Err(error_invalid_value!(c))
@@ -135,22 +145,22 @@ macro_rules! qcursor_op {
                 $env.push(STACK_EMPTY_CLOSURE);
            }
         }
-        $me.cursors.insert(tuple, (tx_type!($me, $env), cursor));
+        $me.cursors.insert(tuple, (tx_type!($me, &$env_id), cursor));
         Ok(())
     }
     };
 }
 
 macro_rules! cursorq_op {
-    ($me: expr, $env: expr, $pid: expr, $op: ident, ($($arg: expr),*)) => {
+    ($me: expr, $env: expr, $env_id: expr, $op: ident, ($($arg: expr),*)) => {
     {
-        validate_lockout!($env, $me.db_read_txn, $pid);
-        validate_lockout!($env, $me.db_write_txn, $pid);
+        validate_read_lockout!($me.db_read_txns, &$env_id);
+        validate_lockout!($env, $me.db_write_txn, $env_id);
 
         let c = stack_pop!($env);
 
-        let txn = read_or_write_transaction!($me, $env);
-        let tuple = ($pid, Vec::from(c));
+        let txn = read_or_write_transaction!($me, &$env_id);
+        let tuple = ($env_id, Vec::from(c));
         let mut cursor = match $me.cursors.remove(&tuple) {
             Some((_, cursor)) => cursor,
             None => return Err(error_invalid_value!(c))
@@ -166,7 +176,7 @@ macro_rules! cursorq_op {
                 $env.push(STACK_FALSE);
            }
         }
-        $me.cursors.insert(tuple, (tx_type!($me, $env), cursor));
+        $me.cursors.insert(tuple, (tx_type!($me, &$env_id), cursor));
         Ok(())
     }
     };
@@ -175,22 +185,17 @@ macro_rules! cursorq_op {
 impl<'a> Module<'a> for Handler<'a> {
 
     fn done(&mut self, _: &mut Env, pid: EnvId) {
-        let mut is_in_read = false;
+        let is_in_read = self.db_read_txns.contains_key(&pid);
         let mut is_in_write = false;
 
-        if let Some((pid_, _)) = self.db_read_txn {
-            is_in_read = pid_ == pid;
-        }
 
         if let Some((pid_, _)) = self.db_write_txn {
             is_in_write = pid_ == pid;
         }
 
         if is_in_read {
-            match mem::replace(&mut self.db_read_txn, None) {
-                Some((_, txn)) => drop(txn),
-                None => ()
-            }
+            let txn = self.db_read_txns.remove(&pid).unwrap();
+            drop(txn)
         }
 
         if is_in_write {
@@ -225,7 +230,8 @@ impl<'a> Handler<'a> {
     pub fn new(db_env: &'a lmdb::Environment, db: &'a lmdb::Database<'a>) -> Self {
         Handler {
             db: db, db_env: db_env,
-            db_write_txn: None, db_read_txn: None,
+            db_write_txn: None,
+            db_read_txns: HashMap::new(),
             cursors: BTreeMap::new()
         }
     }
@@ -267,12 +273,12 @@ impl<'a> Handler<'a> {
             READ => {
                 let v = stack_pop!(env);
 
-                validate_lockout!(env, self.db_read_txn, pid);
+                validate_read_lockout!(self.db_read_txns, &pid);
                 // prepare transaction
                 match lmdb::ReadTransaction::new(self.db_env) {
                     Err(e) => Err(error_database!(e)),
                     Ok(txn) => {
-                        self.db_read_txn = Some((pid, txn));
+                        self.db_read_txns.insert(pid, txn);
                         env.program.push(READ_END);
                         env.program.push(v);
                         Ok(())
@@ -280,11 +286,11 @@ impl<'a> Handler<'a> {
                 }
             }
             READ_END => {
-                validate_lockout!(env, self.db_read_txn, pid);
+                validate_read_lockout!(self.db_read_txns, &pid);
                 self.cursors = mem::replace(&mut self.cursors,
                                             BTreeMap::new()).into_iter()
                     .filter(|t| ((*t).1).0 != TxType::Read).collect();
-                self.db_read_txn = None;
+                self.db_read_txns.remove(&pid);
                 Ok(())
             }
             _ => Err(Error::UnknownWord),
@@ -334,10 +340,10 @@ impl<'a> Handler<'a> {
     pub fn handle_retr(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         if word == RETR {
             validate_lockout!(env, self.db_write_txn, pid);
-            validate_lockout!(env, self.db_read_txn, pid);
+            validate_read_lockout!(self.db_read_txns, pid);
             let key = stack_pop!(env);
 
-            let txn = read_or_write_transaction!(self, env);
+            let txn = read_or_write_transaction!(self, pid);
             let access = txn.access();
 
             return match access.get::<[u8], [u8]>(self.db, key).to_opt() {
@@ -360,7 +366,7 @@ impl<'a> Handler<'a> {
             validate_lockout!(env, self.db_write_txn, pid);
             let key = stack_pop!(env);
 
-            let txn = read_or_write_transaction!(self, env);
+            let txn = read_or_write_transaction!(self, pid);
             let access = txn.access();
 
             match access.get::<[u8], [u8]>(self.db, key).to_opt() {
@@ -386,10 +392,10 @@ impl<'a> Handler<'a> {
     #[inline]
     pub fn handle_cursor(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
         if word == CURSOR {
-            validate_lockout!(env, self.db_read_txn, pid);
+            validate_read_lockout!(self.db_read_txns, pid);
             validate_lockout!(env, self.db_write_txn, pid);
 
-            let txn = read_or_write_transaction!(self, env);
+            let txn = read_or_write_transaction!(self, pid);
             match txn.cursor(self.db) {
                 Ok(cursor) => {
                     let id = CursorId::new();
@@ -401,7 +407,7 @@ impl<'a> Handler<'a> {
                         let _ = bytes.write_u32::<BigEndian>(id.prefix as u32);
                     }
                     let _ = bytes.write_u64::<BigEndian>(id.offset);
-                    self.cursors.insert((pid.clone(), bytes.clone()), (tx_type!(self, env), Handler::cast_away(cursor)));
+                    self.cursors.insert((pid.clone(), bytes.clone()), (tx_type!(self, pid), Handler::cast_away(cursor)));
                     let slice = alloc_and_write!(bytes.as_slice(), env);
                     env.push(slice);
                     Ok(())
