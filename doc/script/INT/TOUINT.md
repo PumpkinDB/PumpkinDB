@@ -32,6 +32,8 @@ Runtime allocation for the `UINT` added to the stack.
 
 [InvalidValue](../errors/InvalidValue.md) error if casting to a `UINT` is impossible.
 
+[InvalidValue](../errors/InvalidValue.md) error if `a` cannot be signed integer
+
 ## Tests
 
 ```test
