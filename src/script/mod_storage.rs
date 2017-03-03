@@ -325,8 +325,10 @@ impl<'a> Handler<'a> {
         if word == COMMIT {
             validate_lockout!(env, self.db_write_txn, pid);
             if let Some((_, txn)) = mem::replace(&mut self.db_write_txn, None) {
-                let _ = txn.commit();
-                Ok(())
+                match txn.commit() {
+                    Ok(_) => Ok(()),
+                    Err(reason) => Err(error_database!(reason))
+                }
             } else {
                 Err(error_no_transaction!())
             }
