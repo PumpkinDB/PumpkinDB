@@ -65,6 +65,7 @@
    * [LT?](script/LTQ.md)
    * [PAD](script/PAD.md)
    * [SLICE](script/SLICE.md)
+   * [STARTSWITH?](script/STARTSWITHQ.md)
  * Control flow
    * [DOWHILE](script/DOWHILE.md)
    * [EVAL](script/EVAL.md)
@@ -75,9 +76,15 @@
  * Numbers
    * [UINT/ADD](script/UINT/ADD.md)
    * [UINT/SUB](script/UINT/SUB.md)
+   * [UINT/EQUAL?](script/UINT/EQUALQ.md)
+   * [UINT/LT?](script/UINT/LTQ.md)
+   * [UINT/GT?](script/UINT/GTQ.md)
    * [INT](script/INT/README.md)
    * [INT/ADD](script/INT/ADD.md)
    * [INT/SUB](script/INT/SUB.md)
+   * [INT/EQUAL?](script/INT/EQUALQ.md)
+   * [INT/LT?](script/INT/LTQ.md)
+   * [INT/GT?](script/INT/GTQ.md)
  * Data formats
    * [JSON?](script/JSONQ.md)
    * [JSON/ARRAY?](script/JSON/ARRAYQ.md)

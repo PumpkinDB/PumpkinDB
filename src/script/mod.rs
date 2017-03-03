@@ -87,7 +87,7 @@ word!(TRY_END, b"\x80\x83TRY"); // internal word
 use std::str;
 
 // To add words that don't belong to a core set,
-// add a module with a handler, and reference it in the VM's pass
+// add a module with a handler, and reference it in the Scheduler's pass
 
 /// # Data Representation
 ///
@@ -114,8 +114,8 @@ use std::str;
 /// byte array of `len & 128u8` length (len without the highest bit set) is considered a word.
 /// Length must be greater than zero.
 ///
-/// `128u8` is reserved as a prefix to be followed by an internal VM's word (not to be accessible
-/// to the end users).
+/// `128u8` is reserved as a prefix to be followed by an internal Scheduler's word (not to be
+/// accessible to the end users).
 ///
 /// The rest of tags (`124u8` to `127u8`) are reserved for future use.
 ///
@@ -161,7 +161,7 @@ pub const HEAP_SIZE: usize = 32_768;
 /// Env is a representation of a stack and the heap.
 ///
 /// Doesn't need to be used directly as it's primarily
-/// used by [`VM`](struct.VM.html)
+/// used by [`Scheduler`](struct.Scheduler.html)
 pub struct Env<'a> {
     pub program: Vec<&'a [u8]>,
     stack: Vec<&'a [u8]>,
@@ -204,7 +204,7 @@ impl<'a> Env<'a> {
     /// topmost element (stack_size)
     ///
     /// This function is useful for working with result stacks received from
-    /// [VM](struct.VM.html)
+    /// [Scheduler](struct.Scheduler.html)
     pub fn new_with_stack(stack: Vec<&'a [u8]>, stack_size: usize) -> Result<Self, Error> {
         #[cfg(feature = "scoped_dictionary")]
         let dictionary = vec![BTreeMap::new()];
@@ -319,17 +319,17 @@ pub type EnvId = ProcessUniqueId;
 pub type Sender<T> = mpsc::Sender<T>;
 pub type Receiver<T> = mpsc::Receiver<T>;
 
-/// Communication messages used to talk with the [VM](struct.VM.html) thread.
+/// Communication messages used to talk with the [Scheduler](struct.Scheduler.html) thread.
 #[derive(Debug)]
 pub enum RequestMessage {
     /// Requests scheduling a new environment with a given
     /// id and a program.
     ScheduleEnv(EnvId, Vec<u8>, Sender<ResponseMessage>),
-    /// Requests VM shutdown
+    /// Requests Scheduler shutdown
     Shutdown,
 }
 
-/// Messages received from the [VM](struct.VM.html) thread.
+/// Messages received from the [Scheduler](struct.Scheduler.html) thread.
 #[derive(Debug)]
 pub enum ResponseMessage {
     /// Notifies of successful environment termination with
@@ -363,8 +363,8 @@ pub trait Module<'a> {
 
 #[cfg(not(feature = "static_module_dispatch"))]
 macro_rules! for_each_module {
-    ($module: ident, $vm : expr, $expr: expr) => {
-        for mut $module in $vm.modules.iter_mut() {
+    ($module: ident, $scheduler : expr, $expr: expr) => {
+        for mut $module in $scheduler.modules.iter_mut() {
             $expr
         }
     };
@@ -372,53 +372,53 @@ macro_rules! for_each_module {
 
 #[cfg(feature = "static_module_dispatch")]
 macro_rules! for_each_module {
-    ($module: ident, $vm : expr, $expr: expr) => {{
+    ($module: ident, $scheduler : expr, $expr: expr) => {{
         {
-           let ref mut $module = $vm.core;
+           let ref mut $module = $scheduler.core;
            $expr
         }
         {
-           let ref mut $module = $vm.stack;
+           let ref mut $module = $scheduler.stack;
            $expr
         }
         {
-           let ref mut $module = $vm.binaries;
+           let ref mut $module = $scheduler.binaries;
            $expr
         }
         {
-           let ref mut $module = $vm.numbers;
+           let ref mut $module = $scheduler.numbers;
            $expr
         }
         {
-           let ref mut $module = $vm.storage;
+           let ref mut $module = $scheduler.storage;
            $expr
         }
         {
-           let ref mut $module = $vm.hash;
+           let ref mut $module = $scheduler.hash;
            $expr
         }
         {
-           let ref mut $module = $vm.hlc;
+           let ref mut $module = $scheduler.hlc;
            $expr
         }
         {
-           let ref mut $module = $vm.json;
+           let ref mut $module = $scheduler.json;
            $expr
         }
     }};
 }
 
-/// VM is a PumpkinScript scheduler and interpreter. This is the
+/// Scheduler is a PumpkinScript scheduler and interpreter. This is the
 /// most central part of this module.
 ///
 /// # Example
 ///
 /// ```norun
-/// let mut vm = VM::new(&env, &db); // lmdb comes from outside
+/// let mut scheduler = Scheduler::new(&env, &db); // lmdb comes from outside
 ///
-/// let sender = vm.sender();
+/// let sender = scheduler.sender();
 /// let handle = thread::spawn(move || {
-///     vm.run();
+///     scheduler.run();
 /// });
 /// let script = parse("..script..");
 /// let (callback, receiver) = mpsc::channel::<ResponseMessage>();
@@ -442,7 +442,7 @@ macro_rules! for_each_module {
 
 use std::collections::VecDeque;
 
-pub struct VM<'a> {
+pub struct Scheduler<'a> {
     inbox: Receiver<RequestMessage>,
     sender: Sender<RequestMessage>,
     #[cfg(not(feature = "static_module_dispatch"))]
@@ -465,7 +465,7 @@ pub struct VM<'a> {
     json: mod_json::Handler<'a>,
 }
 
-unsafe impl<'a> Send for VM<'a> {}
+unsafe impl<'a> Send for Scheduler<'a> {}
 
 type PassResult<'a> = Result<(), Error>;
 
@@ -481,8 +481,8 @@ const ERROR_UNKNOWN_KEY: &'static [u8] = b"\x01\x07";
 const ERROR_NO_TX: &'static [u8] = b"\x01\x08";
 const ERROR_DATABASE: &'static [u8] = b"\x01\x09";
 
-impl<'a> VM<'a> {
-    /// Creates an instance of VM with three communication channels:
+impl<'a> Scheduler<'a> {
+    /// Creates an instance of Scheduler with three communication channels:
     ///
     /// * Response sender
     /// * Internal sender
@@ -491,7 +491,7 @@ impl<'a> VM<'a> {
                publisher: pubsub::PublisherAccessor<Vec<u8>>) -> Self {
         let (sender, receiver) = mpsc::channel::<RequestMessage>();
         #[cfg(not(feature = "static_module_dispatch"))]
-        return VM {
+        return Scheduler {
             inbox: receiver,
             sender: sender.clone(),
             modules: vec![Box::new(mod_core::Handler::new(publisher)),
@@ -505,7 +505,7 @@ impl<'a> VM<'a> {
             ],
         };
         #[cfg(feature = "static_module_dispatch")]
-        return VM {
+        return Scheduler {
             inbox: receiver,
             sender: sender.clone(),
             core: mod_core::Handler::new(publisher),
@@ -730,7 +730,7 @@ pub mod compose;
 #[allow(unused_variables, unused_must_use, unused_mut)]
 mod tests {
 
-    use script::{Env, VM, Error, RequestMessage, ResponseMessage, EnvId, parse, offset_by_size};
+    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, parse, offset_by_size};
     use std::sync::mpsc;
     use std::fs;
     use tempdir::TempDir;

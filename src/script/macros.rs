@@ -60,28 +60,6 @@ macro_rules! try_word {
   };
 }
 
-macro_rules! validate_lockout {
-    ($env: expr, $name: expr, $pid: expr) => {
-        if let Some((pid_, _)) = $name {
-            if pid_ != $pid {
-                return Err(Error::Reschedule)
-            }
-        }
-    };
-}
-
-macro_rules! read_or_write_transaction {
-    ($me: expr, $env: expr) => {
-        if let Some((_, ref txn)) = $me.db_write_txn {
-            txn.deref()
-        } else if let Some((_, ref txn)) = $me.db_read_txn {
-            txn.deref()
-        } else {
-            return Err(error_no_transaction!());
-        };
-    };
-}
-
 macro_rules! stack_pop {
     ($env: expr) => {
         match $env.pop() {
@@ -279,10 +257,10 @@ macro_rules! eval {
                 let $publisher_accessor = publisher.accessor();
                 let publisher_thread = scope.spawn(move || publisher.run());
                 $($init)*
-                let mut vm = VM::new(&env, &db, $publisher_accessor.clone());
-                let sender = vm.sender();
+                let mut scheduler = Scheduler::new(&env, &db, $publisher_accessor.clone());
+                let sender = scheduler.sender();
                 let handle = scope.spawn(move || {
-                    vm.run();
+                    scheduler.run();
                 });
                 let script = parse($script).unwrap();
                 let (callback, receiver) = mpsc::channel::<ResponseMessage>();
@@ -348,11 +326,11 @@ macro_rules! bench_eval {
                 let publisher_accessor = publisher.accessor();
                 let publisher_accessor_ = publisher.accessor();
                 let publisher_thread = scope.spawn(move || publisher.run());
-                let mut vm = VM::new(&env, &db, publisher_accessor.clone());
-                let sender = vm.sender();
+                let mut scheduler = Scheduler::new(&env, &db, publisher_accessor.clone());
+                let sender = scheduler.sender();
                 let sender_ = sender.clone();
                 let handle = scope.spawn(move || {
-                    vm.run();
+                    scheduler.run();
                 });
                 let script = parse($script).unwrap();
                 $b.iter(move || {

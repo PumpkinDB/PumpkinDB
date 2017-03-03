@@ -130,10 +130,10 @@ fn main() {
 
     info!("Starting up");
 
-    let mut vm = script::VM::new(&ENV, &DB, PUBLISHER.lock().unwrap().clone());
-    let sender = vm.sender();
+    let mut scheduler = script::Scheduler::new(&ENV, &DB, PUBLISHER.lock().unwrap().clone());
+    let sender = scheduler.sender();
 
-    thread::spawn(move || vm.run());
+    thread::spawn(move || scheduler.run());
 
     server::run(config::get_int("server.port").unwrap(), sender, PUBLISHER.lock().unwrap().clone());
 
