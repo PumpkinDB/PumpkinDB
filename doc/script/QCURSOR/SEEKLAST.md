@@ -50,6 +50,12 @@ not_lastkey : ["key" HLC CONCAT 1 ASSOC
                "zzzz" HLC CONCAT 4 ASSOC COMMIT] WRITE
           [CURSOR "key" ?CURSOR/SEEKLAST] READ UNWRAP
           3 EQUAL?.
+nextkey_short : ["key" HLC CONCAT 1 ASSOC
+               "key" HLC CONCAT 2 ASSOC
+               "key" HLC CONCAT 3 ASSOC
+               "z" 4 ASSOC COMMIT] WRITE
+          [CURSOR "key" ?CURSOR/SEEKLAST] READ UNWRAP
+          3 EQUAL?.
 no_key : ["zzzz" HLC CONCAT 4 ASSOC COMMIT] WRITE
           [CURSOR "key" ?CURSOR/SEEKLAST] READ NONE?.
 requires_txn : ["1" "1" ?CURSOR/SEEKLAST] TRY UNWRAP 0x08 EQUAL?.

@@ -51,4 +51,10 @@ cursor_dowhile_prefixed :
    COMMIT] WRITE
   ["testkey" [SWAP DROP 1] CURSOR/DOWHILE-PREFIXED] READ
   3 WRAP [1 2 3] EQUAL?.
+nextkey_short : ["key" HLC CONCAT 1 ASSOC
+               "key" HLC CONCAT 2 ASSOC
+               "key" HLC CONCAT 3 ASSOC
+               "z" 4 ASSOC COMMIT] WRITE
+          ["key" [SWAP DROP 1] CURSOR/DOWHILE-PREFIXED] READ
+          3 WRAP [1 2 3] EQUAL?.
 ```
