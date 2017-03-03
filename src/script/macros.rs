@@ -248,10 +248,7 @@ macro_rules! eval {
                     .expect("can't open env")
             };
 
-            let db = lmdb::Database::open(&env,
-                                 None,
-                                 &lmdb::DatabaseOptions::new(lmdb::db::CREATE))
-                                 .expect("can't open database");
+            let db = database::Database::new(&env);
             crossbeam::scope(|scope| {
                 let mut publisher = pubsub::Publisher::new();
                 let $publisher_accessor = publisher.accessor();
@@ -317,10 +314,7 @@ macro_rules! bench_eval {
                     .expect("can't open env")
             };
 
-            let db = lmdb::Database::open(&env,
-                                 None,
-                                 &lmdb::DatabaseOptions::new(lmdb::db::CREATE))
-                                 .expect("can't open database");
+            let db = database::Database::new(&env);
             crossbeam::scope(|scope| {
                 let mut publisher = pubsub::Publisher::new();
                 let publisher_accessor = publisher.accessor();

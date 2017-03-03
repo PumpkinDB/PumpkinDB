@@ -62,6 +62,7 @@
 use std::collections::BTreeMap;
 
 pub mod envheap;
+
 use self::envheap::EnvHeap;
 
 /// `word!` macro is used to define a built-in word, its signature (if applicable)
@@ -313,6 +314,7 @@ pub enum ResponseMessage {
 pub type TrySendError<T> = std::sync::mpsc::TrySendError<T>;
 
 use lmdb;
+use database;
 
 use pubsub;
 
@@ -457,7 +459,8 @@ impl<'a> Scheduler<'a> {
     /// * Response sender
     /// * Internal sender
     /// * Request receiver
-    pub fn new(db_env: &'a lmdb::Environment, db: &'a lmdb::Database<'a>,
+    pub fn new(db_env: &'a lmdb::Environment,
+               db: &'a database::Database<'a>,
                publisher: pubsub::PublisherAccessor<Vec<u8>>) -> Self {
         let (sender, receiver) = mpsc::channel::<RequestMessage>();
         #[cfg(not(feature = "static_module_dispatch"))]
@@ -708,6 +711,7 @@ mod tests {
     use crossbeam;
     use super::binparser;
     use pubsub;
+    use database;
 
     const _EMPTY: &'static [u8] = b"";
 

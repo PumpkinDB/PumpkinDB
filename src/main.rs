@@ -11,6 +11,7 @@
 
 include!("crates.rs");
 
+extern crate num_cpus;
 extern crate log4rs;
 #[macro_use]
 extern crate log;
@@ -19,6 +20,7 @@ pub mod script;
 pub mod server;
 pub mod timestamp;
 pub mod pubsub;
+pub mod database;
 
 use std::thread;
 use std::sync::Arc;
@@ -38,6 +40,8 @@ use alloc::heap;
 use core::mem::size_of;
 
 use std::sync::Mutex;
+
+use database::{Database};
 
 lazy_static! {
  static ref ENV: Arc<lmdb::Environment> = {
@@ -85,10 +89,7 @@ lazy_static! {
     }
  };
 
- static ref DB: Arc<lmdb::Database<'static>> = Arc::new(lmdb::Database::open(ENV.clone(),
-                              None,
-                              &lmdb::DatabaseOptions::new(lmdb::db::CREATE))
-                              .expect("can't open database"));
+ static ref DATABASE: Arc<Database<'static>> = Arc::new(Database::new(&ENV));
 
  static ref PUBLISHER: Mutex<pubsub::PublisherAccessor<Vec<u8>>> = {
      let mut publisher = pubsub::Publisher::new();
@@ -126,15 +127,23 @@ fn main() {
         let _ = log4rs::init_config(log4rs::config::Config::builder().appender(appender).build(root).unwrap());
         warn!("No logging configuration specified, switching to console logging");
     }
-    //
 
     info!("Starting up");
 
-    let mut scheduler = script::Scheduler::new(&ENV, &DB, PUBLISHER.lock().unwrap().clone());
-    let sender = scheduler.sender();
+    let mut senders = Vec::new();
 
-    thread::spawn(move || scheduler.run());
+    for i in 0..num_cpus::get() {
+        info!("Starting scheduler on core {}.", i);
+        let mut scheduler = script::Scheduler::new(
+            &ENV,
+            &DATABASE,
+            PUBLISHER.lock().unwrap().clone(),
+        );
+        let sender = scheduler.sender();
+        thread::spawn(move || scheduler.run());
+        senders.push(sender)
+    }
 
-    server::run(config::get_int("server.port").unwrap(), sender, PUBLISHER.lock().unwrap().clone());
+    server::run(config::get_int("server.port").unwrap(), senders, PUBLISHER.lock().unwrap().clone());
 
 }

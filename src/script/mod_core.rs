@@ -397,6 +397,7 @@ mod tests {
     use crossbeam;
     use super::binparser;
     use pubsub;
+    use database;
 
     const _EMPTY: &'static [u8] = b"";
 

@@ -23,10 +23,10 @@ use std::sync::mpsc;
 use regex::Regex;
 use glob::glob;
 
-
 use pumpkindb::script::{RequestMessage, ResponseMessage, EnvId, Env, Scheduler};
 use pumpkindb::script::{textparser, binparser};
 use pumpkindb::pubsub;
+use pumpkindb::database;
 
 use tempdir::TempDir;
 
@@ -42,10 +42,7 @@ fn eval(name: &[u8], script: &[u8]) {
     };
     let name = String::from(std::str::from_utf8(name).unwrap());
 
-    let db = lmdb::Database::open(&env,
-                                  None,
-                                  &lmdb::DatabaseOptions::new(lmdb::db::CREATE))
-        .expect("can't open database");
+    let db = database::Database::new(&env);
     crossbeam::scope(|scope| {
         let mut publisher = pubsub::Publisher::new();
         let publisher_accessor = publisher.accessor();
