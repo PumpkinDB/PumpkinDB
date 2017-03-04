@@ -131,3 +131,4 @@
      * [No transaction](script/errors/NoTransaction.md)
      * [Database error](script/errors/DatabaseError.md)
 * [Experimental Features](FEATURES.md)
+* [Wire Protocol](WIRE_PROTOCOL.md)

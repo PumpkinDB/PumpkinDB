@@ -1,10 +1,11 @@
 # Wire Protocol
 
-This document describes the design of the PumpkinDB wire protocol.
-It's current design is focused around simplicity, with most data
-not tagged by types but simply broken up into byte arrays.
+This document describes the design of the PumpkinDB wire protocol. It is intrinsically linked to [PumpkinScript](script/README.md) as all
+communication with PumpkinDB is done via PumpkinScript scripts execution.
 
-## Data Push Instructions
+Since core PumpkinScript, having only binary type, is an essentially untyped language (with typing capabilities planned to be built on top of it), the wire protocol is extremely simple as it needs to be able to convey only two types of information: binaries and words (instructions).
+
+## Data
 
 * `<len @ 0..120u8> [_;len]` — byte arrays of up to 120 bytes can have their size indicated
 in the first byte, followed by that size's number of bytes;
