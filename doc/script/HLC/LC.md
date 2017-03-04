@@ -14,8 +14,8 @@ its logical counter as a 4-byte big-endian number.
 {% common -%}
 
 ```
-PumpkinDB> HLC DUP HLC/TICK
-0x000014A278ED90AB13700000 0x000014A278ED90AB13700001
+PumpkinDB> HLC DUP HLC/LC SWAP HLC/TICK DUP HLC/LC SWAP HLC/TICK HLC/LC
+0x00000000 0x00000001 0x00000002
 ```
 
 {% endmethod %}
