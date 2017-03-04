@@ -41,7 +41,6 @@ fn eval(name: &[u8], script: &[u8]) {
             .expect("can't open env")
     };
     let name = String::from(std::str::from_utf8(name).unwrap());
-
     let db = storage::Storage::new(&env);
     crossbeam::scope(|scope| {
         let mut publisher = pubsub::Publisher::new();

@@ -6,6 +6,7 @@
 #![feature(slice_patterns, advanced_slice_patterns)]
 #![cfg_attr(test, feature(test))]
 
+#![cfg_attr(not(target_os = "windows"), feature(alloc, heap_api))]
 #![feature(alloc)]
 
 include!("crates.rs");
