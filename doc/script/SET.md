@@ -21,7 +21,7 @@ word referenced by top item (`w`)
 {% common -%}
 
 ```
-PumpkinDB> "key" 'key SET [key "value" ASSOC COMMIT] WRITE [key RETR] READ
+PumpkinDB> "key" 'key SET [`key "value" ASSOC COMMIT] WRITE [key RETR] READ
 "value"
 ```
 
