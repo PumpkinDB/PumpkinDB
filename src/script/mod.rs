@@ -313,7 +313,6 @@ pub enum ResponseMessage {
 
 pub type TrySendError<T> = std::sync::mpsc::TrySendError<T>;
 
-use lmdb;
 use storage;
 
 use pubsub;
@@ -459,8 +458,7 @@ impl<'a> Scheduler<'a> {
     /// * Response sender
     /// * Internal sender
     /// * Request receiver
-    pub fn new(db_env: &'a lmdb::Environment,
-               db: &'a storage::Storage<'a>,
+    pub fn new(db: &'a storage::Storage<'a>,
                publisher: pubsub::PublisherAccessor<Vec<u8>>) -> Self {
         let (sender, receiver) = mpsc::channel::<RequestMessage>();
         #[cfg(not(feature = "static_module_dispatch"))]
@@ -471,7 +469,7 @@ impl<'a> Scheduler<'a> {
                           Box::new(mod_stack::Handler::new()),
                           Box::new(mod_binaries::Handler::new()),
                           Box::new(mod_numbers::Handler::new()),
-                          Box::new(mod_storage::Handler::new(db_env, db)),
+                          Box::new(mod_storage::Handler::new(db)),
                           Box::new(mod_hash::Handler::new()),
                           Box::new(mod_hlc::Handler::new()),
                           Box::new(mod_json::Handler::new()),
@@ -485,7 +483,7 @@ impl<'a> Scheduler<'a> {
             stack: mod_stack::Handler::new(),
             binaries: mod_binaries::Handler::new(),
             numbers: mod_numbers::Handler::new(),
-            storage: mod_storage::Handler::new(db_env, db),
+            storage: mod_storage::Handler::new(db),
             hash: mod_hash::Handler::new(),
             hlc: mod_hlc::Handler::new(),
             json: mod_json::Handler::new()

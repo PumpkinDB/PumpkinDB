@@ -3,6 +3,7 @@ use lmdb;
 
 pub struct Storage<'a> {
     pub db: lmdb::Database<'a>,
+    pub env: & 'a lmdb::Environment,
     pub gwl: Mutex<()>
 }
 
@@ -19,6 +20,7 @@ impl<'a> GlobalWriteLock for Storage<'a> {
 impl<'a> Storage<'a> {
     pub fn new(env: &'a lmdb::Environment) -> Storage<'a> {
         return Storage {
+            env: env,
             db: lmdb::Database::open(env,
                                      None,
                                      &lmdb::DatabaseOptions::new(lmdb::db::CREATE))

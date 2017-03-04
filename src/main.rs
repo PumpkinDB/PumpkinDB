@@ -133,7 +133,6 @@ fn main() {
     for i in 0..num_cpus::get() {
         info!("Starting scheduler on core {}.", i);
         let mut scheduler = script::Scheduler::new(
-            &ENV,
             &DATABASE,
             PUBLISHER.lock().unwrap().clone(),
         );

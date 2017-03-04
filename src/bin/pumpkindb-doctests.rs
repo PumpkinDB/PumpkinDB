@@ -47,7 +47,7 @@ fn eval(name: &[u8], script: &[u8]) {
         let mut publisher = pubsub::Publisher::new();
         let publisher_accessor = publisher.accessor();
         let publisher_thread = scope.spawn(move || publisher.run());
-        let mut scheduler = Scheduler::new(&env, &db, publisher_accessor.clone());
+        let mut scheduler = Scheduler::new(&db, publisher_accessor.clone());
         let sender = scheduler.sender();
         let handle = scope.spawn(move || scheduler.run());
         let (callback, receiver) = mpsc::channel::<ResponseMessage>();
