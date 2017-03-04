@@ -32,9 +32,10 @@ use mio::channel as mio_chan;
 
 use std::collections::BTreeMap;
 
+use rand::{thread_rng, Rng};
+
 pub struct Server {
     senders: Vec<Sender<RequestMessage>>,
-    last_sender: usize,
     response_sender: Sender<ResponseMessage>,
     evented_sender: mio_chan::Sender<(Token, Vec<u8>, Vec<u8>)>,
     receiver: mio_chan::Receiver<(Token, Vec<u8>, Vec<u8>)>,
@@ -54,7 +55,6 @@ impl Server {
         Server {
             sock: sock,
             senders: senders,
-            last_sender: 0,
             response_sender: response_sender,
             evented_sender: evented_sender,
             receiver: receiver,
@@ -275,15 +275,10 @@ impl Server {
             vec.append(&mut subscribe);
             vec.append(&mut unsubscribe);
             vec.append(&mut message);
-            if self.senders.len() - 1 > self.last_sender {
-                // This is a terrible way to balance load over senders. We need to move to something
-                // else, like round robin or random.
-                self.last_sender += 1;
-            } else {
-                self.last_sender = 0;
-            }
-            println!("Picking scheduler {}", self.last_sender);
-            let _ = self.senders.get(self.last_sender).unwrap().send(RequestMessage::ScheduleEnv(id, Vec::from(vec), self.response_sender.clone()));
+            let mut rng = thread_rng();
+            let index: usize = rng.gen_range(0, self.senders.len() - 1);
+            let sender = self.senders.get(index);
+            let _ = sender.unwrap().send(RequestMessage::ScheduleEnv(id, Vec::from(vec), self.response_sender.clone()));
 
         }
 
