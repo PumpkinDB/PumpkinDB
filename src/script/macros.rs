@@ -248,7 +248,7 @@ macro_rules! eval {
                     .expect("can't open env")
             };
 
-            let db = database::Database::new(&env);
+            let db = storage::Storage::new(&env);
             crossbeam::scope(|scope| {
                 let mut publisher = pubsub::Publisher::new();
                 let $publisher_accessor = publisher.accessor();
@@ -314,7 +314,7 @@ macro_rules! bench_eval {
                     .expect("can't open env")
             };
 
-            let db = database::Database::new(&env);
+            let db = storage::Storage::new(&env);
             crossbeam::scope(|scope| {
                 let mut publisher = pubsub::Publisher::new();
                 let publisher_accessor = publisher.accessor();

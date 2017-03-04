@@ -20,7 +20,7 @@ pub mod script;
 pub mod server;
 pub mod timestamp;
 pub mod pubsub;
-pub mod database;
+pub mod storage;
 
 use std::thread;
 use std::sync::Arc;
@@ -40,8 +40,6 @@ use alloc::heap;
 use core::mem::size_of;
 
 use std::sync::Mutex;
-
-use database::{Database};
 
 lazy_static! {
  static ref ENV: Arc<lmdb::Environment> = {
@@ -89,7 +87,7 @@ lazy_static! {
     }
  };
 
- static ref DATABASE: Arc<Database<'static>> = Arc::new(Database::new(&ENV));
+ static ref DATABASE: Arc<storage::Storage<'static>> = Arc::new(storage::Storage::new(&ENV));
 
  static ref PUBLISHER: Mutex<pubsub::PublisherAccessor<Vec<u8>>> = {
      let mut publisher = pubsub::Publisher::new();

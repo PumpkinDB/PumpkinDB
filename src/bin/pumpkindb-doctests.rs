@@ -26,7 +26,7 @@ use glob::glob;
 use pumpkindb::script::{RequestMessage, ResponseMessage, EnvId, Env, Scheduler};
 use pumpkindb::script::{textparser, binparser};
 use pumpkindb::pubsub;
-use pumpkindb::database;
+use pumpkindb::storage;
 
 use tempdir::TempDir;
 
@@ -42,7 +42,7 @@ fn eval(name: &[u8], script: &[u8]) {
     };
     let name = String::from(std::str::from_utf8(name).unwrap());
 
-    let db = database::Database::new(&env);
+    let db = storage::Storage::new(&env);
     crossbeam::scope(|scope| {
         let mut publisher = pubsub::Publisher::new();
         let publisher_accessor = publisher.accessor();

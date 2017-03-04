@@ -15,4 +15,4 @@ pub mod script;
 mod timestamp;
 #[allow(dead_code)]
 pub mod pubsub;
-pub mod database;
+pub mod storage;

@@ -11,8 +11,8 @@
 //!
 use lmdb;
 use lmdb::traits::LmdbResultExt;
-use database;
-use database::GlobalWriteLock;
+use storage;
+use storage::GlobalWriteLock;
 use std::mem;
 use std::error::Error as StdError;
 use std::collections::HashMap;
@@ -59,7 +59,7 @@ enum TxType {
 }
 
 pub struct Handler<'a> {
-    db: &'a database::Database<'a>,
+    db: &'a storage::Storage<'a>,
     db_env: &'a lmdb::Environment,
     db_write_txn: Option<(EnvId, lmdb::WriteTransaction<'a>)>,
     db_read_txns: HashMap<EnvId, lmdb::ReadTransaction<'a>>,
@@ -230,7 +230,7 @@ impl<'a> Module<'a> for Handler<'a> {
 impl<'a> Handler<'a> {
 
     pub fn new(db_env: &'a lmdb::Environment,
-               db: &'a database::Database<'a>) -> Self {
+               db: &'a storage::Storage<'a>) -> Self {
         Handler {
             db: db,
             db_env: db_env,
@@ -510,7 +510,7 @@ mod tests {
     use crossbeam;
     use script::binparser;
     use pubsub;
-    use database;
+    use storage;
 
     const _EMPTY: &'static [u8] = b"";
 
