@@ -1,7 +1,8 @@
 [package]
 name = "pumpkindb"
 version = "0.2.0"
-authors = ["Ómar Yasin <omarkj@gmail.com>",
+authors = ["Guillaume Gauvrit <guillaume@gauvr.it>",
+           "Ómar Yasin <omarkj@gmail.com>",
            "Yurii Rashkovskii <yrashk@gmail.com>"]
 
 
