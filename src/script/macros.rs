@@ -248,16 +248,13 @@ macro_rules! eval {
                     .expect("can't open env")
             };
 
-            let db = lmdb::Database::open(&env,
-                                 None,
-                                 &lmdb::DatabaseOptions::new(lmdb::db::CREATE))
-                                 .expect("can't open database");
+            let db = storage::Storage::new(&env);
             crossbeam::scope(|scope| {
                 let mut publisher = pubsub::Publisher::new();
                 let $publisher_accessor = publisher.accessor();
                 let publisher_thread = scope.spawn(move || publisher.run());
                 $($init)*
-                let mut scheduler = Scheduler::new(&env, &db, $publisher_accessor.clone());
+                let mut scheduler = Scheduler::new(&db, $publisher_accessor.clone());
                 let sender = scheduler.sender();
                 let handle = scope.spawn(move || {
                     scheduler.run();
@@ -317,16 +314,13 @@ macro_rules! bench_eval {
                     .expect("can't open env")
             };
 
-            let db = lmdb::Database::open(&env,
-                                 None,
-                                 &lmdb::DatabaseOptions::new(lmdb::db::CREATE))
-                                 .expect("can't open database");
+            let db = storage::Storage::new(&env);
             crossbeam::scope(|scope| {
                 let mut publisher = pubsub::Publisher::new();
                 let publisher_accessor = publisher.accessor();
                 let publisher_accessor_ = publisher.accessor();
                 let publisher_thread = scope.spawn(move || publisher.run());
-                let mut scheduler = Scheduler::new(&env, &db, publisher_accessor.clone());
+                let mut scheduler = Scheduler::new(&db, publisher_accessor.clone());
                 let sender = scheduler.sender();
                 let sender_ = sender.clone();
                 let handle = scope.spawn(move || {

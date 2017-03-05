@@ -32,8 +32,10 @@ use mio::channel as mio_chan;
 
 use std::collections::BTreeMap;
 
+use rand::{thread_rng, Rng};
+
 pub struct Server {
-    sender: Sender<RequestMessage>,
+    senders: Vec<Sender<RequestMessage>>,
     response_sender: Sender<ResponseMessage>,
     evented_sender: mio_chan::Sender<(Token, Vec<u8>, Vec<u8>)>,
     receiver: mio_chan::Receiver<(Token, Vec<u8>, Vec<u8>)>,
@@ -46,13 +48,13 @@ pub struct Server {
 
 
 impl Server {
-    pub fn new(sock: TcpListener, sender: Sender<RequestMessage>, publisher: pubsub::PublisherAccessor<Vec<u8>>) -> Server {
+    pub fn new(sock: TcpListener, senders: Vec<Sender<RequestMessage>>, publisher: pubsub::PublisherAccessor<Vec<u8>>) -> Server {
         let (response_sender, _) = mpsc::channel();
         let (evented_sender, receiver) = mio_chan::channel();
 
         Server {
             sock: sock,
-            sender: sender,
+            senders: senders,
             response_sender: response_sender,
             evented_sender: evented_sender,
             receiver: receiver,
@@ -266,7 +268,6 @@ impl Server {
 
     fn readable(&mut self, token: Token) -> io::Result<()> {
         while let Some(mut message) = self.find_connection_by_token(token).readable()? {
-
             let id = EnvId::new();
             let mut vec = Vec::new();
             let mut subscribe = parse(format!("[{} 2 WRAP \"subscriptions\" SEND] 'SUBSCRIBE DEF", token.0).as_str()).unwrap();
@@ -274,7 +275,10 @@ impl Server {
             vec.append(&mut subscribe);
             vec.append(&mut unsubscribe);
             vec.append(&mut message);
-            let _ = self.sender.send(RequestMessage::ScheduleEnv(id, Vec::from(vec), self.response_sender.clone()));
+            let mut rng = thread_rng();
+            let index: usize = rng.gen_range(0, self.senders.len() - 1);
+            let sender = self.senders.get(index);
+            let _ = sender.unwrap().send(RequestMessage::ScheduleEnv(id, Vec::from(vec), self.response_sender.clone()));
 
         }
 
