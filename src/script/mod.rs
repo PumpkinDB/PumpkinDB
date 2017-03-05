@@ -62,6 +62,7 @@
 use std::collections::BTreeMap;
 
 pub mod envheap;
+
 use self::envheap::EnvHeap;
 
 /// `word!` macro is used to define a built-in word, its signature (if applicable)
@@ -89,36 +90,6 @@ use std::str;
 // To add words that don't belong to a core set,
 // add a module with a handler, and reference it in the Scheduler's pass
 
-/// # Data Representation
-///
-/// In an effort to keep PumpkinScript dead simple, we are not introducing enums
-/// or structures to represent instructions (although some argued that we rather should).
-/// Instead, their binary form is kept.
-///
-/// Data push instructions:
-///
-/// * `<len @ 0..120u8> [_;len]` — byte arrays of up to 120 bytes can have their size indicated
-/// in the first byte, followed by that size's number of bytes
-/// * `<121u8> <len u8> [_; len]` — byte array from 121 to 255 bytes can have their size indicated
-/// in the second byte, followed by that size's number of bytes, with `121u8` as the first byte
-/// * `<122u8> <len u16> [_; len]` — byte array from 256 to 65535 bytes can have their size
-/// indicated in the second and third bytes (u16), followed by that size's number of bytes,
-/// with `122u8` as the first byte
-/// * `<123u8> <len u32> [_; len]` — byte array from 65536 to 4294967296 bytes can have their
-/// size indicated in the second, third, fourth and fifth bytes (u32), followed by that size's
-/// number of bytes, with `123u8` as the first byte
-///
-/// Word:
-///
-/// * `<len @ 129u8..255u8> [_; len ^ 128u8]` — if `len` is greater than `128u8`, the following
-/// byte array of `len & 128u8` length (len without the highest bit set) is considered a word.
-/// Length must be greater than zero.
-///
-/// `128u8` is reserved as a prefix to be followed by an internal Scheduler's word (not to be
-/// accessible to the end users).
-///
-/// The rest of tags (`124u8` to `127u8`) are reserved for future use.
-///
 pub type Program = Vec<u8>;
 
 /// `Error` represents an enumeration of possible `Executor` errors.
@@ -342,7 +313,7 @@ pub enum ResponseMessage {
 
 pub type TrySendError<T> = std::sync::mpsc::TrySendError<T>;
 
-use lmdb;
+use storage;
 
 use pubsub;
 
@@ -487,7 +458,7 @@ impl<'a> Scheduler<'a> {
     /// * Response sender
     /// * Internal sender
     /// * Request receiver
-    pub fn new(db_env: &'a lmdb::Environment, db: &'a lmdb::Database<'a>,
+    pub fn new(db: &'a storage::Storage<'a>,
                publisher: pubsub::PublisherAccessor<Vec<u8>>) -> Self {
         let (sender, receiver) = mpsc::channel::<RequestMessage>();
         #[cfg(not(feature = "static_module_dispatch"))]
@@ -498,7 +469,7 @@ impl<'a> Scheduler<'a> {
                           Box::new(mod_stack::Handler::new()),
                           Box::new(mod_binaries::Handler::new()),
                           Box::new(mod_numbers::Handler::new()),
-                          Box::new(mod_storage::Handler::new(db_env, db)),
+                          Box::new(mod_storage::Handler::new(db)),
                           Box::new(mod_hash::Handler::new()),
                           Box::new(mod_hlc::Handler::new()),
                           Box::new(mod_json::Handler::new()),
@@ -512,7 +483,7 @@ impl<'a> Scheduler<'a> {
             stack: mod_stack::Handler::new(),
             binaries: mod_binaries::Handler::new(),
             numbers: mod_numbers::Handler::new(),
-            storage: mod_storage::Handler::new(db_env, db),
+            storage: mod_storage::Handler::new(db),
             hash: mod_hash::Handler::new(),
             hlc: mod_hlc::Handler::new(),
             json: mod_json::Handler::new()
@@ -738,6 +709,7 @@ mod tests {
     use crossbeam;
     use super::binparser;
     use pubsub;
+    use storage;
 
     const _EMPTY: &'static [u8] = b"";
 

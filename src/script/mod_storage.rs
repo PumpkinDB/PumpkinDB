@@ -11,6 +11,8 @@
 //!
 use lmdb;
 use lmdb::traits::LmdbResultExt;
+use storage;
+use storage::GlobalWriteLock;
 use std::mem;
 use std::error::Error as StdError;
 use std::collections::HashMap;
@@ -57,8 +59,7 @@ enum TxType {
 }
 
 pub struct Handler<'a> {
-    db: &'a lmdb::Database<'a>,
-    db_env: &'a lmdb::Environment,
+    db: &'a storage::Storage<'a>,
     db_write_txn: Option<(EnvId, lmdb::WriteTransaction<'a>)>,
     db_read_txns: HashMap<EnvId, lmdb::ReadTransaction<'a>>,
     cursors: BTreeMap<(EnvId, Vec<u8>), (TxType, lmdb::Cursor<'a, 'a>)>
@@ -227,9 +228,9 @@ impl<'a> Module<'a> for Handler<'a> {
 
 impl<'a> Handler<'a> {
 
-    pub fn new(db_env: &'a lmdb::Environment, db: &'a lmdb::Database<'a>) -> Self {
+    pub fn new(db: &'a storage::Storage<'a>) -> Self {
         Handler {
-            db: db, db_env: db_env,
+            db: db,
             db_write_txn: None,
             db_read_txns: HashMap::new(),
             cursors: BTreeMap::new()
@@ -242,10 +243,12 @@ impl<'a> Handler<'a> {
         match word {
             WRITE => {
                 let v = stack_pop!(env);
-
                 validate_lockout!(env, self.db_write_txn, pid);
+                if self.db.try_lock() == false {
+                    return Err(Error::Reschedule)
+                }
                 // prepare transaction
-                match lmdb::WriteTransaction::new(self.db_env) {
+                match lmdb::WriteTransaction::new(self.db.env) {
                     Err(e) => Err(error_database!(e)),
                     Ok(txn) => {
                         self.db_write_txn = Some((pid, txn));
@@ -275,7 +278,7 @@ impl<'a> Handler<'a> {
 
                 validate_read_lockout!(self.db_read_txns, &pid);
                 // prepare transaction
-                match lmdb::ReadTransaction::new(self.db_env) {
+                match lmdb::ReadTransaction::new(self.db.env) {
                     Err(e) => Err(error_database!(e)),
                     Ok(txn) => {
                         self.db_read_txns.insert(pid, txn);
@@ -307,7 +310,7 @@ impl<'a> Handler<'a> {
 
                 let mut access = txn.access();
 
-                match access.put(self.db, key, value, lmdb::put::NOOVERWRITE) {
+                match access.put(&self.db.db, key, value, lmdb::put::NOOVERWRITE) {
                     Ok(_) => Ok(()),
                     Err(lmdb::Error::Code(code)) if lmdb::error::KEYEXIST == code => Err(error_duplicate_key!(key)),
                     Err(err) => Err(error_database!(err)),
@@ -325,8 +328,10 @@ impl<'a> Handler<'a> {
         if word == COMMIT {
             validate_lockout!(env, self.db_write_txn, pid);
             if let Some((_, txn)) = mem::replace(&mut self.db_write_txn, None) {
-                let _ = txn.commit();
-                Ok(())
+                match txn.commit() {
+                    Ok(_) => Ok(()),
+                    Err(reason) => Err(error_database!(reason))
+                }
             } else {
                 Err(error_no_transaction!())
             }
@@ -346,7 +351,7 @@ impl<'a> Handler<'a> {
             let txn = read_or_write_transaction!(self, pid);
             let access = txn.access();
 
-            return match access.get::<[u8], [u8]>(self.db, key).to_opt() {
+            return match access.get::<[u8], [u8]>(&self.db.db, key).to_opt() {
                 Ok(Some(val)) => {
                     let slice = alloc_and_write!(val, env);
                     env.push(slice);
@@ -369,7 +374,7 @@ impl<'a> Handler<'a> {
             let txn = read_or_write_transaction!(self, pid);
             let access = txn.access();
 
-            match access.get::<[u8], [u8]>(self.db, key).to_opt() {
+            match access.get::<[u8], [u8]>(&self.db.db, key).to_opt() {
                 Ok(Some(_)) => {
                     env.push(STACK_TRUE);
                     Ok(())
@@ -396,7 +401,7 @@ impl<'a> Handler<'a> {
             validate_lockout!(env, self.db_write_txn, pid);
 
             let txn = read_or_write_transaction!(self, pid);
-            match txn.cursor(self.db) {
+            match txn.cursor(&self.db.db) {
                 Ok(cursor) => {
                     let id = CursorId::new();
                     let mut bytes = Vec::new();
@@ -502,6 +507,7 @@ mod tests {
     use crossbeam;
     use script::binparser;
     use pubsub;
+    use storage;
 
     const _EMPTY: &'static [u8] = b"";
 

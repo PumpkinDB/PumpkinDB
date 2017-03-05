@@ -44,3 +44,8 @@ extern crate lazy_static;
 extern crate crypto;
 
 extern crate serde_json;
+
+extern crate rand;
+
+#[macro_use]
+extern crate log;

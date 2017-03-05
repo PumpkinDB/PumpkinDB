@@ -4,7 +4,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-
 use script;
 
 use mio::*;
@@ -16,7 +15,7 @@ use self::server::*;
 
 use pubsub;
 
-pub fn run(port: i64, sender: script::Sender<script::RequestMessage>,
+pub fn run(port: i64, senders: Vec<script::Sender<script::RequestMessage>>,
                         publisher: pubsub::PublisherAccessor<Vec<u8>>) {
     let addr = format!("0.0.0.0:{}", port).parse().unwrap();
 
@@ -26,7 +25,7 @@ pub fn run(port: i64, sender: script::Sender<script::RequestMessage>,
 
     let mut poll = Poll::new().expect("Failed to initialize polling");
 
-    let mut server = Server::new(sock, sender, publisher);
+    let mut server = Server::new(sock, senders, publisher);
     server.run(&mut poll).expect("Failed to run server");
 
 }
