@@ -29,7 +29,7 @@ marker word.
 
 ## Errors
 
-[EmptyStack](./errors/EmptyStack.md) error if stack is less than two items on the stack.
+[EmptyStack](./errors/EmptyStack.md) error if stack is less than one item on the stack.
 
 [DatabaseError](./errors/DatabaseError.md) error if there's a problem with underlying storage.
 

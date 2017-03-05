@@ -2,15 +2,15 @@
 
 {% method -%}
 
-Evaluates code in a context of a new write transaction
+Evaluates code in a context of a new read transaction
 
 Input stack: `code`
 
 Output stack: result of `code` evaluation
 
-This word is the only way one can write to the database, meaning
-words like [RETR](RETR.md) are only possible in the context of
-a READ.
+This word is one of two ways one can read from the database.
+Words like [RETR](RETR.md) are only possible in the context of
+a READ or a [WRITE](WRITE.md).
 
 {% common -%}
 
@@ -27,7 +27,7 @@ marker word.
 
 ## Errors
 
-[EmptyStack](./errors/EmptyStack.md) error if stack is less than two items on the stack.
+[EmptyStack](./errors/EmptyStack.md) error if stack is less than one item on the stack.
 
 [DatabaseError](./errors/DatabaseError.md) error if there's a problem with underlying storage.
 
