@@ -535,4 +535,39 @@ mod tests {
         bench_eval!("[HLC \"Hello\"] 1000 TIMES [[ASSOC COMMIT] WRITE] 1000 TIMES", b);
     }
 
+    use timestamp;
+    use byteorder::WriteBytesExt;
+
+    #[bench]
+    fn write_1000_kv_pairs_in_isolated_txns_baseline(b: &mut Bencher) {
+        let dir = TempDir::new("pumpkindb").unwrap();
+        let path = dir.path().to_str().unwrap();
+        fs::create_dir_all(path).expect("can't create directory");
+        let env = unsafe {
+            let mut builder = lmdb::EnvBuilder::new().expect("can't create env builder");
+            builder.set_mapsize(1024 * 1024 * 1024).expect("can't set mapsize");
+            builder.open(path, lmdb::open::NOTLS, 0o600).expect("can't open env")
+        };
+
+        let db = storage::Storage::new(&env);
+        b.iter(move || {
+            let mut timestamps = Vec::new();
+            for i in 0..1000 {
+                timestamps.push(timestamp::hlc());
+            }
+            for ts in timestamps {
+                let txn = lmdb::WriteTransaction::new(db.env).unwrap();
+                {
+                    let mut access = txn.access();
+                    let mut key: Vec<u8> = Vec::new();
+
+                    ts.write_bytes(&mut key);
+
+                    let _ = access.put(&db.db, key.as_slice(), "Hello".as_bytes(), lmdb::put::NOOVERWRITE).unwrap();
+                }
+                let _ = txn.commit().unwrap();
+            }
+        });
+    }
+
 }
