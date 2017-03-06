@@ -308,10 +308,9 @@ macro_rules! bench_eval {
             let path = dir.path().to_str().unwrap();
             fs::create_dir_all(path).expect("can't create directory");
             let env = unsafe {
-                lmdb::EnvBuilder::new()
-                    .expect("can't create env builder")
-                    .open(path, lmdb::open::NOTLS, 0o600)
-                    .expect("can't open env")
+                let mut builder = lmdb::EnvBuilder::new().expect("can't create env builder");
+                builder.set_mapsize(1024 * 1024 * 1024).expect("can't set mapsize");
+                builder.open(path, lmdb::open::NOTLS, 0o600).expect("can't open env")
             };
 
             let db = storage::Storage::new(&env);
