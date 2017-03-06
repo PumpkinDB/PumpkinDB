@@ -325,6 +325,7 @@ pub mod mod_storage;
 pub mod mod_hlc;
 pub mod mod_hash;
 pub mod mod_json;
+pub mod mod_atomic_id;
 
 pub trait Module<'a> {
     fn init(&mut self, _: &mut Env<'a>, _: EnvId) {}

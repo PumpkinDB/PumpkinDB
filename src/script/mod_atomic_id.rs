@@ -16,6 +16,7 @@ word!(ACV, b"\x83ACV");
 
 use std::marker::PhantomData;
 use super::{Module, PassResult, Error, Env, EnvId};
+use logicalstamp;
 
 pub struct Handler<'a> {
     phantom: PhantomData<&'a ()>
@@ -34,7 +35,7 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub handle_acv(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+    pub fn handle_acv(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == ACV {
             let c = logicalstamp::acv_count();
             env.push(c);
