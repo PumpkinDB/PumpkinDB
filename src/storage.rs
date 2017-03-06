@@ -35,6 +35,9 @@ impl<'a> GlobalWriteLock for Storage<'a> {
 
 impl<'a> Storage<'a> {
     pub fn new(env: &'a lmdb::Environment) -> Storage<'a> {
+        if !env.flags().unwrap().contains(lmdb::open::NOTLS) {
+            panic!("env should have NOTLS enabled");
+        }
         Storage {
             env: env,
             db: lmdb::Database::open(env, None,
@@ -81,7 +84,7 @@ pub fn create_environment(storage_path: String, map_size: Option<i64>) -> lmdb::
             }
         }
         env_builder
-            .open(storage_path.as_str(), lmdb::open::Flags::empty(), 0o600)
+            .open(storage_path.as_str(), lmdb::open::NOTLS, 0o600)
             .expect("can't open env")
     }
 }
