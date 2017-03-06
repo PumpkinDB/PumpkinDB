@@ -37,7 +37,7 @@ fn eval(name: &[u8], script: &[u8]) {
     let env = unsafe {
         lmdb::EnvBuilder::new()
             .expect("can't create env builder")
-            .open(path, lmdb::open::Flags::empty(), 0o600)
+            .open(path, lmdb::open::NOTLS, 0o600)
             .expect("can't open env")
     };
     let name = String::from(std::str::from_utf8(name).unwrap());
