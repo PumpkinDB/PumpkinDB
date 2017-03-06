@@ -17,6 +17,7 @@ word!(ACV, b"\x83ACV");
 use std::marker::PhantomData;
 use super::{Module, PassResult, Error, Env, EnvId};
 use logicalstamp;
+use byteorder::{ByteOrder, BigEndian};
 
 pub struct Handler<'a> {
     phantom: PhantomData<&'a ()>
@@ -38,7 +39,23 @@ impl<'a> Handler<'a> {
     pub fn handle_acv(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == ACV {
             let c = logicalstamp::acv_count();
-            env.push(c);
+
+            if cfg!(target_pointer_width = "32"){
+                let mut buf = [0; 4];
+                let val = c as u32;
+                BigEndian::write_u32(&mut buf, val);
+                let slice = alloc_and_write!(&buf, env);
+                env.push(slice);
+            }
+
+            if cfg!(target_pointer_width = "64") {
+                let mut buf = [0; 8];
+                let val = c as u64;
+                BigEndian::write_u64(&mut buf, val);
+                let slice = alloc_and_write!(&buf, env);
+                env.push(slice);
+            }
+            //env.push(slice);
             Ok(())
         }else {
             //Does not match word 
