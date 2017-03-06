@@ -16,7 +16,7 @@ extern crate log4rs;
 
 pub mod script;
 pub mod server;
-pub mod timestamp;
+pub mod logicalstamp;
 pub mod pubsub;
 pub mod storage;
 

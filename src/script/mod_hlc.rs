@@ -15,7 +15,7 @@ word!(HLC_TICK, b"\x88HLC/TICK");
 
 use super::{Env, EnvId, Module, PassResult, Error, ERROR_EMPTY_STACK,
             ERROR_INVALID_VALUE, offset_by_size};
-use timestamp;
+use logicalstamp;
 
 use hlc;
 use std::marker::PhantomData;
@@ -42,7 +42,7 @@ impl<'a> Handler<'a> {
     #[inline]
     pub fn handle_hlc(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == HLC {
-            let now = timestamp::hlc();
+            let now = logicalstamp::hlc();
             let slice = alloc_slice!(16, env);
             let _ = now.write_bytes(&mut slice[0..]).unwrap();
             env.push(slice);
