@@ -88,3 +88,8 @@ pub fn create_environment(storage_path: String, map_size: Option<i64>) -> lmdb::
             .expect("can't open env")
     }
 }
+
+// //Database Meta Table for Internal use 
+// pub struct MetaStorage {
+
+// }
