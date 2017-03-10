@@ -2,6 +2,8 @@
 [![Build Status](https://travis-ci.org/PumpkinDB/PumpkinDB.svg?branch=master)](https://travis-ci.org/PumpkinDB/PumpkinDB)
 [![Windows Build status](https://ci.appveyor.com/api/projects/status/picau5286hr9ynl7?svg=true)](https://ci.appveyor.com/project/yrashk/pumpkindb)
 [![Code Triagers](https://www.codetriage.com/pumpkindb/pumpkindb/badges/users.svg)](https://www.codetriage.com/pumpkindb/pumpkindb)
+[![OpenCollective](https://opencollective.com/pumpkindb/backers/badge.svg)](#backers) 
+[![OpenCollective](https://opencollective.com/pumpkindb/sponsors/badge.svg)](#sponsors)
 
 PumpkinDB
 =========
@@ -132,3 +134,73 @@ In a nutshell, this means:
 * We prefer code now over consensus later
 
 To learn more, read our [contribution guidelines](CONTRIBUTING.md)
+
+## Backers
+
+Support us with a monthly donation and help us continue our activities. [[Become a backer](https://opencollective.com/pumpkindb#backer)]
+
+<a href="https://opencollective.com/pumpkindb/backer/0/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/0/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/1/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/1/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/2/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/2/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/3/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/3/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/4/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/4/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/5/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/5/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/6/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/6/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/7/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/7/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/8/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/8/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/9/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/9/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/10/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/10/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/11/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/11/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/12/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/12/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/13/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/13/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/14/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/14/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/15/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/15/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/16/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/16/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/17/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/17/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/18/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/18/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/19/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/19/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/20/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/20/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/21/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/21/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/22/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/22/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/23/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/23/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/24/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/24/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/25/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/25/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/26/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/26/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/27/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/27/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/28/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/28/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/backer/29/website" target="_blank"><img src="https://opencollective.com/pumpkindb/backer/29/avatar.svg"></a>
+
+## Sponsors
+
+Become a sponsor and get your logo on our README on Github with a link to your site. [[Become a sponsor](https://opencollective.com/pumpkindb#sponsor)]
+
+<a href="https://opencollective.com/pumpkindb/sponsor/0/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/0/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/1/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/1/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/2/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/2/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/3/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/3/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/4/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/4/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/5/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/5/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/6/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/6/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/7/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/7/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/8/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/8/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/9/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/9/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/10/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/10/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/11/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/11/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/12/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/12/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/13/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/13/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/14/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/14/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/15/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/15/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/16/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/16/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/17/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/17/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/18/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/18/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/19/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/19/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/20/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/20/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/21/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/21/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/22/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/22/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/23/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/23/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/24/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/24/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/25/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/25/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/26/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/26/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/27/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/27/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/28/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/28/avatar.svg"></a>
+<a href="https://opencollective.com/pumpkindb/sponsor/29/website" target="_blank"><img src="https://opencollective.com/pumpkindb/sponsor/29/avatar.svg"></a>
