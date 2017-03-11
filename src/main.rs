@@ -24,8 +24,6 @@ use std::fs;
 use std::thread;
 use std::sync::Arc;
 
-use std::sync::Mutex;
-
 lazy_static! {
 
  static ref ENVIRONMENT: lmdb::Environment = {
@@ -38,13 +36,6 @@ lazy_static! {
 
  static ref DATABASE: Arc<storage::Storage<'static>> = {
     Arc::new(storage::Storage::new(&ENVIRONMENT))
- };
-
- static ref PUBLISHER: Mutex<pubsub::PublisherAccessor<Vec<u8>>> = {
-     let mut publisher = pubsub::Publisher::new();
-     let publisher_accessor = publisher.accessor();
-     let _ = thread::spawn(move || publisher.run());
-     Mutex::new(publisher_accessor)
  };
 
 }
@@ -81,17 +72,21 @@ fn main() {
 
     let mut senders = Vec::new();
 
+    let mut publisher = pubsub::Publisher::new();
+    let publisher_accessor = publisher.accessor();
+    let _ = thread::spawn(move || publisher.run());
+
     for i in 0..num_cpus::get() {
         info!("Starting scheduler on core {}.", i);
         let mut scheduler = script::Scheduler::new(
             &DATABASE,
-            PUBLISHER.lock().unwrap().clone(),
+            publisher_accessor.clone(),
         );
         let sender = scheduler.sender();
         thread::spawn(move || scheduler.run());
         senders.push(sender)
     }
 
-    server::run(config::get_int("server.port").unwrap(), senders, PUBLISHER.lock().unwrap().clone());
+    server::run(config::get_int("server.port").unwrap(), senders, publisher_accessor.clone());
 
 }
