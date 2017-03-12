@@ -50,17 +50,16 @@ fn eval(name: &[u8], script: &[u8]) {
         let publisher_thread = scope.spawn(move || publisher.run());
         let publisher_clone = publisher_accessor.clone();
         let timestamp_clone = timestamp.clone();
-        let (sender_sender, receiver) = mpsc::sync_channel(0);
+        let (sender, receiver) = Scheduler::create_sender();
         let handle = scope.spawn(move || {
             let mut scheduler = Scheduler::new(
                 &db,
                 publisher_clone,
                 timestamp_clone,
-                sender_sender,
+                receiver,
             );
             scheduler.run()
         });
-        let sender = receiver.recv().unwrap();
         let (callback, receiver) = mpsc::channel::<ResponseMessage>();
         let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(), Vec::from(script), callback));
         match receiver.recv() {

@@ -463,9 +463,7 @@ impl<'a> Scheduler<'a> {
         db: &'a storage::Storage<'a>,
         publisher: pubsub::PublisherAccessor<Vec<u8>>,
         timestamp_state: Arc<timestamp::Timestamp>,
-        sender_sender: mpsc::SyncSender<Sender<RequestMessage>>) -> Self {
-        let (sender, receiver) = mpsc::channel::<RequestMessage>();
-        let _  = sender_sender.send(sender.clone());
+        receiver: Receiver<RequestMessage>) -> Self {
         #[cfg(not(feature = "static_module_dispatch"))]
         return Scheduler {
             inbox: receiver,
@@ -491,6 +489,10 @@ impl<'a> Scheduler<'a> {
             hlc: mod_hlc::Handler::new(timestamp_state),
             json: mod_json::Handler::new()
         };
+    }
+
+    pub fn create_sender() -> (Sender<RequestMessage>, Receiver<RequestMessage>) {
+        mpsc::channel::<RequestMessage>()
     }
 
     /// Scheduler. It is supposed to be running in a separate thread

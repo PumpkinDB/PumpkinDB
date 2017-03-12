@@ -257,16 +257,15 @@ macro_rules! eval {
                 $($init)*
                 let publisher_clone = $publisher_accessor.clone();
                 let timestamp_clone = timestamp.clone();
-                let (sender_sender, receiver) = mpsc::sync_channel(0);
+                let (sender, receiver) = Scheduler::create_sender();
                 let handle = scope.spawn(move || {
                     let mut scheduler = Scheduler::new(
                         &db,
                         publisher_clone,
                         timestamp_clone,
-                        sender_sender);
+                        receiver);
                     scheduler.run()
                 });
-                let sender = receiver.recv().unwrap();
                 let script = parse($script).unwrap();
                 let (callback, receiver) = mpsc::channel::<ResponseMessage>();
                 let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(),
@@ -330,17 +329,16 @@ macro_rules! bench_eval {
                 let publisher_thread = scope.spawn(move || publisher.run());
                 let publisher_clone = publisher_accessor.clone();
                 let timestamp_clone = timestamp.clone();
-                let (sender_sender, receiver) = mpsc::sync_channel(0);
+                let (sender, receiver) = Scheduler::create_sender();
                 let handle = scope.spawn(move || {
                     let mut scheduler = Scheduler::new(
                         &db,
                         publisher_clone,
                         timestamp_clone,
-                        sender_sender,
+                        receiver,
                     );
                     scheduler.run()
                 });
-                let sender = receiver.recv().unwrap();
                 let sender_ = sender.clone();
                 let script = parse($script).unwrap();
                 $b.iter(move || {

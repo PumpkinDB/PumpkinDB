@@ -25,7 +25,6 @@ use std::fs::{OpenOptions};
 use std::path::PathBuf;
 use std::thread;
 use std::sync::Arc;
-use std::sync::mpsc;
 use memmap::{Mmap, Protection};
 
 lazy_static! {
@@ -100,7 +99,7 @@ fn main() {
 
     for i in 0..num_cpus::get() {
         info!("Starting scheduler on core {}.", i);
-        let (sender, receiver) = mpsc::sync_channel(0);
+        let (sender, receiver) = script::Scheduler::create_sender();
         let publisher_clone = publisher_accessor.clone();
         let storage_clone = storage.clone();
         let timestamp_clone = timestamp.clone();
@@ -109,11 +108,10 @@ fn main() {
                 &storage_clone,
                 publisher_clone,
                 timestamp_clone,
-                sender,
+                receiver,
             );
             scheduler.run()
         });
-        let sender = receiver.recv().expect("Could not receive sender");
         senders.push(sender)
     }
 
