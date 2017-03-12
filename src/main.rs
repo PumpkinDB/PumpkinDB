@@ -40,6 +40,9 @@ lazy_static! {
 /// Accepts storage path, filename and length and prepares the file. It is important that the length
 /// is the total length of the memory mapped file, otherwise the application _will segfault_ when
 /// trying to read those sections later. There is no way to handle that.
+/// The mmap file is structured as such now:
+/// Byte Range         Used for
+/// [0..20]            Last known HTC timestamp
 fn prepare_mmap(storage_path: &str, filename: &str, length: u64) -> Mmap {
     let mut scratchpad_pathbuf = PathBuf::from(storage_path);
     scratchpad_pathbuf.push(filename);
