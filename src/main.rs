@@ -46,7 +46,7 @@ fn prepare_mmap(storage_path: &str, filename: &str, length: u64) -> Mmap {
     scratchpad_pathbuf.push(filename);
     scratchpad_pathbuf.set_extension("dat");
     let scratchpad_path = scratchpad_pathbuf.as_path();
-    let scratchpad_file = OpenOptions::new().create_new(false).write(true)
+    let scratchpad_file = OpenOptions::new().create(true).write(true)
         .open(scratchpad_path).expect("Could not open or create scratchpad");
     let _ = scratchpad_file.set_len(length);
     Mmap::open_path(scratchpad_path, Protection::ReadWrite)
