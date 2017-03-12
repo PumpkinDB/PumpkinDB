@@ -254,11 +254,17 @@ macro_rules! eval {
                 let $publisher_accessor = publisher.accessor();
                 let publisher_thread = scope.spawn(move || publisher.run());
                 $($init)*
-                let mut scheduler = Scheduler::new(&db, $publisher_accessor.clone());
-                let sender = scheduler.sender();
+                let publisher_clone = $publisher_accessor.clone();
+                let (sender_sender, receiver) = mpsc::sync_channel(0);
                 let handle = scope.spawn(move || {
-                    scheduler.run();
+                    let mut scheduler = Scheduler::new(
+                        &db,
+                        publisher_clone,
+                        sender_sender,
+                        );
+                    scheduler.run()
                 });
+                let sender = receiver.recv().unwrap();
                 let script = parse($script).unwrap();
                 let (callback, receiver) = mpsc::channel::<ResponseMessage>();
                 let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(),
@@ -319,12 +325,18 @@ macro_rules! bench_eval {
                 let publisher_accessor = publisher.accessor();
                 let publisher_accessor_ = publisher.accessor();
                 let publisher_thread = scope.spawn(move || publisher.run());
-                let mut scheduler = Scheduler::new(&db, publisher_accessor.clone());
-                let sender = scheduler.sender();
-                let sender_ = sender.clone();
+                let publisher_clone = publisher_accessor.clone();
+                let (sender_sender, receiver) = mpsc::sync_channel(0);
                 let handle = scope.spawn(move || {
-                    scheduler.run();
+                    let mut scheduler = Scheduler::new(
+                        &db,
+                        publisher_clone,
+                        sender_sender,
+                    );
+                    scheduler.run()
                 });
+                let sender = receiver.recv().unwrap();
+                let sender_ = sender.clone();
                 let script = parse($script).unwrap();
                 $b.iter(move || {
                     let (callback, receiver) = mpsc::channel::<ResponseMessage>();

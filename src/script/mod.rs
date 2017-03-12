@@ -415,7 +415,6 @@ use std::collections::VecDeque;
 
 pub struct Scheduler<'a> {
     inbox: Receiver<RequestMessage>,
-    sender: Sender<RequestMessage>,
     #[cfg(not(feature = "static_module_dispatch"))]
     modules: Vec<Box<Module<'a> + 'a>>,
     #[cfg(feature = "static_module_dispatch")]
@@ -458,13 +457,15 @@ impl<'a> Scheduler<'a> {
     /// * Response sender
     /// * Internal sender
     /// * Request receiver
-    pub fn new(db: &'a storage::Storage<'a>,
-               publisher: pubsub::PublisherAccessor<Vec<u8>>) -> Self {
+    pub fn new(
+        db: &'a storage::Storage<'a>,
+        publisher: pubsub::PublisherAccessor<Vec<u8>>,
+        sender_sender: mpsc::SyncSender<Sender<RequestMessage>>) -> Self {
         let (sender, receiver) = mpsc::channel::<RequestMessage>();
+        let _  = sender_sender.send(sender.clone());
         #[cfg(not(feature = "static_module_dispatch"))]
         return Scheduler {
             inbox: receiver,
-            sender: sender.clone(),
             modules: vec![Box::new(mod_core::Handler::new(publisher)),
                           Box::new(mod_stack::Handler::new()),
                           Box::new(mod_binaries::Handler::new()),
@@ -478,7 +479,6 @@ impl<'a> Scheduler<'a> {
         #[cfg(feature = "static_module_dispatch")]
         return Scheduler {
             inbox: receiver,
-            sender: sender.clone(),
             core: mod_core::Handler::new(publisher),
             stack: mod_stack::Handler::new(),
             binaries: mod_binaries::Handler::new(),
@@ -488,10 +488,6 @@ impl<'a> Scheduler<'a> {
             hlc: mod_hlc::Handler::new(),
             json: mod_json::Handler::new()
         };
-    }
-
-    pub fn sender(&self) -> Sender<RequestMessage> {
-        self.sender.clone()
     }
 
     /// Scheduler. It is supposed to be running in a separate thread

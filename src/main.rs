@@ -23,9 +23,9 @@ pub mod storage;
 use std::fs;
 use std::thread;
 use std::sync::Arc;
+use std::sync::mpsc;
 
 lazy_static! {
-
  static ref ENVIRONMENT: lmdb::Environment = {
     let _ = config::set_default("storage.path", "pumpkin.db");
     let storage_path = config::get_str("storage.path").unwrap().into_owned();
@@ -33,11 +33,6 @@ lazy_static! {
     let map_size = config::get_int("storage.mapsize");
     storage::create_environment(storage_path, map_size)
  };
-
- static ref DATABASE: Arc<storage::Storage<'static>> = {
-    Arc::new(storage::Storage::new(&ENVIRONMENT))
- };
-
 }
 
 fn main() {
@@ -75,15 +70,22 @@ fn main() {
     let mut publisher = pubsub::Publisher::new();
     let publisher_accessor = publisher.accessor();
     let _ = thread::spawn(move || publisher.run());
+    let storage = Arc::new(storage::Storage::new(&ENVIRONMENT));
 
     for i in 0..num_cpus::get() {
         info!("Starting scheduler on core {}.", i);
-        let mut scheduler = script::Scheduler::new(
-            &DATABASE,
-            publisher_accessor.clone(),
-        );
-        let sender = scheduler.sender();
-        thread::spawn(move || scheduler.run());
+        let (sender, receiver) = mpsc::sync_channel(0);
+        let publisher_clone = publisher_accessor.clone();
+        let storage_clone = storage.clone();
+        thread::spawn(move || {
+            let mut scheduler = script::Scheduler::new(
+                &storage_clone,
+                publisher_clone,
+                sender
+            );
+            scheduler.run()
+        });
+        let sender = receiver.recv().expect("Could not receive sender");
         senders.push(sender)
     }
 
