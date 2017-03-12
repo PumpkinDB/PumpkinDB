@@ -71,17 +71,20 @@ fn main() {
     let publisher_accessor = publisher.accessor();
     let _ = thread::spawn(move || publisher.run());
     let storage = Arc::new(storage::Storage::new(&ENVIRONMENT));
+    let timestamp = Arc::new(timestamp::Timestamp::new());
 
     for i in 0..num_cpus::get() {
         info!("Starting scheduler on core {}.", i);
         let (sender, receiver) = mpsc::sync_channel(0);
         let publisher_clone = publisher_accessor.clone();
         let storage_clone = storage.clone();
+        let timestamp_clone = timestamp.clone();
         thread::spawn(move || {
             let mut scheduler = script::Scheduler::new(
                 &storage_clone,
                 publisher_clone,
-                sender
+                timestamp_clone,
+                sender,
             );
             scheduler.run()
         });

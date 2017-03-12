@@ -314,7 +314,7 @@ pub enum ResponseMessage {
 pub type TrySendError<T> = std::sync::mpsc::TrySendError<T>;
 
 use storage;
-
+use timestamp;
 use pubsub;
 
 pub mod mod_core;
@@ -451,6 +451,8 @@ const ERROR_UNKNOWN_KEY: &'static [u8] = b"\x01\x07";
 const ERROR_NO_TX: &'static [u8] = b"\x01\x08";
 const ERROR_DATABASE: &'static [u8] = b"\x01\x09";
 
+use std::sync::Arc;
+
 impl<'a> Scheduler<'a> {
     /// Creates an instance of Scheduler with three communication channels:
     ///
@@ -460,6 +462,7 @@ impl<'a> Scheduler<'a> {
     pub fn new(
         db: &'a storage::Storage<'a>,
         publisher: pubsub::PublisherAccessor<Vec<u8>>,
+        timestamp_state: Arc<timestamp::Timestamp>,
         sender_sender: mpsc::SyncSender<Sender<RequestMessage>>) -> Self {
         let (sender, receiver) = mpsc::channel::<RequestMessage>();
         let _  = sender_sender.send(sender.clone());
@@ -472,7 +475,7 @@ impl<'a> Scheduler<'a> {
                           Box::new(mod_numbers::Handler::new()),
                           Box::new(mod_storage::Handler::new(db)),
                           Box::new(mod_hash::Handler::new()),
-                          Box::new(mod_hlc::Handler::new()),
+                          Box::new(mod_hlc::Handler::new(timestamp_state)),
                           Box::new(mod_json::Handler::new()),
             ],
         };
@@ -485,7 +488,7 @@ impl<'a> Scheduler<'a> {
             numbers: mod_numbers::Handler::new(),
             storage: mod_storage::Handler::new(db),
             hash: mod_hash::Handler::new(),
-            hlc: mod_hlc::Handler::new(),
+            hlc: mod_hlc::Handler::new(timestamp_state),
             json: mod_json::Handler::new()
         };
     }
@@ -699,6 +702,8 @@ mod tests {
 
     use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, parse, offset_by_size};
     use std::sync::mpsc;
+    use std::sync::Arc;
+    use timestamp;
     use std::fs;
     use tempdir::TempDir;
     use lmdb;

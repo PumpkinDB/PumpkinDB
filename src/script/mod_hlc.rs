@@ -20,9 +20,11 @@ use timestamp;
 use hlc;
 use std::marker::PhantomData;
 use byteorder::{BigEndian, WriteBytesExt};
+use std::sync::Arc;
 
 pub struct Handler<'a> {
-    phantom: PhantomData<&'a ()>
+    phantom: PhantomData<&'a ()>,
+    timestamp: Arc<timestamp::Timestamp>,
 }
 
 impl<'a> Module<'a> for Handler<'a> {
@@ -35,14 +37,17 @@ impl<'a> Module<'a> for Handler<'a> {
 }
 
 impl<'a> Handler<'a> {
-    pub fn new() -> Self {
-        Handler { phantom: PhantomData }
+    pub fn new(timestamp_state: Arc<timestamp::Timestamp>) -> Self {
+        Handler {
+            phantom: PhantomData,
+            timestamp: timestamp_state
+        }
     }
 
     #[inline]
-    pub fn handle_hlc(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+    pub fn handle_hlc(&self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
         if word == HLC {
-            let now = timestamp::hlc();
+            let now = self.timestamp.hlc();
             let slice = alloc_slice!(16, env);
             let _ = now.write_bytes(&mut slice[0..]).unwrap();
             env.push(slice);

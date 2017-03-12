@@ -250,18 +250,20 @@ macro_rules! eval {
 
             let db = storage::Storage::new(&env);
             crossbeam::scope(|scope| {
+                let timestamp = Arc::new(timestamp::Timestamp::new());
                 let mut publisher = pubsub::Publisher::new();
                 let $publisher_accessor = publisher.accessor();
                 let publisher_thread = scope.spawn(move || publisher.run());
                 $($init)*
                 let publisher_clone = $publisher_accessor.clone();
+                let timestamp_clone = timestamp.clone();
                 let (sender_sender, receiver) = mpsc::sync_channel(0);
                 let handle = scope.spawn(move || {
                     let mut scheduler = Scheduler::new(
                         &db,
                         publisher_clone,
-                        sender_sender,
-                        );
+                        timestamp_clone,
+                        sender_sender);
                     scheduler.run()
                 });
                 let sender = receiver.recv().unwrap();
@@ -322,15 +324,18 @@ macro_rules! bench_eval {
             let db = storage::Storage::new(&env);
             crossbeam::scope(|scope| {
                 let mut publisher = pubsub::Publisher::new();
+                let timestamp = Arc::new(timestamp::Timestamp::new());
                 let publisher_accessor = publisher.accessor();
                 let publisher_accessor_ = publisher.accessor();
                 let publisher_thread = scope.spawn(move || publisher.run());
                 let publisher_clone = publisher_accessor.clone();
+                let timestamp_clone = timestamp.clone();
                 let (sender_sender, receiver) = mpsc::sync_channel(0);
                 let handle = scope.spawn(move || {
                     let mut scheduler = Scheduler::new(
                         &db,
                         publisher_clone,
+                        timestamp_clone,
                         sender_sender,
                     );
                     scheduler.run()

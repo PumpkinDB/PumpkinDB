@@ -27,7 +27,8 @@ use pumpkindb::script::{RequestMessage, ResponseMessage, EnvId, Env, Scheduler};
 use pumpkindb::script::{textparser, binparser};
 use pumpkindb::pubsub;
 use pumpkindb::storage;
-
+use pumpkindb::timestamp;
+use std::sync::Arc;
 use tempdir::TempDir;
 
 fn eval(name: &[u8], script: &[u8]) {
@@ -43,15 +44,18 @@ fn eval(name: &[u8], script: &[u8]) {
     let name = String::from(std::str::from_utf8(name).unwrap());
     let db = storage::Storage::new(&env);
     crossbeam::scope(|scope| {
+        let timestamp = Arc::new(timestamp::Timestamp::new());
         let mut publisher = pubsub::Publisher::new();
         let publisher_accessor = publisher.accessor();
         let publisher_thread = scope.spawn(move || publisher.run());
         let publisher_clone = publisher_accessor.clone();
+        let timestamp_clone = timestamp.clone();
         let (sender_sender, receiver) = mpsc::sync_channel(0);
         let handle = scope.spawn(move || {
             let mut scheduler = Scheduler::new(
                 &db,
                 publisher_clone,
+                timestamp_clone,
                 sender_sender,
             );
             scheduler.run()

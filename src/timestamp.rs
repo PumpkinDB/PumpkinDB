@@ -7,25 +7,20 @@
 use hlc;
 use std::sync::Mutex;
 
-lazy_static! {
-
-   static ref HLC_CLOCK: Mutex<hlc::Clock<hlc::Wall>> = Mutex::new(hlc::Clock::wall());
-
+#[derive(Debug)]
+pub struct Timestamp {
+    clock: Mutex<hlc::Clock<hlc::Wall>>
 }
 
-pub fn hlc() -> hlc::Timestamp<hlc::WallT> {
-    (*HLC_CLOCK).lock().unwrap().now()
-}
-
-#[cfg(test)]
-mod tests {
-
-    use timestamp;
-
-    #[test]
-    fn test() {
-        let t1 = timestamp::hlc();
-        let t2 = timestamp::hlc();
-        assert!(t2 > t1);
+impl Timestamp {
+    pub fn new() -> Self {
+        Timestamp {
+            clock: Mutex::new(hlc::Clock::wall())
+        }
     }
+
+    pub fn hlc(&self) -> hlc::Timestamp<hlc::WallT> {
+        self.clock.lock().unwrap().now()
+    }
+
 }
