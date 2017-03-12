@@ -250,7 +250,7 @@ macro_rules! eval {
 
             let db = storage::Storage::new(&env);
             crossbeam::scope(|scope| {
-                let timestamp = Arc::new(timestamp::Timestamp::new());
+                let timestamp = Arc::new(timestamp::Timestamp::new(None));
                 let mut publisher = pubsub::Publisher::new();
                 let $publisher_accessor = publisher.accessor();
                 let publisher_thread = scope.spawn(move || publisher.run());
@@ -324,7 +324,7 @@ macro_rules! bench_eval {
             let db = storage::Storage::new(&env);
             crossbeam::scope(|scope| {
                 let mut publisher = pubsub::Publisher::new();
-                let timestamp = Arc::new(timestamp::Timestamp::new());
+                let timestamp = Arc::new(timestamp::Timestamp::new(None));
                 let publisher_accessor = publisher.accessor();
                 let publisher_accessor_ = publisher.accessor();
                 let publisher_thread = scope.spawn(move || publisher.run());

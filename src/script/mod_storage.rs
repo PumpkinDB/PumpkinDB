@@ -548,7 +548,7 @@ mod tests {
             builder.set_mapsize(1024 * 1024 * 1024).expect("can't set mapsize");
             builder.open(path, lmdb::open::NOTLS, 0o600).expect("can't open env")
         };
-        let timestamp = timestamp::Timestamp::new();
+        let timestamp = timestamp::Timestamp::new(None);
         let db = storage::Storage::new(&env);
         b.iter(move || {
             let mut timestamps = Vec::new();

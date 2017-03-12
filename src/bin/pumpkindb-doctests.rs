@@ -44,7 +44,7 @@ fn eval(name: &[u8], script: &[u8]) {
     let name = String::from(std::str::from_utf8(name).unwrap());
     let db = storage::Storage::new(&env);
     crossbeam::scope(|scope| {
-        let timestamp = Arc::new(timestamp::Timestamp::new());
+        let timestamp = Arc::new(timestamp::Timestamp::new(None));
         let mut publisher = pubsub::Publisher::new();
         let publisher_accessor = publisher.accessor();
         let publisher_thread = scope.spawn(move || publisher.run());

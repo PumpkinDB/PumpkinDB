@@ -21,9 +21,12 @@ pub mod pubsub;
 pub mod storage;
 
 use std::fs;
+use std::fs::{OpenOptions};
+use std::path::PathBuf;
 use std::thread;
 use std::sync::Arc;
 use std::sync::mpsc;
+use memmap::{Mmap, Protection};
 
 lazy_static! {
  static ref ENVIRONMENT: lmdb::Environment = {
@@ -35,11 +38,33 @@ lazy_static! {
  };
 }
 
+/// Accepts storage path, filename and length and prepares the file. It is important that the length
+/// is the total length of the memory mapped file, otherwise the application _will segfault_ when
+/// trying to read those sections later. There is no way to handle that.
+fn prepare_mmap(storage_path: &str, filename: &str, length: u64) -> Mmap {
+    let mut scratchpad_pathbuf = PathBuf::from(storage_path);
+    scratchpad_pathbuf.push(filename);
+    scratchpad_pathbuf.set_extension("dat");
+    let scratchpad_path = scratchpad_pathbuf.as_path();
+    let scratchpad_file = OpenOptions::new().create_new(false).write(true)
+        .open(scratchpad_path).expect("Could not open or create scratchpad");
+    let _ = scratchpad_file.set_len(length);
+    Mmap::open_path(scratchpad_path, Protection::ReadWrite)
+        .expect("Could not open scratchpad")
+}
+
 fn main() {
     let _ = config::merge(config::Environment::new("pumpkindb"));
     let _ = config::merge(config::File::new("pumpkindb.toml", config::FileFormat::Toml));
-
     let _ = config::set_default("server.port", 9981);
+    let _ = config::set_default("storage.path", "pumpkin.db");
+    let storage_path = config::get_str("storage.path").unwrap().into_owned();
+    fs::create_dir_all(storage_path.as_str()).expect("can't create directory");
+
+    // Initialize Mmap
+    let scratchpad = prepare_mmap(storage_path.as_str(), "scratchpad", 20);
+    let mut hlc_state = scratchpad.into_view_sync();
+    hlc_state.restrict(0, 20).expect("Could not prepare HLC state");
 
     // Initialize logging
     let log_config = config::get_str("logging.config");
@@ -71,7 +96,7 @@ fn main() {
     let publisher_accessor = publisher.accessor();
     let _ = thread::spawn(move || publisher.run());
     let storage = Arc::new(storage::Storage::new(&ENVIRONMENT));
-    let timestamp = Arc::new(timestamp::Timestamp::new());
+    let timestamp = Arc::new(timestamp::Timestamp::new(Some(hlc_state)));
 
     for i in 0..num_cpus::get() {
         info!("Starting scheduler on core {}.", i);
