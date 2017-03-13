@@ -31,7 +31,7 @@ use pumpkindb::timestamp;
 use std::sync::Arc;
 use tempdir::TempDir;
 
-fn eval(name: &[u8], script: &[u8]) {
+fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp>) {
     let dir = TempDir::new("pumpkindb").unwrap();
     let path = dir.path().to_str().unwrap();
     fs::create_dir_all(path).expect("can't create directory");
@@ -44,7 +44,6 @@ fn eval(name: &[u8], script: &[u8]) {
     let name = String::from(std::str::from_utf8(name).unwrap());
     let db = storage::Storage::new(&env);
     crossbeam::scope(|scope| {
-        let timestamp = Arc::new(timestamp::Timestamp::new(None));
         let mut publisher = pubsub::Publisher::new();
         let publisher_accessor = publisher.accessor();
         let publisher_thread = scope.spawn(move || publisher.run());
@@ -92,6 +91,7 @@ fn eval(name: &[u8], script: &[u8]) {
 }
 
 fn main() {
+    let timestamp = Arc::new(timestamp::Timestamp::new(None));
     let re = Regex::new(r"```test\r?\n((.+\r?\n?)+)```").unwrap();
     for entry in glob("doc/script/**/*.md").expect("Failed to read glob pattern") {
         match entry {
@@ -106,7 +106,7 @@ fn main() {
                         if program.len() > 0 {
                             match binparser::word(program.as_slice()) {
                                 nom::IResult::Done(&[0x81, b':', ref rest..], program) => {
-                                    eval(&program[1..], rest);
+                                    eval(&program[1..], rest, timestamp.clone());
                                 },
                                 other => panic!("test definition parse error {:?}", other)
                             }
