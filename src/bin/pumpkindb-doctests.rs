@@ -27,10 +27,11 @@ use pumpkindb::script::{RequestMessage, ResponseMessage, EnvId, Env, Scheduler};
 use pumpkindb::script::{textparser, binparser};
 use pumpkindb::pubsub;
 use pumpkindb::storage;
-
+use pumpkindb::timestamp;
+use std::sync::Arc;
 use tempdir::TempDir;
 
-fn eval(name: &[u8], script: &[u8]) {
+fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp>) {
     let dir = TempDir::new("pumpkindb").unwrap();
     let path = dir.path().to_str().unwrap();
     fs::create_dir_all(path).expect("can't create directory");
@@ -46,9 +47,18 @@ fn eval(name: &[u8], script: &[u8]) {
         let mut publisher = pubsub::Publisher::new();
         let publisher_accessor = publisher.accessor();
         let publisher_thread = scope.spawn(move || publisher.run());
-        let mut scheduler = Scheduler::new(&db, publisher_accessor.clone());
-        let sender = scheduler.sender();
-        let handle = scope.spawn(move || scheduler.run());
+        let publisher_clone = publisher_accessor.clone();
+        let timestamp_clone = timestamp.clone();
+        let (sender, receiver) = Scheduler::create_sender();
+        let handle = scope.spawn(move || {
+            let mut scheduler = Scheduler::new(
+                &db,
+                publisher_clone,
+                timestamp_clone,
+                receiver,
+            );
+            scheduler.run()
+        });
         let (callback, receiver) = mpsc::channel::<ResponseMessage>();
         let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(), Vec::from(script), callback));
         match receiver.recv() {
@@ -81,6 +91,7 @@ fn eval(name: &[u8], script: &[u8]) {
 }
 
 fn main() {
+    let timestamp = Arc::new(timestamp::Timestamp::new(None));
     let re = Regex::new(r"```test\r?\n((.+\r?\n?)+)```").unwrap();
     for entry in glob("doc/script/**/*.md").expect("Failed to read glob pattern") {
         match entry {
@@ -95,7 +106,7 @@ fn main() {
                         if program.len() > 0 {
                             match binparser::word(program.as_slice()) {
                                 nom::IResult::Done(&[0x81, b':', ref rest..], program) => {
-                                    eval(&program[1..], rest);
+                                    eval(&program[1..], rest, timestamp.clone());
                                 },
                                 other => panic!("test definition parse error {:?}", other)
                             }

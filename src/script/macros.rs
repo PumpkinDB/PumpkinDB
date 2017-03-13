@@ -250,14 +250,21 @@ macro_rules! eval {
 
             let db = storage::Storage::new(&env);
             crossbeam::scope(|scope| {
+                let timestamp = Arc::new(timestamp::Timestamp::new(None));
                 let mut publisher = pubsub::Publisher::new();
                 let $publisher_accessor = publisher.accessor();
                 let publisher_thread = scope.spawn(move || publisher.run());
                 $($init)*
-                let mut scheduler = Scheduler::new(&db, $publisher_accessor.clone());
-                let sender = scheduler.sender();
+                let publisher_clone = $publisher_accessor.clone();
+                let timestamp_clone = timestamp.clone();
+                let (sender, receiver) = Scheduler::create_sender();
                 let handle = scope.spawn(move || {
-                    scheduler.run();
+                    let mut scheduler = Scheduler::new(
+                        &db,
+                        publisher_clone,
+                        timestamp_clone,
+                        receiver);
+                    scheduler.run()
                 });
                 let script = parse($script).unwrap();
                 let (callback, receiver) = mpsc::channel::<ResponseMessage>();
@@ -316,15 +323,23 @@ macro_rules! bench_eval {
             let db = storage::Storage::new(&env);
             crossbeam::scope(|scope| {
                 let mut publisher = pubsub::Publisher::new();
+                let timestamp = Arc::new(timestamp::Timestamp::new(None));
                 let publisher_accessor = publisher.accessor();
                 let publisher_accessor_ = publisher.accessor();
                 let publisher_thread = scope.spawn(move || publisher.run());
-                let mut scheduler = Scheduler::new(&db, publisher_accessor.clone());
-                let sender = scheduler.sender();
-                let sender_ = sender.clone();
+                let publisher_clone = publisher_accessor.clone();
+                let timestamp_clone = timestamp.clone();
+                let (sender, receiver) = Scheduler::create_sender();
                 let handle = scope.spawn(move || {
-                    scheduler.run();
+                    let mut scheduler = Scheduler::new(
+                        &db,
+                        publisher_clone,
+                        timestamp_clone,
+                        receiver,
+                    );
+                    scheduler.run()
                 });
+                let sender_ = sender.clone();
                 let script = parse($script).unwrap();
                 $b.iter(move || {
                     let (callback, receiver) = mpsc::channel::<ResponseMessage>();

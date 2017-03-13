@@ -500,7 +500,9 @@ impl<'a> Handler<'a> {
 #[allow(unused_variables, unused_must_use, unused_mut, unused_imports)]
 mod tests {
     use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, parse, offset_by_size};
+    use byteorder::WriteBytesExt;
     use std::sync::mpsc;
+    use std::sync::Arc;
     use std::fs;
     use tempdir::TempDir;
     use lmdb;
@@ -508,6 +510,7 @@ mod tests {
     use script::binparser;
     use pubsub;
     use storage;
+    use timestamp;
 
     const _EMPTY: &'static [u8] = b"";
 
@@ -535,9 +538,6 @@ mod tests {
         bench_eval!("[HLC \"Hello\"] 1000 TIMES [[ASSOC COMMIT] WRITE] 1000 TIMES", b);
     }
 
-    use timestamp;
-    use byteorder::WriteBytesExt;
-
     #[bench]
     fn write_1000_kv_pairs_in_isolated_txns_baseline(b: &mut Bencher) {
         let dir = TempDir::new("pumpkindb").unwrap();
@@ -548,12 +548,12 @@ mod tests {
             builder.set_mapsize(1024 * 1024 * 1024).expect("can't set mapsize");
             builder.open(path, lmdb::open::NOTLS, 0o600).expect("can't open env")
         };
-
+        let timestamp = timestamp::Timestamp::new(None);
         let db = storage::Storage::new(&env);
         b.iter(move || {
             let mut timestamps = Vec::new();
             for i in 0..1000 {
-                timestamps.push(timestamp::hlc());
+                timestamps.push(timestamp.hlc());
             }
             for ts in timestamps {
                 let txn = lmdb::WriteTransaction::new(db.env).unwrap();

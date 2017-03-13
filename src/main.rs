@@ -21,13 +21,13 @@ pub mod pubsub;
 pub mod storage;
 
 use std::fs;
+use std::fs::{OpenOptions};
+use std::path::PathBuf;
 use std::thread;
 use std::sync::Arc;
-
-use std::sync::Mutex;
+use memmap::{Mmap, Protection};
 
 lazy_static! {
-
  static ref ENVIRONMENT: lmdb::Environment = {
     let _ = config::set_default("storage.path", "pumpkin.db");
     let storage_path = config::get_str("storage.path").unwrap().into_owned();
@@ -35,25 +35,38 @@ lazy_static! {
     let map_size = config::get_int("storage.mapsize");
     storage::create_environment(storage_path, map_size)
  };
+}
 
- static ref DATABASE: Arc<storage::Storage<'static>> = {
-    Arc::new(storage::Storage::new(&ENVIRONMENT))
- };
-
- static ref PUBLISHER: Mutex<pubsub::PublisherAccessor<Vec<u8>>> = {
-     let mut publisher = pubsub::Publisher::new();
-     let publisher_accessor = publisher.accessor();
-     let _ = thread::spawn(move || publisher.run());
-     Mutex::new(publisher_accessor)
- };
-
+/// Accepts storage path, filename and length and prepares the file. It is important that the length
+/// is the total length of the memory mapped file, otherwise the application _will segfault_ when
+/// trying to read those sections later. There is no way to handle that.
+/// The mmap file is structured as such now:
+/// Byte Range         Used for
+/// [0..20]            Last known HTC timestamp
+fn prepare_mmap(storage_path: &str, filename: &str, length: u64) -> Mmap {
+    let mut scratchpad_pathbuf = PathBuf::from(storage_path);
+    scratchpad_pathbuf.push(filename);
+    scratchpad_pathbuf.set_extension("dat");
+    let scratchpad_path = scratchpad_pathbuf.as_path();
+    let scratchpad_file = OpenOptions::new().create(true).write(true)
+        .open(scratchpad_path).expect("Could not open or create scratchpad");
+    let _ = scratchpad_file.set_len(length);
+    Mmap::open_path(scratchpad_path, Protection::ReadWrite)
+        .expect("Could not open scratchpad")
 }
 
 fn main() {
     let _ = config::merge(config::Environment::new("pumpkindb"));
     let _ = config::merge(config::File::new("pumpkindb.toml", config::FileFormat::Toml));
-
     let _ = config::set_default("server.port", 9981);
+    let _ = config::set_default("storage.path", "pumpkin.db");
+    let storage_path = config::get_str("storage.path").unwrap().into_owned();
+    fs::create_dir_all(storage_path.as_str()).expect("can't create directory");
+
+    // Initialize Mmap
+    let scratchpad = prepare_mmap(storage_path.as_str(), "scratchpad", 20);
+    let mut hlc_state = scratchpad.into_view_sync();
+    hlc_state.restrict(0, 20).expect("Could not prepare HLC state");
 
     // Initialize logging
     let log_config = config::get_str("logging.config");
@@ -81,17 +94,30 @@ fn main() {
 
     let mut senders = Vec::new();
 
+    let mut publisher = pubsub::Publisher::new();
+    let publisher_accessor = publisher.accessor();
+    let _ = thread::spawn(move || publisher.run());
+    let storage = Arc::new(storage::Storage::new(&ENVIRONMENT));
+    let timestamp = Arc::new(timestamp::Timestamp::new(Some(hlc_state)));
+
     for i in 0..num_cpus::get() {
         info!("Starting scheduler on core {}.", i);
-        let mut scheduler = script::Scheduler::new(
-            &DATABASE,
-            PUBLISHER.lock().unwrap().clone(),
-        );
-        let sender = scheduler.sender();
-        thread::spawn(move || scheduler.run());
+        let (sender, receiver) = script::Scheduler::create_sender();
+        let publisher_clone = publisher_accessor.clone();
+        let storage_clone = storage.clone();
+        let timestamp_clone = timestamp.clone();
+        thread::spawn(move || {
+            let mut scheduler = script::Scheduler::new(
+                &storage_clone,
+                publisher_clone,
+                timestamp_clone,
+                receiver,
+            );
+            scheduler.run()
+        });
         senders.push(sender)
     }
 
-    server::run(config::get_int("server.port").unwrap(), senders, PUBLISHER.lock().unwrap().clone());
+    server::run(config::get_int("server.port").unwrap(), senders, publisher_accessor.clone());
 
 }

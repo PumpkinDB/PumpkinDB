@@ -390,6 +390,7 @@ mod tests {
 
     use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, parse, offset_by_size};
     use std::sync::mpsc;
+    use std::sync::Arc;
     use std::fs;
     use std::thread;
     use tempdir::TempDir;
@@ -398,6 +399,7 @@ mod tests {
     use super::binparser;
     use pubsub;
     use storage;
+    use timestamp;
 
     const _EMPTY: &'static [u8] = b"";
 

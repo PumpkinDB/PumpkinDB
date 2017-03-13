@@ -314,7 +314,7 @@ pub enum ResponseMessage {
 pub type TrySendError<T> = std::sync::mpsc::TrySendError<T>;
 
 use storage;
-
+use timestamp;
 use pubsub;
 
 pub mod mod_core;
@@ -415,7 +415,6 @@ use std::collections::VecDeque;
 
 pub struct Scheduler<'a> {
     inbox: Receiver<RequestMessage>,
-    sender: Sender<RequestMessage>,
     #[cfg(not(feature = "static_module_dispatch"))]
     modules: Vec<Box<Module<'a> + 'a>>,
     #[cfg(feature = "static_module_dispatch")]
@@ -452,46 +451,48 @@ const ERROR_UNKNOWN_KEY: &'static [u8] = b"\x01\x07";
 const ERROR_NO_TX: &'static [u8] = b"\x01\x08";
 const ERROR_DATABASE: &'static [u8] = b"\x01\x09";
 
+use std::sync::Arc;
+
 impl<'a> Scheduler<'a> {
     /// Creates an instance of Scheduler with three communication channels:
     ///
     /// * Response sender
     /// * Internal sender
     /// * Request receiver
-    pub fn new(db: &'a storage::Storage<'a>,
-               publisher: pubsub::PublisherAccessor<Vec<u8>>) -> Self {
-        let (sender, receiver) = mpsc::channel::<RequestMessage>();
+    pub fn new(
+        db: &'a storage::Storage<'a>,
+        publisher: pubsub::PublisherAccessor<Vec<u8>>,
+        timestamp_state: Arc<timestamp::Timestamp>,
+        receiver: Receiver<RequestMessage>) -> Self {
         #[cfg(not(feature = "static_module_dispatch"))]
         return Scheduler {
             inbox: receiver,
-            sender: sender.clone(),
             modules: vec![Box::new(mod_core::Handler::new(publisher)),
                           Box::new(mod_stack::Handler::new()),
                           Box::new(mod_binaries::Handler::new()),
                           Box::new(mod_numbers::Handler::new()),
                           Box::new(mod_storage::Handler::new(db)),
                           Box::new(mod_hash::Handler::new()),
-                          Box::new(mod_hlc::Handler::new()),
+                          Box::new(mod_hlc::Handler::new(timestamp_state)),
                           Box::new(mod_json::Handler::new()),
             ],
         };
         #[cfg(feature = "static_module_dispatch")]
         return Scheduler {
             inbox: receiver,
-            sender: sender.clone(),
             core: mod_core::Handler::new(publisher),
             stack: mod_stack::Handler::new(),
             binaries: mod_binaries::Handler::new(),
             numbers: mod_numbers::Handler::new(),
             storage: mod_storage::Handler::new(db),
             hash: mod_hash::Handler::new(),
-            hlc: mod_hlc::Handler::new(),
+            hlc: mod_hlc::Handler::new(timestamp_state),
             json: mod_json::Handler::new()
         };
     }
 
-    pub fn sender(&self) -> Sender<RequestMessage> {
-        self.sender.clone()
+    pub fn create_sender() -> (Sender<RequestMessage>, Receiver<RequestMessage>) {
+        mpsc::channel::<RequestMessage>()
     }
 
     /// Scheduler. It is supposed to be running in a separate thread
@@ -703,6 +704,8 @@ mod tests {
 
     use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, parse, offset_by_size};
     use std::sync::mpsc;
+    use std::sync::Arc;
+    use timestamp;
     use std::fs;
     use tempdir::TempDir;
     use lmdb;
