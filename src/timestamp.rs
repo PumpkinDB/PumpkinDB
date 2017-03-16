@@ -51,5 +51,46 @@ impl Timestamp {
         let _ = unsafe { &now.write_bytes(&mut state.as_mut_slice()).unwrap() };
         now
     }
+}
 
+#[cfg(test)]
+mod tests {
+    use memmap::{Mmap, Protection};
+    use timestamp::Timestamp;
+    use hlc;
+
+    #[test]
+    fn order_guaranteed() {
+        let timestamp = Timestamp::new(None);
+        let p1 = timestamp.hlc();
+        let p2 = timestamp.hlc();
+        assert!(p2 > p1);
+    }
+
+    #[test]
+    fn order_guaranteed_if_shifted() {
+        // Creates a clock and moves it into the future. That timestamp get serialized to an mmap
+        // which a Timestamp is created with, making the "future" value the last known value of the
+        // timestamp. Two stamps are then taken, and we make sure that even with a timestamp "from
+        // the future" as being the last known timestamp, the invariant that HLC moves forward (and
+        // is ordered that way) holds.
+        let mut scratchpad = Mmap::anonymous(20, Protection::ReadWrite).unwrap();
+        let mut clock = hlc::Clock::wall();
+        clock.set_epoch(u32::max_value());
+        let now = clock.now();
+        let _ = unsafe { &now.write_bytes(&mut scratchpad.as_mut_slice()).unwrap() };
+        let sync_view = scratchpad.into_view_sync();
+        let timestamp = Timestamp::new(Some(sync_view));
+        let p1 = timestamp.hlc();
+        let p2 = timestamp.hlc();
+        assert!(p1 < p2);
+    }
+
+    use test::Bencher;
+
+    #[bench]
+    fn timestamp_generation(b: &mut Bencher) {
+        let timestamp = Timestamp::new(None);
+        b.iter(|| timestamp.hlc());
+    }
 }
