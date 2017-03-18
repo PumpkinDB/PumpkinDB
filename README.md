@@ -1,61 +1,61 @@
+# PumpkinDB
+
+
 [![Gitter chat](https://badges.gitter.im/PumpkinDB.png)](https://gitter.im/PumpkinDB/Lobby)
-[![Build Status](https://travis-ci.org/PumpkinDB/PumpkinDB.svg?branch=master)](https://travis-ci.org/PumpkinDB/PumpkinDB)
-[![Windows Build status](https://ci.appveyor.com/api/projects/status/picau5286hr9ynl7?svg=true)](https://ci.appveyor.com/project/yrashk/pumpkindb)
 [![Code Triagers](https://www.codetriage.com/pumpkindb/pumpkindb/badges/users.svg)](https://www.codetriage.com/pumpkindb/pumpkindb)
-[![OpenCollective](https://opencollective.com/pumpkindb/backers/badge.svg)](#backers) 
+[![OpenCollective](https://opencollective.com/pumpkindb/backers/badge.svg)](#backers)
 [![OpenCollective](https://opencollective.com/pumpkindb/sponsors/badge.svg)](#sponsors)
 
-PumpkinDB
-=========
+| | |
+|-|-|
+| Build status (Linux) | [![Build Status](https://travis-ci.org/PumpkinDB/PumpkinDB.svg?branch=master)](https://travis-ci.org/PumpkinDB/PumpkinDB) |
+| Build status (Windows) | [![Windows Build status](https://ci.appveyor.com/api/projects/status/picau5286hr9ynl7?svg=true)](https://ci.appveyor.com/project/yrashk/pumpkindb) |
+| Project status | Usable, between alpha and beta |
+| Production-readiness | Depends on your risk tolerance |
 
-PumpkinDB is a compact event sourcing database, featuring fast on-disk storage,
-flexible approach to event structure and encoding, sophisticated event indexing
-and querying.
+PumpkinDB is a compact event sourcing database, featuring:
 
-The core ideas behind PumpkinDB stem from the so called 
+* Immutable key/value storage
+* ACID transactions
+* Binary keys and values (allows any encoding to be used: JSON, XML, Protobuf, Cap'n Proto, etc.)
+* An embedded programming language (PumpkinScript)
+* A range of event indexing and querying primitives
+
+## What is event sourcing?
+
+Event sourcing is a pattern in which, instead of storing the current state of
+the data and using it as a source of truth, one should immutably record the full series of actions taken and designate that log as a source of truth instead. This approach can simplify tasks in complex, changing domains by avoiding the need to synchronize data models and domain models. It also provides
+great auditing and transactional capabilities, as well as opportunities for lossless error correction.
+
+## What is PumpkinDB?
+
+PumpkinDB is essentially a database programming environment, largely inspired by core ideas behind [MUMPS](https://en.wikipedia.org/wiki/MUMPS). Instead of M,
+it has a Forth-inspired stack-based language, PumpkinScript. Instead of hierarchical keys, it has a flat key namespace and doesn't allow overriding values once they are said.  Core motivation for immutability was that with the cost of storage declining, erasing data is effectively a strategical mistake.
+
+While not intended for general purpose programming, it's main objective is to facilitate building specialized application-specific and generic databases with a particular focus on immutability and processing data as close to storage as possible, incurring as little communication penalty as possible.
+
+Applications communicate with PumpkinDB by sending small PumpkinScript programs
+over a network interface (or API when using PumpkinDB as an embedded solution).
+
+PumpkinDB offers a wide array of primitives for concurrency, storage, journalling, indexing and other common building blocks.
+
+## Why is it an event sourcing database engine?
+
+The core ideas behind PumpkinDB stem from the so called
 [lazy event sourcing](https://www.youtube.com/watch?v=aqv8d1pjmU8)
 approach which is based on storing and indexing events while delaying domain
 binding for as long as possible. That said, the intention of this database is to
 be a building block for different kinds of event sourcing systems, ranging from
 the classic one (using it as an event store) all the way to the lazy one (using
-indices) and anywhere in between. It's also possible to implement different approaches
-within a single database for different parts of the domain.
+indices) and anywhere in between. It's also possible to implement different approaches within a single database for different parts of the domain.
 
-In previous incarnations (or, rather, inspirations) of PumpkinDB much more rigid structures,
-formats and encoding were established as a prerequisite for using it, unnecessarily limiting
-the applicability and appeal of the technology and ideas behind it. For example, one had to buy
-into [ELF](https://rfc.eventsourcing.com/spec:1/ELF), UUID-based event identification and
-[HLC-based](https://rfc.eventsourcing.com/spec:6/HLC) timestamps.
+Instead of devising custom protocols for talking to PumpkinDB, the protocol of communication has become a pipeline to a script executor. This offers us enormous extension and flexibility capabilities.
 
-So it was deemed to be important to lift this kind of restrictions in PumpkinDB. But how do we
-support all the formats without knowing what they are? What if there was a way to describe how data should be processed, for example,
-for indexing — in a compact, unambiguous and composable form? Or even for recording data
-itself?
-
-Well, that's where the idea to use something like a Forth-like language was born.
-
-Instead of devising custom protocols for talking to PumpkinDB, the protocol of communication has
-become a pipeline to a script executor. This offers us enormous extension and flexibility capabilities.
- 
 To name a few:
 
 * Low-level imperative querying (as a foundation for declarative queries)
 * Indexing filters
 * Subscription filters
-
-
-PumpkinDB is in the process of active development and is not suitable for anything
-beyond experimentation. The interfaces, guarantees and concepts will evolve over
-time. You can read up on some of the ideas and progress in this repository's tlog
-("gitlog"). Simply run `git log` and find commits with a lot of text in the message
-and no diffs. 
-
-So what **is** PumpkinDB?
-
-* Fast file-based storage (thanks to [LMDB](http://lmdb.tech))
-* PumpkinScript (Forth-like) language for data manipulation
-* Library of building primitives: encoding, indexing, subscriptions, etc.
-* Query language that compiles to PumpkinScript
 
 
 ## Trying it out
@@ -73,30 +73,35 @@ $ rustup override set nightly # in PumpkinDB directory
 
 After that, you can run PumpkinDB server this way:
 
-```
+```shell
 $ cargo run --bin pumpkindb
-2017-02-25T09:19:25.848993+07:00 WARN pumpkindb - No logging configuration specified, switching to console logging
-2017-02-25T09:19:25.850079+07:00 INFO pumpkindb - Starting up
-2017-02-25T09:19:25.851175+07:00 INFO pumpkindb - Available disk space is approx. 25Gb, setting database map size to it
-2017-02-25T09:19:25.853860+07:00 INFO pumpkindb::server - Listening on 0.0.0.0:9981
+2017-03-18T09:55:24.510400-07:00 WARN pumpkindb - No logging configuration specified, switching to console logging
+2017-03-18T09:55:24.511821-07:00 INFO pumpkindb - Starting up
+2017-03-18T09:55:24.512955-07:00 INFO pumpkindb::storage - Available disk space is approx. 26Gb, setting database map size to it
+2017-03-18T09:55:24.514145-07:00 INFO pumpkindb - Starting scheduler on core 0.
+# ...
+2017-03-18T09:55:24.515344-07:00 INFO pumpkindb - Starting scheduler on core 7.
+2017-03-18T09:55:24.515468-07:00 INFO pumpkindb::server - Listening on 0.0.0.0:9981
 ```
 
 You can connect to it using `pumpkindb-term`:
 
-```
+```shell
 $ cargo run --bin pumpkindb-term
 Connected to PumpkinDB at 0.0.0.0:9981
 To send an expression, end it with `.`
 Type \h for help.
-PumpkinDB> ["Hello" "world" ASSOC COMMIT] WRITE.
+PumpkinDB> ["Name" HLC CONCAT "Jopn Doe" ASSOC COMMIT] WRITE.
 
-PumpkinDB> ["Hello" RETR] READ.
-"world"
-PumpkinDB>
+PumpkinDB> ["Name" HLC CONCAT "John Doe" ASSOC COMMIT] WRITE.
+
+PumpkinDB> [CURSOR "Name" ?CURSOR/SEEKLAST] READ UNWRAP NIP (Get last value).
+"John Doe"
+PumpkinDB> [CURSOR DUP "Name" ?CURSOR/SEEKLAST DROP ?CURSOR/PREV] READ UNWRAP NIP  (Get previous value).
+"Jopn Doe"
 ```
 
-(The above example stores key/value pair of "Hello" and "world" and
-then retrieves the value associated with that key.)
+(The above example shows how one can query and navigate for values submitted at a different time, using low level primitives).
 
 You can change some of the server's parameters by creating `pumpkindb.toml`:
 
@@ -120,12 +125,12 @@ port = 9981
 ## Contributing
 
 This project is its very early days and we will always be welcoming
-contributors. 
+contributors.
 
 Our goal is to encourage frictionless contributions to the project. In order to
 achieve that, we use Unprotocols [C4 process](https://rfc.unprotocols.org/spec:1/C4).
 Please read it, it will answer a lot of questions. Our goal is to merge pull requests
-as quickly as possible and make new stable releases regularly. 
+as quickly as possible and make new stable releases regularly.
 
 In a nutshell, this means:
 
@@ -134,6 +139,9 @@ In a nutshell, this means:
 * We prefer code now over consensus later
 
 To learn more, read our [contribution guidelines](CONTRIBUTING.md)
+
+We also maintain a [list of issues](https://github.com/PumpkinDB/PumpkinDB/issues?q=is%3Aissue+is%3Aopen+label%3AWhatCanIStartWith%3F) that we think are good starters for new
+contributors.
 
 ## Backers
 
