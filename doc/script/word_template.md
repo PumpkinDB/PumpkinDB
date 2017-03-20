@@ -22,7 +22,7 @@ Output stack: [stack notation]
 
 ## Errors
 
-[Describe in which cases this word will fail the program]
+[Describe in which cases this instruction will fail the program]
 
 ## Tests
 
@@ -35,12 +35,12 @@ example_test : 1 1 EQUAL?.
 
 ##### Stack notation
 
-In this notation, the top of the stack is to the right.  Words
+In this notation, the top of the stack is to the right.  Instructions
 may also be shown in context when appropriate.
 
 ##### Filename transliteration
 
-Some of the words contain characters not permitted or desirable
+Some of the instructions contain characters not permitted or desirable
 in the file system. Below is the table for transliterating them:
 
 | Character | Replacement |

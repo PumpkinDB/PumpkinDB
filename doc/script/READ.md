@@ -8,8 +8,8 @@ Input stack: `code`
 
 Output stack: result of `code` evaluation
 
-This word is one of two ways one can read from the database.
-Words like [RETR](RETR.md) are only possible in the context of
+This instruction is one of two ways one can read from the database.
+Instructions like [RETR](RETR.md) are only possible in the context of
 a READ or a [WRITE](WRITE.md).
 
 {% common -%}
@@ -23,7 +23,7 @@ PumpkinDB> ["hi" RETR] READ
 ## Allocation
 
 Will allocate for `code` appended with an internal transaction end
-marker word.
+marker instruction.
 
 ## Errors
 

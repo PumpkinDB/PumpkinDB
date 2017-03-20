@@ -9,9 +9,9 @@
 //! This module handles issuance, management and comparison of Hybrid
 //! Logical Clock timestamps (https://www.cse.buffalo.edu/tech-reports/2014-04.pdf)
 //!
-word!(HLC, b"\x83HLC");
-word!(HLC_LC, b"\x86HLC/LC");
-word!(HLC_TICK, b"\x88HLC/TICK");
+instruction!(HLC, b"\x83HLC");
+instruction!(HLC_LC, b"\x86HLC/LC");
+instruction!(HLC_TICK, b"\x88HLC/TICK");
 
 use super::{Env, EnvId, Module, PassResult, Error, ERROR_EMPTY_STACK,
             ERROR_INVALID_VALUE, offset_by_size};
@@ -28,11 +28,11 @@ pub struct Handler<'a> {
 }
 
 impl<'a> Module<'a> for Handler<'a> {
-    fn handle(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_word!(env, self.handle_hlc(env, word, pid));
-        try_word!(env, self.handle_hlc_lc(env, word, pid));
-        try_word!(env, self.handle_hlc_tick(env, word, pid));
-        Err(Error::UnknownWord)
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        try_instruction!(env, self.handle_hlc(env, instruction, pid));
+        try_instruction!(env, self.handle_hlc_lc(env, instruction, pid));
+        try_instruction!(env, self.handle_hlc_tick(env, instruction, pid));
+        Err(Error::UnknownInstruction)
     }
 }
 
@@ -45,21 +45,21 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_hlc(&self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == HLC {
+    pub fn handle_hlc(&self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if instruction == HLC {
             let now = self.timestamp.hlc();
             let slice = alloc_slice!(16, env);
             let _ = now.write_bytes(&mut slice[0..]).unwrap();
             env.push(slice);
             Ok(())
         } else {
-            Err(Error::UnknownWord)
+            Err(Error::UnknownInstruction)
         }
     }
 
     #[inline]
-    pub fn handle_hlc_tick(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == HLC_TICK {
+    pub fn handle_hlc_tick(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if instruction == HLC_TICK {
             let a = env.pop();
 
             if a.is_none() {
@@ -83,13 +83,13 @@ impl<'a> Handler<'a> {
 
             Ok(())
         } else {
-            Err(Error::UnknownWord)
+            Err(Error::UnknownInstruction)
         }
     }
 
     #[inline]
-    pub fn handle_hlc_lc(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if word == HLC_LC {
+    pub fn handle_hlc_lc(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if instruction == HLC_LC {
             let a = env.pop();
 
             if a.is_none() {
@@ -113,7 +113,7 @@ impl<'a> Handler<'a> {
 
             Ok(())
         } else {
-            Err(Error::UnknownWord)
+            Err(Error::UnknownInstruction)
         }
     }
 

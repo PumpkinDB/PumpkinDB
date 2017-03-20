@@ -8,10 +8,10 @@ Input stack: `code`
 
 Output stack: result of `code` evaluation
 
-This word is the only way one can write to the database, meaning
-words like [ASSOC](ASSOC.md) are only possible in the context of
+This instruction is the only way one can write to the database, meaning
+instructions like [ASSOC](ASSOC.md) are only possible in the context of
 a WRITE. If changes are to be saved, [COMMIT](COMMIT.md) has to be
-used as well. Read-transaction related words (such as [RETR](RETR.md))
+used as well. Read-transaction related instructions (such as [RETR](RETR.md))
 can also be used.
 
 {% common -%}
@@ -25,7 +25,7 @@ PumpkinDB> ["hi" "there" ASSOC COMMIT] WRITE
 ## Allocation
 
 Will allocate for `code` appended with an internal transaction end
-marker word.
+marker instruction.
 
 ## Errors
 

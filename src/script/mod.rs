@@ -65,14 +65,14 @@ pub mod envheap;
 
 use self::envheap::EnvHeap;
 
-/// `word!` macro is used to define a built-in word, its signature (if applicable)
+/// `instruction!` macro is used to define a built-in instruction, its signature (if applicable)
 /// and representation
-macro_rules! word {
+macro_rules! instruction {
     ($name : ident,
     ($($input : ident),* => $($output : ident),*),
     $ident : expr) =>
     (
-     word!($name, $ident);
+     instruction!($name, $ident);
     );
     ($name : ident,
     $ident : expr) =>
@@ -81,13 +81,13 @@ macro_rules! word {
     )
 }
 
-word!(TRY, b"\x83TRY");
-word!(TRY_END, b"\x80\x83TRY"); // internal word
+instruction!(TRY, b"\x83TRY");
+instruction!(TRY_END, b"\x80\x83TRY"); // internal instruction
 
 
 use std::str;
 
-// To add words that don't belong to a core set,
+// To add instructions that don't belong to a core set,
 // add a module with a handler, and reference it in the Scheduler's pass
 
 pub type Program = Vec<u8>;
@@ -95,8 +95,8 @@ pub type Program = Vec<u8>;
 /// `Error` represents an enumeration of possible `Executor` errors.
 #[derive(Debug, PartialEq, Clone)]
 pub enum Error {
-    /// Word is unknown
-    UnknownWord,
+    /// Instruction is unknown
+    UnknownInstruction,
     /// An internal scheduler's error to indicate that currently
     /// executed environment should be rescheduled from the same point
     Reschedule,
@@ -329,7 +329,7 @@ pub mod mod_json;
 pub trait Module<'a> {
     fn init(&mut self, _: &mut Env<'a>, _: EnvId) {}
     fn done(&mut self, _: &mut Env<'a>, _: EnvId) {}
-    fn handle(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a>;
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a>;
 }
 
 #[cfg(not(feature = "static_module_dispatch"))]
@@ -442,7 +442,7 @@ type PassResult<'a> = Result<(), Error>;
 const STACK_TRUE: &'static [u8] = b"\x01";
 const STACK_FALSE: &'static [u8] = b"\x00";
 
-const ERROR_UNKNOWN_WORD: &'static [u8] = b"\x01\x02";
+const ERROR_UNKNOWN_INSTRUCTION: &'static [u8] = b"\x01\x02";
 const ERROR_INVALID_VALUE: &'static [u8] = b"\x01\x03";
 const ERROR_EMPTY_STACK: &'static [u8] = b"\x01\x04";
 const ERROR_DECODING: &'static [u8] = b"\x01\x05";
@@ -612,24 +612,24 @@ impl<'a> Scheduler<'a> {
                 env.program.push(rest);
             }
             Ok(())
-        } else if let nom::IResult::Done(rest, word) = binparser::word_or_internal_word(program) {
+        } else if let nom::IResult::Done(rest, instruction) = binparser::instruction_or_internal_instruction(program) {
             if rest.len() > 0 {
                 env.program.push(rest);
             }
-            if word != TRY_END && !env.aborting_try.is_empty() {
+            if instruction != TRY_END && !env.aborting_try.is_empty() {
                 return Ok(())
             }
 
-            try_word!(env, self.handle_try(env, word, pid));
-            try_word!(env, self.handle_try_end(env, word, pid));
+            try_instruction!(env, self.handle_try(env, instruction, pid));
+            try_instruction!(env, self.handle_try_end(env, instruction, pid));
 
-            for_each_module!(module, self, try_word!(env, module.handle(env, word, pid)));
+            for_each_module!(module, self, try_instruction!(env, module.handle(env, instruction, pid)));
 
             // catch-all (NB: keep it last)
-            try_word!(env, self.handle_dictionary(env, word, pid));
+            try_instruction!(env, self.handle_dictionary(env, instruction, pid));
 
             // if nothing worked...
-            handle_error!(env, error_unknown_word!(word))
+            handle_error!(env, error_unknown_instruction!(instruction))
         } else {
             handle_error!(env, error_decoding!())
         }
@@ -638,38 +638,38 @@ impl<'a> Scheduler<'a> {
 
     #[inline]
     #[cfg(not(feature = "scoped_dictionary"))]
-    fn handle_dictionary(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if env.dictionary.contains_key(word) {
+    fn handle_dictionary(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if env.dictionary.contains_key(instruction) {
             {
-                let def = env.dictionary.get(word).unwrap();
+                let def = env.dictionary.get(instruction).unwrap();
                 env.program.push(def);
             }
             Ok(())
         } else {
-            Err(Error::UnknownWord)
+            Err(Error::UnknownInstruction)
         }
     }
 
     #[inline]
     #[cfg(feature = "scoped_dictionary")]
-    fn handle_dictionary(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_dictionary(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
         let dict = env.dictionary.pop().unwrap();
-        if dict.contains_key(word) {
+        if dict.contains_key(instruction) {
             {
-                let def = dict.get(word).unwrap();
+                let def = dict.get(instruction).unwrap();
                 env.program.push(def);
             }
             env.dictionary.push(dict);
             Ok(())
         } else {
             env.dictionary.push(dict);
-            Err(Error::UnknownWord)
+            Err(Error::UnknownInstruction)
         }
     }
 
     #[inline]
-    fn handle_try(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, TRY);
+    fn handle_try(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, TRY);
         let v = stack_pop!(env);
         env.tracking_errors += 1;
         env.program.push(TRY_END);
@@ -678,8 +678,8 @@ impl<'a> Scheduler<'a> {
     }
 
     #[inline]
-    fn handle_try_end(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        word_is!(env, word, TRY_END);
+    fn handle_try_end(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, TRY_END);
         env.tracking_errors -= 1;
         if env.aborting_try.is_empty() {
             env.push(_EMPTY);
@@ -737,9 +737,9 @@ mod tests {
 
 
     #[test]
-    fn unknown_word() {
-        eval!("NOTAWORD", env, result, {
-            assert_error!(result, "[\"Unknown word: NOTAWORD\" ['NOTAWORD] 2]");
+    fn unknown_instruction() {
+        eval!("NOTANINSTRUCTION", env, result, {
+            assert_error!(result, "[\"Unknown instruction: NOTANINSTRUCTION\" ['NOTANINSTRUCTION] 2]");
         });
     }
 
@@ -765,8 +765,8 @@ mod tests {
             assert_eq!(env.pop(), None);
         });
 
-        eval!("[NOTAWORD] TRY", env, result, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Unknown word: NOTAWORD\" ['NOTAWORD] 2]"));
+        eval!("[NOTANINSTRUCTION] TRY", env, result, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Unknown instruction: NOTANINSTRUCTION\" ['NOTANINSTRUCTION] 2]"));
             assert_eq!(env.pop(), None);
         });
 

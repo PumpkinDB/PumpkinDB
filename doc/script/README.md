@@ -28,9 +28,9 @@ with binaries represented as:
 * `0x<hexadecimal>` (hexadecimal form)
 * `"STRING"` (string form, newline and double quotes can be escaped with `\`)
 * `integer` (integer form, will convert to a big endian big integer)
-* `'word` (word in a binary form)
+* `'instruction` (instruction in a binary form)
 
-The rest of the instructions considered to be words.
+The rest of the instructions considered to be instructions.
 
 {% common -%}
 
@@ -43,14 +43,14 @@ The rest of the instructions considered to be words.
 One additional piece of syntax is code included within square
 brackets: `[DUP]`. This means that the parser will take the code inside,
 compile it to the binary form and add as a data push. This is useful for
-words like [EVAL](EVAL.md).
+instructions like [EVAL](EVAL.md).
  
 Inside of this syntax, you can use so-called "unwrapping"
-syntax (``word`) that can embed a value of a word into this code. 
-The reason for this syntax is quite important: by default, every word
+syntax (``instruction`) that can embed a value of a instruction into this code. 
+The reason for this syntax is quite important: by default, every instruction
 included into this block of code is passed by name. However, there
- are cases when it is important to pass word's value instead, as
- word values can change or be overridden in scoped evaluations.
+ are cases when it is important to pass instruction's value instead, as
+ instruction values can change or be overridden in scoped evaluations.
 
 {% common -%}
 

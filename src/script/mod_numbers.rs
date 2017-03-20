@@ -14,22 +14,22 @@ use num_traits::Signed;
 use core::ops::{Add, Sub};
 
 // Category: arithmetics
-word!(UINT_ADD, (a, b => c), b"\x88UINT/ADD");
-word!(UINT_SUB, (a, b => c), b"\x88UINT/SUB");
-word!(INT_ADD, (a, b => c), b"\x87INT/ADD");
-word!(INT_SUB, (a, b => c), b"\x87INT/SUB");
+instruction!(UINT_ADD, (a, b => c), b"\x88UINT/ADD");
+instruction!(UINT_SUB, (a, b => c), b"\x88UINT/SUB");
+instruction!(INT_ADD, (a, b => c), b"\x87INT/ADD");
+instruction!(INT_SUB, (a, b => c), b"\x87INT/SUB");
 
 // Casting
-word!(INT_TO_UINT, (a => b), b"\x89INT->UINT");
-word!(UINT_TO_INT, (a => b), b"\x89UINT->INT");
+instruction!(INT_TO_UINT, (a => b), b"\x89INT->UINT");
+instruction!(UINT_TO_INT, (a => b), b"\x89UINT->INT");
 
 // Comparison
-word!(UINT_EQUALQ, (a, b => c), b"\x8BUINT/EQUAL?");
-word!(UINT_GTQ, (a, b => c), b"\x88UINT/GT?");
-word!(UINT_LTQ, (a, b => c), b"\x88UINT/LT?");
-word!(INT_EQUALQ, (a, b => c), b"\x8AINT/EQUAL?");
-word!(INT_GTQ, (a, b => c), b"\x87INT/GT?");
-word!(INT_LTQ, (a, b => c), b"\x87INT/LT?");
+instruction!(UINT_EQUALQ, (a, b => c), b"\x8BUINT/EQUAL?");
+instruction!(UINT_GTQ, (a, b => c), b"\x88UINT/GT?");
+instruction!(UINT_LTQ, (a, b => c), b"\x88UINT/LT?");
+instruction!(INT_EQUALQ, (a, b => c), b"\x8AINT/EQUAL?");
+instruction!(INT_GTQ, (a, b => c), b"\x87INT/GT?");
+instruction!(INT_LTQ, (a, b => c), b"\x87INT/LT?");
 
 pub fn bytes_to_bigint(bytes: &[u8]) -> Option<BigInt> {
     if bytes.len() >= 2 {
@@ -54,8 +54,8 @@ macro_rules! bytes_to_bigint {
 }
 
 macro_rules! uint_comparison {
-    ($env: expr, $word: expr, $word_const: expr, $cmp: ident) => {{
-        word_is!($env, $word, $word_const);
+    ($env: expr, $instruction: expr, $instruction_const: expr, $cmp: ident) => {{
+        instruction_is!($env, $instruction, $instruction_const);
         let b = stack_pop!($env);
         let a = stack_pop!($env);
 
@@ -72,8 +72,8 @@ macro_rules! uint_comparison {
 }
 
 macro_rules! int_comparison {
-    ($env: expr, $word: expr, $word_const: expr, $cmp: ident) => {{
-        word_is!($env, $word, $word_const);
+    ($env: expr, $instruction: expr, $instruction_const: expr, $cmp: ident) => {{
+        instruction_is!($env, $instruction, $instruction_const);
         let b = stack_pop!($env);
         let a = stack_pop!($env);
 
@@ -102,20 +102,20 @@ pub struct Handler<'a> {
 }
 
 impl<'a> Module<'a> for Handler<'a> {
-    fn handle(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_word!(env, self.handle_uint_add(env, word, pid));
-        try_word!(env, self.handle_uint_sub(env, word, pid));
-        try_word!(env, self.handle_int_add(env, word, pid));
-        try_word!(env, self.handle_int_sub(env, word, pid));
-        try_word!(env, self.handle_int_to_uint(env, word, pid));
-        try_word!(env, self.handle_uint_to_int(env, word, pid));
-        try_word!(env, self.handle_uint_equalq(env, word, pid));
-        try_word!(env, self.handle_uint_gtq(env, word, pid));
-        try_word!(env, self.handle_uint_ltq(env, word, pid));
-        try_word!(env, self.handle_int_equalq(env, word, pid));
-        try_word!(env, self.handle_int_gtq(env, word, pid));
-        try_word!(env, self.handle_int_ltq(env, word, pid));
-        Err(Error::UnknownWord)
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        try_instruction!(env, self.handle_uint_add(env, instruction, pid));
+        try_instruction!(env, self.handle_uint_sub(env, instruction, pid));
+        try_instruction!(env, self.handle_int_add(env, instruction, pid));
+        try_instruction!(env, self.handle_int_sub(env, instruction, pid));
+        try_instruction!(env, self.handle_int_to_uint(env, instruction, pid));
+        try_instruction!(env, self.handle_uint_to_int(env, instruction, pid));
+        try_instruction!(env, self.handle_uint_equalq(env, instruction, pid));
+        try_instruction!(env, self.handle_uint_gtq(env, instruction, pid));
+        try_instruction!(env, self.handle_uint_ltq(env, instruction, pid));
+        try_instruction!(env, self.handle_int_equalq(env, instruction, pid));
+        try_instruction!(env, self.handle_int_gtq(env, instruction, pid));
+        try_instruction!(env, self.handle_int_ltq(env, instruction, pid));
+        Err(Error::UnknownInstruction)
     }
 }
 
@@ -127,8 +127,8 @@ impl<'a> Handler<'a> {
 
 
     #[inline]
-    fn handle_uint_add(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, UINT_ADD);
+    fn handle_uint_add(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, UINT_ADD);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -144,8 +144,8 @@ impl<'a> Handler<'a> {
         Ok(())
     }
 
-    fn handle_int_add(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, INT_ADD);
+    fn handle_int_add(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, INT_ADD);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -173,8 +173,8 @@ impl<'a> Handler<'a> {
         Ok(())
     }
 
-    fn handle_int_sub(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, INT_SUB);
+    fn handle_int_sub(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, INT_SUB);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -202,9 +202,9 @@ impl<'a> Handler<'a> {
         Ok(())
     }
 
-    fn handle_int_to_uint(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId)
+    fn handle_int_to_uint(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId)
                           -> PassResult<'a> {
-        word_is!(env, word, INT_TO_UINT);
+        instruction_is!(env, instruction, INT_TO_UINT);
         let a = stack_pop!(env);
         let a_int = bytes_to_bigint(a);
 
@@ -225,9 +225,9 @@ impl<'a> Handler<'a> {
         }
     }
 
-    fn handle_uint_to_int(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId)
+    fn handle_uint_to_int(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId)
                           -> PassResult<'a> {
-        word_is!(env, word, UINT_TO_INT);
+        instruction_is!(env, instruction, UINT_TO_INT);
         let a = stack_pop!(env);
         let a_uint = BigUint::from_bytes_be(a);
 
@@ -241,8 +241,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_uint_sub(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, UINT_SUB);
+    fn handle_uint_sub(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, UINT_SUB);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -262,33 +262,33 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_uint_equalq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        uint_comparison!(env, word, UINT_EQUALQ, eq)
+    fn handle_uint_equalq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        uint_comparison!(env, instruction, UINT_EQUALQ, eq)
     }
 
     #[inline]
-    fn handle_uint_gtq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        uint_comparison!(env, word, UINT_GTQ, gt)
+    fn handle_uint_gtq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        uint_comparison!(env, instruction, UINT_GTQ, gt)
     }
 
     #[inline]
-    fn handle_uint_ltq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        uint_comparison!(env, word, UINT_LTQ, lt)
+    fn handle_uint_ltq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        uint_comparison!(env, instruction, UINT_LTQ, lt)
     }
 
     #[inline]
-    fn handle_int_equalq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        int_comparison!(env, word, INT_EQUALQ, eq)
+    fn handle_int_equalq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        int_comparison!(env, instruction, INT_EQUALQ, eq)
     }
 
     #[inline]
-    fn handle_int_gtq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        int_comparison!(env, word, INT_GTQ, gt)
+    fn handle_int_gtq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        int_comparison!(env, instruction, INT_GTQ, gt)
     }
 
     #[inline]
-    fn handle_int_ltq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        int_comparison!(env, word, INT_LTQ, lt)
+    fn handle_int_ltq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        int_comparison!(env, instruction, INT_LTQ, lt)
     }
 
 }

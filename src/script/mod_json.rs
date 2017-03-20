@@ -11,18 +11,18 @@
 
 use core::convert::From;
 
-word!(JSONQ, b"\x85JSON?");
-word!(JSON_OBJECTQ, b"\x8CJSON/OBJECT?");
-word!(JSON_STRINGQ, b"\x8CJSON/STRING?");
-word!(JSON_NUMBERQ, b"\x8CJSON/NUMBER?");
-word!(JSON_BOOLEANQ, b"\x8DJSON/BOOLEAN?");
-word!(JSON_ARRAYQ, b"\x8BJSON/ARRAY?");
-word!(JSON_NULLQ, b"\x8AJSON/NULL?");
-word!(JSON_GET, b"\x88JSON/GET");
-word!(JSON_SET, b"\x88JSON/SET");
-word!(JSON_HASQ, b"\x89JSON/HAS?");
-word!(JSON_STRING_TO, b"\x8dJSON/STRING->");
-word!(JSON_TO_STRING, b"\x8dJSON/->STRING");
+instruction!(JSONQ, b"\x85JSON?");
+instruction!(JSON_OBJECTQ, b"\x8CJSON/OBJECT?");
+instruction!(JSON_STRINGQ, b"\x8CJSON/STRING?");
+instruction!(JSON_NUMBERQ, b"\x8CJSON/NUMBER?");
+instruction!(JSON_BOOLEANQ, b"\x8DJSON/BOOLEAN?");
+instruction!(JSON_ARRAYQ, b"\x8BJSON/ARRAY?");
+instruction!(JSON_NULLQ, b"\x8AJSON/NULL?");
+instruction!(JSON_GET, b"\x88JSON/GET");
+instruction!(JSON_SET, b"\x88JSON/SET");
+instruction!(JSON_HASQ, b"\x89JSON/HAS?");
+instruction!(JSON_STRING_TO, b"\x8dJSON/STRING->");
+instruction!(JSON_TO_STRING, b"\x8dJSON/->STRING");
 
 use super::{Env, EnvId, Module, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
             offset_by_size, STACK_TRUE, STACK_FALSE};
@@ -35,8 +35,8 @@ pub struct Handler<'a> {
 }
 
 macro_rules! json_is_a {
-    ($env: expr, $word: expr, $c: expr, { $t: ident }) => {{
-        word_is!($env, $word, $c);
+    ($env: expr, $instruction: expr, $c: expr, { $t: ident }) => {{
+        instruction_is!($env, $instruction, $c);
         let a = stack_pop!($env);
 
         match json::from_slice::<json::Value>(a) {
@@ -46,8 +46,8 @@ macro_rules! json_is_a {
 
         Ok(())
     }};
-    ($env: expr, $word: expr, $c: expr, $t: ident) => {{
-        word_is!($env, $word, $c);
+    ($env: expr, $instruction: expr, $c: expr, $t: ident) => {{
+        instruction_is!($env, $instruction, $c);
         let a = stack_pop!($env);
 
         match json::from_slice::<json::Value>(a) {
@@ -60,20 +60,20 @@ macro_rules! json_is_a {
 }
 
 impl<'a> Module<'a> for Handler<'a> {
-    fn handle(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_word!(env, self.handle_jsonq(env, word, pid));
-        try_word!(env, self.handle_json_objectq(env, word, pid));
-        try_word!(env, self.handle_json_stringq(env, word, pid));
-        try_word!(env, self.handle_json_numberq(env, word, pid));
-        try_word!(env, self.handle_json_booleanq(env, word, pid));
-        try_word!(env, self.handle_json_arrayq(env, word, pid));
-        try_word!(env, self.handle_json_nullq(env, word, pid));
-        try_word!(env, self.handle_json_get(env, word, pid));
-        try_word!(env, self.handle_json_hasq(env, word, pid));
-        try_word!(env, self.handle_json_set(env, word, pid));
-        try_word!(env, self.handle_json_string_to(env, word, pid));
-        try_word!(env, self.handle_json_to_string(env, word, pid));
-        Err(Error::UnknownWord)
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        try_instruction!(env, self.handle_jsonq(env, instruction, pid));
+        try_instruction!(env, self.handle_json_objectq(env, instruction, pid));
+        try_instruction!(env, self.handle_json_stringq(env, instruction, pid));
+        try_instruction!(env, self.handle_json_numberq(env, instruction, pid));
+        try_instruction!(env, self.handle_json_booleanq(env, instruction, pid));
+        try_instruction!(env, self.handle_json_arrayq(env, instruction, pid));
+        try_instruction!(env, self.handle_json_nullq(env, instruction, pid));
+        try_instruction!(env, self.handle_json_get(env, instruction, pid));
+        try_instruction!(env, self.handle_json_hasq(env, instruction, pid));
+        try_instruction!(env, self.handle_json_set(env, instruction, pid));
+        try_instruction!(env, self.handle_json_string_to(env, instruction, pid));
+        try_instruction!(env, self.handle_json_to_string(env, instruction, pid));
+        Err(Error::UnknownInstruction)
     }
 }
 
@@ -83,8 +83,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_jsonq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, JSONQ);
+    pub fn handle_jsonq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, JSONQ);
         let a = stack_pop!(env);
 
         match json::from_slice::<json::Value>(a) {
@@ -96,37 +96,37 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_json_objectq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        json_is_a!(env, word, JSON_OBJECTQ, Object)
+    pub fn handle_json_objectq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        json_is_a!(env, instruction, JSON_OBJECTQ, Object)
     }
 
     #[inline]
-    pub fn handle_json_stringq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        json_is_a!(env, word, JSON_STRINGQ, String)
+    pub fn handle_json_stringq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        json_is_a!(env, instruction, JSON_STRINGQ, String)
     }
     #[inline]
-    pub fn handle_json_numberq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        json_is_a!(env, word, JSON_NUMBERQ, Number)
-    }
-
-    #[inline]
-    pub fn handle_json_booleanq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        json_is_a!(env, word, JSON_BOOLEANQ, Bool)
+    pub fn handle_json_numberq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        json_is_a!(env, instruction, JSON_NUMBERQ, Number)
     }
 
     #[inline]
-    pub fn handle_json_arrayq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        json_is_a!(env, word, JSON_ARRAYQ, Array)
+    pub fn handle_json_booleanq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        json_is_a!(env, instruction, JSON_BOOLEANQ, Bool)
     }
 
     #[inline]
-    pub fn handle_json_nullq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        json_is_a!(env, word, JSON_NULLQ, { Null })
+    pub fn handle_json_arrayq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        json_is_a!(env, instruction, JSON_ARRAYQ, Array)
     }
 
     #[inline]
-    pub fn handle_json_get(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, JSON_GET);
+    pub fn handle_json_nullq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        json_is_a!(env, instruction, JSON_NULLQ, { Null })
+    }
+
+    #[inline]
+    pub fn handle_json_get(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, JSON_GET);
 
         let field = stack_pop!(env);
         let a = stack_pop!(env);
@@ -157,8 +157,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_json_hasq(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, JSON_HASQ);
+    pub fn handle_json_hasq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, JSON_HASQ);
 
         let field = stack_pop!(env);
         let a = stack_pop!(env);
@@ -184,8 +184,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_json_set(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, JSON_SET);
+    pub fn handle_json_set(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, JSON_SET);
 
         let value = stack_pop!(env);
         let field = stack_pop!(env);
@@ -216,8 +216,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_json_string_to(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, JSON_STRING_TO);
+    pub fn handle_json_string_to(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, JSON_STRING_TO);
 
         let a = stack_pop!(env);
 
@@ -234,8 +234,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_json_to_string(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, JSON_TO_STRING);
+    pub fn handle_json_to_string(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, JSON_TO_STRING);
 
         let a = stack_pop!(env);
 

@@ -8,13 +8,13 @@
 //!
 //! This module handles hashing data
 //!
-word!(HASH_SHA1, b"\x89HASH/SHA1");
-word!(HASH_SHA224, b"\x8BHASH/SHA224");
-word!(HASH_SHA256, b"\x8BHASH/SHA256");
-word!(HASH_SHA384, b"\x8BHASH/SHA384");
-word!(HASH_SHA512, b"\x8BHASH/SHA512");
-word!(HASH_SHA512_224, b"\x8FHASH/SHA512-224");
-word!(HASH_SHA512_256, b"\x8FHASH/SHA512-256");
+instruction!(HASH_SHA1, b"\x89HASH/SHA1");
+instruction!(HASH_SHA224, b"\x8BHASH/SHA224");
+instruction!(HASH_SHA256, b"\x8BHASH/SHA256");
+instruction!(HASH_SHA384, b"\x8BHASH/SHA384");
+instruction!(HASH_SHA512, b"\x8BHASH/SHA512");
+instruction!(HASH_SHA512_224, b"\x8FHASH/SHA512-224");
+instruction!(HASH_SHA512_256, b"\x8FHASH/SHA512-256");
 
 /*
  * `Sha224`, which is the 32-bit `Sha256` algorithm with the result truncated to 224 bits.
@@ -36,11 +36,11 @@ pub struct Handler<'a> {
     phantom: PhantomData<&'a ()>
 }
 
-macro_rules! hash_word {
+macro_rules! hash_instruction {
     ($name : ident, $constant: ident, $i: ident, $size: expr) => {
     #[inline]
-    pub fn $name(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, $constant);
+    pub fn $name(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, $constant);
         let a = stack_pop!(env);
         let mut hasher = $i::new();
         hasher.input(a);
@@ -53,15 +53,15 @@ macro_rules! hash_word {
 }
 
 impl<'a> Module<'a> for Handler<'a> {
-    fn handle(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_word!(env, self.handle_hash_sha1(env, word, pid));
-        try_word!(env, self.handle_hash_sha224(env, word, pid));
-        try_word!(env, self.handle_hash_sha256(env, word, pid));
-        try_word!(env, self.handle_hash_sha384(env, word, pid));
-        try_word!(env, self.handle_hash_sha512(env, word, pid));
-        try_word!(env, self.handle_hash_sha512_224(env, word, pid));
-        try_word!(env, self.handle_hash_sha512_256(env, word, pid));
-        Err(Error::UnknownWord)
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        try_instruction!(env, self.handle_hash_sha1(env, instruction, pid));
+        try_instruction!(env, self.handle_hash_sha224(env, instruction, pid));
+        try_instruction!(env, self.handle_hash_sha256(env, instruction, pid));
+        try_instruction!(env, self.handle_hash_sha384(env, instruction, pid));
+        try_instruction!(env, self.handle_hash_sha512(env, instruction, pid));
+        try_instruction!(env, self.handle_hash_sha512_224(env, instruction, pid));
+        try_instruction!(env, self.handle_hash_sha512_256(env, instruction, pid));
+        Err(Error::UnknownInstruction)
     }
 }
 
@@ -70,12 +70,12 @@ impl<'a> Handler<'a> {
         Handler { phantom: PhantomData }
     }
 
-    hash_word!(handle_hash_sha1, HASH_SHA1, Sha1, 20);
-    hash_word!(handle_hash_sha224, HASH_SHA224, Sha224, 28);
-    hash_word!(handle_hash_sha256, HASH_SHA256, Sha256, 32);
-    hash_word!(handle_hash_sha384, HASH_SHA384, Sha384, 48);
-    hash_word!(handle_hash_sha512, HASH_SHA512, Sha512, 64);
-    hash_word!(handle_hash_sha512_224, HASH_SHA512_224, Sha512Trunc224, 28);
-    hash_word!(handle_hash_sha512_256, HASH_SHA512_256, Sha512Trunc256, 32);
+    hash_instruction!(handle_hash_sha1, HASH_SHA1, Sha1, 20);
+    hash_instruction!(handle_hash_sha224, HASH_SHA224, Sha224, 28);
+    hash_instruction!(handle_hash_sha256, HASH_SHA256, Sha256, 32);
+    hash_instruction!(handle_hash_sha384, HASH_SHA384, Sha384, 48);
+    hash_instruction!(handle_hash_sha512, HASH_SHA512, Sha512, 64);
+    hash_instruction!(handle_hash_sha512_224, HASH_SHA512_224, Sha512Trunc224, 28);
+    hash_instruction!(handle_hash_sha512_256, HASH_SHA512_256, Sha512Trunc256, 32);
 
 }

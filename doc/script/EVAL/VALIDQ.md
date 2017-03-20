@@ -12,7 +12,7 @@ Output stack: `1` or `0`
 interpret the code. However, it won't assess any other properties
 pertaining to its validity.
 
-Generally speaking, this word is only reserved for
+Generally speaking, this instruction is only reserved for
 some special cases as `EVAL` will fail upon trying to
 evaluate incorrect code anyway.
 

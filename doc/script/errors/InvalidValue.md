@@ -1,6 +1,6 @@
 # Invalid value
 
-A value specified to another word is invalid.
+A value specified to another instruction is invalid.
 
 ## Code
 

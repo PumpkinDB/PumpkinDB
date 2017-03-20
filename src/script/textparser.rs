@@ -14,10 +14,10 @@ use std::str;
 
 use script::{Program, ParseError};
 
-fn prefix_word(word: &[u8]) -> Vec<u8> {
+fn prefix_instruction(instruction: &[u8]) -> Vec<u8> {
     let mut vec = Vec::new();
-    vec.push(word.len() as u8 | 128u8);
-    vec.extend_from_slice(word);
+    vec.push(instruction.len() as u8 | 128u8);
+    vec.extend_from_slice(instruction);
     vec
 }
 
@@ -90,7 +90,7 @@ fn sized_vec(s: Vec<u8>) -> Vec<u8> {
     vec
 }
 
-fn is_word_char(s: u8) -> bool {
+fn is_instruction_char(s: u8) -> bool {
     (s >= b'a' && s <= b'z') || (s >= b'A' && s <= b'Z') || (s >= b'0' && s <= b'9') ||
     s == b'_' || s == b':' || s == b'-' || s == b'=' ||
     s == b'!' || s == b'#' || s == b'$' || s == b'%' || s == b'@' || s == b'?' ||
@@ -162,10 +162,10 @@ named!(uint<Vec<u8>>,
         biguint: biguint >>
         (sized_vec(biguint.to_bytes_be()))));
 
-named!(word<Vec<u8>>, do_parse!(
-                        word: take_while1!(is_word_char)  >>
-                              (prefix_word(word))));
-named!(wordref<Vec<u8>>, do_parse!(tag!(b"'") >> w: word >> (sized_vec(w))));
+named!(instruction<Vec<u8>>, do_parse!(
+                        instruction: take_while1!(is_instruction_char)  >>
+                              (prefix_instruction(instruction))));
+named!(instructionref<Vec<u8>>, do_parse!(tag!(b"'") >> w: instruction >> (sized_vec(w))));
 named!(binary<Vec<u8>>, do_parse!(
                               tag!(b"0x")                 >>
                          hex: take_while1!(is_hex_digit)  >>
@@ -176,12 +176,12 @@ named!(string<Vec<u8>>,  alt!(do_parse!(tag!(b"\"\"") >> (vec![0])) |
                          str: delimited!(char!('"'), escaped!(is_not!("\"\\"), '\\', one_of!("\"n\\")), char!('"')) >>
                               (string_to_vec(str)))));
 named!(comment<Vec<u8>>, do_parse!(delimited!(char!('('), is_not!(")"), char!(')')) >> (vec![])));
-named!(item<Vec<u8>>, alt!(comment | binary | string | uint | sint | wrap | wordref | word));
+named!(item<Vec<u8>>, alt!(comment | binary | string | uint | sint | wrap | instructionref | instruction));
 
-fn unwrap_word(mut word: Vec<u8>) -> Vec<u8> {
+fn unwrap_instruction(mut instruction: Vec<u8>) -> Vec<u8> {
     let mut vec = Vec::new();
     vec.extend_from_slice(b"`");
-    vec.append(&mut word);
+    vec.append(&mut instruction);
     vec
 }
 
@@ -200,15 +200,15 @@ fn rewrap(prog: Vec<u8>) -> Vec<u8> {
             }
             vec.extend_from_slice(&unwrap[1..]);
             vec.extend_from_slice(b"\x01\x01");
-            vec.append(&mut prefix_word(b"WRAP"));
+            vec.append(&mut prefix_instruction(b"WRAP"));
 
             counter += 1;
             program = rest;
         } else if let IResult::Done(rest, data) = super::binparser::data(program) {
             acc.extend_from_slice(data);
             program = rest;
-        } else if let IResult::Done(rest, word) = super::binparser::word(program) {
-            acc.extend_from_slice(word);
+        } else if let IResult::Done(rest, instruction) = super::binparser::instruction(program) {
+            acc.extend_from_slice(instruction);
             program = rest;
         } else {
             panic!("invalid data {:?}", &program);
@@ -220,7 +220,7 @@ fn rewrap(prog: Vec<u8>) -> Vec<u8> {
         acc.clear();
     }
     for _ in 0..counter - 1 {
-        vec.append(&mut prefix_word(b"CONCAT"));
+        vec.append(&mut prefix_instruction(b"CONCAT"));
     }
     if counter == 0 {
         sized_vec(vec)
@@ -229,18 +229,18 @@ fn rewrap(prog: Vec<u8>) -> Vec<u8> {
     }
 }
 
-use super::binparser::word_tag;
-named!(bin_word<Vec<u8>>, do_parse!(v: length_bytes!(word_tag) >> (Vec::from(v))));
+use super::binparser::instruction_tag;
+named!(bin_instruction<Vec<u8>>, do_parse!(v: length_bytes!(instruction_tag) >> (Vec::from(v))));
 
 named!(bin_unwrap<Vec<u8>>, do_parse!(
                               tag!(b"`")                   >>
-                        word: alt!(bin_word | bin_unwrap)  >>
-                              (unwrap_word(word))));
+                        instruction: alt!(bin_instruction | bin_unwrap)  >>
+                              (unwrap_instruction(instruction))));
 
 named!(unwrap<Vec<u8>>, do_parse!(
                               tag!(b"`")                 >>
-                        word: alt!(word | unwrap)        >>
-                              (unwrap_word(word))));
+                        instruction: alt!(instruction | unwrap)        >>
+                              (unwrap_instruction(instruction))));
 named!(wrap<Vec<u8>>, do_parse!(
                          prog: delimited!(char!('['), ws!(wrapped_program), char!(']')) >>
                                (rewrap(prog))));
@@ -278,15 +278,15 @@ named!(pub programs<Vec<Vec<u8>>>, do_parse!(
 /// * `0x<hexadecimal>` (hexadecimal form)
 /// * `"STRING"` (string form, newline and double quotes can be escaped with `\`)
 /// * `integer` (integer form, will convert to a big endian big integer)
-/// * `'word` (word in a binary form)
+/// * `'instruction` (instruction in a binary form)
 ///
-/// The rest of the instructions considered to be words.
+/// The rest of the instructions considered to be instructions.
 ///
 /// One additional piece of syntax is code included within square
 /// brackets: `[DUP]`. This means that the parser will take the code inside,
 /// compile it to the binary form and add as a data push. This is useful for
-/// words like EVAL. Inside of this syntax, you can use so-called "unwrapping"
-/// syntax that can embed a value of a word into this code:
+/// instructions like EVAL. Inside of this syntax, you can use so-called "unwrapping"
+/// syntax that can embed a value of a instruction into this code:
 ///
 /// ```norun
 /// PumpkinDB> 1 'a SET [`a] 'b SET 2 'a SET b EVAL
@@ -365,7 +365,7 @@ mod tests {
     }
 
     #[test]
-    fn test_wordref() {
+    fn test_instructionref() {
         let script = parse("'HELLO").unwrap();
         assert_eq!(script, vec![0x06, 0x85, b'H', b'E', b'L', b'L', b'O']);
     }
@@ -417,7 +417,7 @@ mod tests {
 
 
     #[test]
-    fn test_number_prefixed_word() {
+    fn test_number_prefixed_instruction() {
         let script = parse("2DUP").unwrap();
         assert_eq!(script, b"\x842DUP");
     }
