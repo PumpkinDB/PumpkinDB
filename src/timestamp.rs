@@ -32,15 +32,11 @@ impl Timestamp {
                 }
                 clock
             };
-            Timestamp {
-                clock: Mutex::new((clock, scratchpad)),
-            }
+            Timestamp { clock: Mutex::new((clock, scratchpad)) }
         } else {
             let clock = hlc::Clock::wall();
             let scratchpad = Mmap::anonymous(20, Protection::ReadWrite).unwrap();
-            Timestamp {
-                clock: Mutex::new((clock, scratchpad.into_view_sync()))
-            }
+            Timestamp { clock: Mutex::new((clock, scratchpad.into_view_sync())) }
         }
     }
 

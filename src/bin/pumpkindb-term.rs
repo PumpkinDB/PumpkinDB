@@ -86,7 +86,8 @@ fn main() {
                         println!("\nTo send an expression, end it with `.`");
                         println!("To quit, hit ^D");
                         println!("Further help online at http://pumpkindb.org/doc/");
-                        println!("Missing a feature? Let us know at https://github.com/PumpkinDB/PumpkinDB/issues/\n");
+                        println!("Missing a feature? Let us know at \
+                                  https://github.com/PumpkinDB/PumpkinDB/issues/\n");
                     }
                 } else if text_str.len() > 0 && text_bytes[text_str.len() - 1] == 46u8 {
                     let rest = str::from_utf8(&text.as_bytes()[..text_str.len() - 1]).unwrap();
@@ -106,13 +107,19 @@ fn main() {
                     match script::parse(&program) {
                         Ok(compiled) => {
                             let uuid = Uuid::new_v4();
-                            let msg : Vec<u8> = Program(vec![
-                                Data(&compiled), Instruction("TRY"),
-                                Data(uuid.as_bytes()), InstructionRef("topic"), Instruction("SET"),
-                                Instruction("topic"),
-                                Instruction("SUBSCRIBE"), Instruction("STACK"), Instruction("topic"), Instruction("SEND"),
-                                Instruction("topic"), Instruction("UNSUBSCRIBE")
-                            ]).into();
+                            let msg: Vec<u8> = Program(vec![Data(&compiled),
+                                                            Instruction("TRY"),
+                                                            Data(uuid.as_bytes()),
+                                                            InstructionRef("topic"),
+                                                            Instruction("SET"),
+                                                            Instruction("topic"),
+                                                            Instruction("SUBSCRIBE"),
+                                                            Instruction("STACK"),
+                                                            Instruction("topic"),
+                                                            Instruction("SEND"),
+                                                            Instruction("topic"),
+                                                            Instruction("UNSUBSCRIBE")])
+                                .into();
                             let mut buf = [0u8; 4];
 
                             BigEndian::write_u32(&mut buf, msg.len() as u32);
@@ -128,16 +135,16 @@ fn main() {
                             r.clear();
 
                             match s_ref.take(msg_len as u64).read_to_end(&mut r) {
-                                Ok(0) => {
-                                },
+                                Ok(0) => {}
                                 Ok(_) => {
                                     let mut input = r.clone();
                                     let mut top_level = true;
                                     let mut s = String::new();
-                                    while input.len()> 0 {
+                                    while input.len() > 0 {
                                         match script::binparser::data(input.clone().as_slice()) {
                                             nom::IResult::Done(rest, data) => {
-                                                let (_, size) = script::binparser::data_size(data).unwrap();
+                                                let (_, size) = script::binparser::data_size(data)
+                                                    .unwrap();
                                                 let data = &data[script::offset_by_size(size)..];
 
                                                 input = Vec::from(rest);
@@ -148,13 +155,19 @@ fn main() {
                                                         if cfg!(target_os = "windows") {
                                                             let _ = write!(&mut s, "Error: ");
                                                         } else {
-                                                            let _ = write!(&mut s, "{}", Red.paint("Error: "));
+                                                            let _ = write!(&mut s,
+                                                                           "{}",
+                                                                           Red.paint("Error: "));
                                                         }
                                                         input = Vec::from(data);
                                                     }
                                                 } else {
-                                                    if data.iter().all(|c| *c >= 0x20 && *c <= 0x7e) {
-                                                        let _ = write!(&mut s, "{:?} ", str::from_utf8(data).unwrap());
+                                                    if data.iter()
+                                                        .all(|c| *c >= 0x20 && *c <= 0x7e) {
+                                                        let _ = write!(&mut s,
+                                                                       "{:?} ",
+                                                                       str::from_utf8(data)
+                                                                           .unwrap());
                                                     } else {
                                                         let _ = write!(&mut s, "0x");
                                                         for b in Vec::from(data) {
@@ -163,19 +176,19 @@ fn main() {
                                                         let _ = write!(&mut s, " ");
                                                     }
                                                 }
-                                            },
+                                            }
                                             e => {
                                                 panic!("{:?}", e);
                                             }
                                         }
                                     }
                                     println!("{}", s);
-                                },
+                                }
                                 Err(e) => {
                                     panic!("{}", e);
                                 }
                             }
-                        },
+                        }
                         Err(err) => {
                             println!("Script error: {:?}", err);
                         }
@@ -184,15 +197,15 @@ fn main() {
             }
             Err(ReadlineError::Interrupted) => {
                 println!("Aborted");
-                break
-            },
+                break;
+            }
             Err(ReadlineError::Eof) => {
                 println!("Exiting");
-                break
-            },
+                break;
+            }
             Err(err) => {
                 println!("Error: {:?}", err);
-                break
+                break;
             }
         }
 

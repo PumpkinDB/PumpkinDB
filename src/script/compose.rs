@@ -9,6 +9,7 @@
 //! This module is intended for composing PumpkinScript code in Rust
 //! clients
 //!
+
 use super::offset_by_size;
 
 /// # Item
@@ -22,9 +23,8 @@ pub enum Item<'a> {
 
 
 impl<'a> Into<Vec<u8>> for Item<'a> {
-
     fn into(self) -> Vec<u8> {
-        let mut vec : Vec<u8> = Vec::new();
+        let mut vec: Vec<u8> = Vec::new();
         match self {
             Item::Instruction(instruction) => {
                 vec.push(instruction.len() as u8 + 0x80);
@@ -42,7 +42,6 @@ impl<'a> Into<Vec<u8>> for Item<'a> {
         }
         vec
     }
-
 }
 
 
@@ -53,7 +52,6 @@ pub struct Program<'a>(pub Vec<Item<'a>>);
 
 
 impl<'a> Into<Vec<u8>> for Program<'a> {
-
     fn into(self) -> Vec<u8> {
         let mut vec = Vec::new();
         for item in self.0 {
@@ -61,7 +59,6 @@ impl<'a> Into<Vec<u8>> for Program<'a> {
         }
         vec
     }
-
 }
 
 #[cfg(test)]
@@ -73,7 +70,8 @@ mod tests {
 
     #[test]
     fn into() {
-        let p : Vec<u8> = Program(vec![Data(&vec![1]), Instruction("DUP"), InstructionRef("DUP")]).into();
+        let p: Vec<u8> = Program(vec![Data(&vec![1]), Instruction("DUP"), InstructionRef("DUP")])
+            .into();
         assert_eq!(parse("1 DUP 'DUP").unwrap(), p);
 
     }

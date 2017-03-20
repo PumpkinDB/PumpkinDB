@@ -21,7 +21,7 @@ pub mod pubsub;
 pub mod storage;
 
 use std::fs;
-use std::fs::{OpenOptions};
+use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::thread;
 use std::sync::Arc;
@@ -48,11 +48,13 @@ fn prepare_mmap(storage_path: &str, filename: &str, length: u64) -> Mmap {
     scratchpad_pathbuf.push(filename);
     scratchpad_pathbuf.set_extension("dat");
     let scratchpad_path = scratchpad_pathbuf.as_path();
-    let scratchpad_file = OpenOptions::new().create(true).write(true)
-        .open(scratchpad_path).expect("Could not open or create scratchpad");
+    let scratchpad_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(scratchpad_path)
+        .expect("Could not open or create scratchpad");
     let _ = scratchpad_file.set_len(length);
-    Mmap::open_path(scratchpad_path, Protection::ReadWrite)
-        .expect("Could not open scratchpad")
+    Mmap::open_path(scratchpad_path, Protection::ReadWrite).expect("Could not open scratchpad")
 }
 
 fn main() {
@@ -85,8 +87,12 @@ fn main() {
         let appender = log4rs::config::Appender::builder()
             .build("console",
                    Box::new(log4rs::append::console::ConsoleAppender::builder().build()));
-        let root = log4rs::config::Root::builder().appender("console").build(log::LogLevelFilter::Info);
-        let _ = log4rs::init_config(log4rs::config::Config::builder().appender(appender).build(root).unwrap());
+        let root =
+            log4rs::config::Root::builder().appender("console").build(log::LogLevelFilter::Info);
+        let _ = log4rs::init_config(log4rs::config::Config::builder()
+            .appender(appender)
+            .build(root)
+            .unwrap());
         warn!("No logging configuration specified, switching to console logging");
     }
 
@@ -107,17 +113,15 @@ fn main() {
         let storage_clone = storage.clone();
         let timestamp_clone = timestamp.clone();
         thread::spawn(move || {
-            let mut scheduler = script::Scheduler::new(
-                &storage_clone,
-                publisher_clone,
-                timestamp_clone,
-                receiver,
-            );
+            let mut scheduler =
+                script::Scheduler::new(&storage_clone, publisher_clone, timestamp_clone, receiver);
             scheduler.run()
         });
         senders.push(sender)
     }
 
-    server::run(config::get_int("server.port").unwrap(), senders, publisher_accessor.clone());
+    server::run(config::get_int("server.port").unwrap(),
+                senders,
+                publisher_accessor.clone());
 
 }

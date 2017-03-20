@@ -22,7 +22,7 @@ instruction!(PAD, (a, b, c => d), b"\x83PAD");
 
 
 pub struct Handler<'a> {
-    phantom: PhantomData<&'a ()>
+    phantom: PhantomData<&'a ()>,
 }
 
 impl<'a> Module<'a> for Handler<'a> {
@@ -39,13 +39,16 @@ impl<'a> Module<'a> for Handler<'a> {
 }
 
 impl<'a> Handler<'a> {
-
     pub fn new() -> Self {
         Handler { phantom: PhantomData }
     }
 
     #[inline]
-    fn handle_equal(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_equal(&mut self,
+                    env: &mut Env<'a>,
+                    instruction: &'a [u8],
+                    _: EnvId)
+                    -> PassResult<'a> {
         instruction_is!(env, instruction, EQUALQ);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
@@ -90,7 +93,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_concat(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_concat(&mut self,
+                     env: &mut Env<'a>,
+                     instruction: &'a [u8],
+                     _: EnvId)
+                     -> PassResult<'a> {
         instruction_is!(env, instruction, CONCAT);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
@@ -98,7 +105,7 @@ impl<'a> Handler<'a> {
         let slice = alloc_slice!(a.len() + b.len(), env);
 
         slice[0..b.len()].copy_from_slice(b);
-        slice[b.len()..b.len()+a.len()].copy_from_slice(a);
+        slice[b.len()..b.len() + a.len()].copy_from_slice(a);
 
         env.push(slice);
 
@@ -106,7 +113,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_slice(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_slice(&mut self,
+                    env: &mut Env<'a>,
+                    instruction: &'a [u8],
+                    _: EnvId)
+                    -> PassResult<'a> {
         instruction_is!(env, instruction, SLICE);
         let end = stack_pop!(env);
         let start = stack_pop!(env);
@@ -156,10 +167,10 @@ impl<'a> Handler<'a> {
 
         let slice = alloc_slice!(size_int, env);
 
-        for i in 0..size_int-value.len() {
+        for i in 0..size_int - value.len() {
             slice[i] = byte[0];
         }
-        slice[size_int-value.len()..].copy_from_slice(value);
+        slice[size_int - value.len()..].copy_from_slice(value);
 
         env.push(slice);
 
@@ -167,7 +178,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_length(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_length(&mut self,
+                     env: &mut Env<'a>,
+                     instruction: &'a [u8],
+                     _: EnvId)
+                     -> PassResult<'a> {
         instruction_is!(env, instruction, LENGTH);
         let a = stack_pop!(env);
 
@@ -180,5 +195,4 @@ impl<'a> Handler<'a> {
 
         Ok(())
     }
-
 }

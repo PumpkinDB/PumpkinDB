@@ -73,8 +73,8 @@ fn bin(bin: &[u8]) -> Vec<u8> {
 
 fn string_to_vec(s: &[u8]) -> Vec<u8> {
     let s = unsafe { String::from_utf8_unchecked(s.to_vec()) }
-            .replace("\\\"","\"")
-            .replace("\\n","\n");
+        .replace("\\\"", "\"")
+        .replace("\\n", "\n");
     let mut bin = Vec::new();
     let size = s.len();
     write_size!(bin, size);
@@ -91,10 +91,10 @@ fn sized_vec(s: Vec<u8>) -> Vec<u8> {
 }
 
 fn is_instruction_char(s: u8) -> bool {
-    (s >= b'a' && s <= b'z') || (s >= b'A' && s <= b'Z') || (s >= b'0' && s <= b'9') ||
-    s == b'_' || s == b':' || s == b'-' || s == b'=' ||
-    s == b'!' || s == b'#' || s == b'$' || s == b'%' || s == b'@' || s == b'?' ||
-    s == b'/' || s == b'<' || s == b'>'
+    (s >= b'a' && s <= b'z') || (s >= b'A' && s <= b'Z') ||
+    (s >= b'0' && s <= b'9') || s == b'_' || s == b':' || s == b'-' || s == b'=' ||
+    s == b'!' || s == b'#' ||
+    s == b'$' || s == b'%' || s == b'@' || s == b'?' || s == b'/' || s == b'<' || s == b'>'
 }
 
 
@@ -108,7 +108,7 @@ fn flatten_program(p: Vec<Vec<u8>>) -> Vec<u8> {
 
 fn delim_or_end(i: &[u8]) -> IResult<&[u8], ()> {
     if i.len() == 0 || (i.len() >= 1 && (i[0] == b' ' || i[0] == b']')) {
-        return IResult::Done(&i[0..], ())
+        return IResult::Done(&i[0..], ());
     } else {
         IResult::Error(ErrorKind::Custom(0))
     }
@@ -116,7 +116,7 @@ fn delim_or_end(i: &[u8]) -> IResult<&[u8], ()> {
 
 fn eof(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
     if i.len() == 0 {
-        return IResult::Done(&i[0..], Vec::new())
+        return IResult::Done(&i[0..], Vec::new());
     } else {
         IResult::Error(ErrorKind::Custom(1))
     }
@@ -173,10 +173,13 @@ named!(binary<Vec<u8>>, do_parse!(
 ));
 named!(string<Vec<u8>>,  alt!(do_parse!(tag!(b"\"\"") >> (vec![0])) |
                          do_parse!(
-                         str: delimited!(char!('"'), escaped!(is_not!("\"\\"), '\\', one_of!("\"n\\")), char!('"')) >>
+                         str: delimited!(char!('"'),
+                                         escaped!(is_not!("\"\\"), '\\', one_of!("\"n\\")),
+                                         char!('"')) >>
                               (string_to_vec(str)))));
 named!(comment<Vec<u8>>, do_parse!(delimited!(char!('('), is_not!(")"), char!(')')) >> (vec![])));
-named!(item<Vec<u8>>, alt!(comment | binary | string | uint | sint | wrap | instructionref | instruction));
+named!(item<Vec<u8>>, alt!(comment | binary | string | uint | sint |
+                           wrap | instructionref | instruction));
 
 fn unwrap_instruction(mut instruction: Vec<u8>) -> Vec<u8> {
     let mut vec = Vec::new();
@@ -222,11 +225,7 @@ fn rewrap(prog: Vec<u8>) -> Vec<u8> {
     for _ in 0..counter - 1 {
         vec.append(&mut prefix_instruction(b"CONCAT"));
     }
-    if counter == 0 {
-        sized_vec(vec)
-    } else {
-        vec
-    }
+    if counter == 0 { sized_vec(vec) } else { vec }
 }
 
 use super::binparser::instruction_tag;
@@ -316,7 +315,7 @@ pub fn parse(script: &str) -> Result<Program, ParseError> {
             } else {
                 Err(ParseError::Superfluous(Vec::from(rest)))
             }
-        },
+        }
         IResult::Incomplete(_) => Err(ParseError::Incomplete),
         IResult::Error(ErrorKind::Custom(code)) => Err(ParseError::Err(code)),
         _ => Err(ParseError::UnknownErr),
@@ -332,7 +331,7 @@ mod tests {
     #[test]
     fn test_empty() {
         let script = parse("").unwrap();
-        let empty : Vec<u8> = vec![];
+        let empty: Vec<u8> = vec![];
         assert_eq!(script, empty);
         let script = parse("  ").unwrap();
         assert_eq!(script, empty);
@@ -340,9 +339,7 @@ mod tests {
 
     #[test]
     fn multiline() {
-        let script_multiline = parse("\nHELP [\n\
-        DROP] \n\
-        1").unwrap();
+        let script_multiline = parse("\nHELP [\nDROP] \n1").unwrap();
         let script = parse("HELP [DROP] 1").unwrap();
         assert_eq!(script, script_multiline);
     }
@@ -479,15 +476,19 @@ mod tests {
     fn unwrapping() {
         assert_eq!(parse("[`val DUP]").unwrap(), parse("val 1 WRAP [DUP] CONCAT").unwrap());
         assert_eq!(parse("[`val]").unwrap(), parse("val 1 WRAP").unwrap());
-        assert_eq!(parse("[1 `val DUP]").unwrap(), parse("[1] val 1 WRAP [DUP] CONCAT CONCAT").unwrap());
-        assert_eq!(parse("[1 `val DUP `val]").unwrap(), parse("[1] val 1 WRAP [DUP] val 1 WRAP CONCAT CONCAT CONCAT").unwrap());
+        assert_eq!(parse("[1 `val DUP]").unwrap(),
+                   parse("[1] val 1 WRAP [DUP] CONCAT CONCAT").unwrap());
+        assert_eq!(parse("[1 `val DUP `val]").unwrap(),
+                   parse("[1] val 1 WRAP [DUP] val 1 WRAP CONCAT CONCAT CONCAT").unwrap());
         assert_eq!(parse("[1 `val]").unwrap(), parse("[1] val 1 WRAP CONCAT").unwrap());
     }
 
     #[test]
     fn nested_unwrapping() {
-        assert_eq!(parse("[[``val DUP]]").unwrap(), parse("val 1 WRAP [1 WRAP [DUP] CONCAT] CONCAT").unwrap());
-        assert_eq!(parse("[[2 ``val DUP]]").unwrap(), parse("[[2]] val 1 WRAP [1 WRAP [DUP] CONCAT CONCAT] CONCAT CONCAT").unwrap());
+        assert_eq!(parse("[[``val DUP]]").unwrap(),
+                   parse("val 1 WRAP [1 WRAP [DUP] CONCAT] CONCAT").unwrap());
+        assert_eq!(parse("[[2 ``val DUP]]").unwrap(),
+                   parse("[[2]] val 1 WRAP [1 WRAP [DUP] CONCAT CONCAT] CONCAT CONCAT").unwrap());
     }
 
     #[test]

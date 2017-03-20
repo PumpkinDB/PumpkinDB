@@ -3,9 +3,9 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
-//!
-//! This program is used to run doctests defined in doc/script
-//!
+//
+// This program is used to run doctests defined in doc/script
+//
 #![feature(slice_patterns)]
 extern crate glob;
 extern crate pumpkindb;
@@ -51,12 +51,7 @@ fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp>) {
         let timestamp_clone = timestamp.clone();
         let (sender, receiver) = Scheduler::create_sender();
         let handle = scope.spawn(move || {
-            let mut scheduler = Scheduler::new(
-                &db,
-                publisher_clone,
-                timestamp_clone,
-                receiver,
-            );
+            let mut scheduler = Scheduler::new(&db, publisher_clone, timestamp_clone, receiver);
             scheduler.run()
         });
         let (callback, receiver) = mpsc::channel::<ResponseMessage>();
@@ -71,7 +66,10 @@ fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp>) {
                 }
                 let mut script_env = Env::new_with_stack(stack_, stack_size).unwrap();
                 let val = script_env.pop().unwrap();
-                assert_eq!(Vec::from(val), vec![1], "{} was expected to succeeed", &name);
+                assert_eq!(Vec::from(val),
+                           vec![1],
+                           "{} was expected to succeeed",
+                           &name);
                 println!(" * {}", &name);
             }
             Ok(ResponseMessage::EnvFailed(_, err, _, _)) => {
@@ -80,9 +78,9 @@ fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp>) {
                 panic!("Error while executing {:?}: {:?}", &name, err)
             }
             Err(err) => {
-               let _ = sender.send(RequestMessage::Shutdown);
-               publisher_accessor.shutdown();
-               panic!("recv error: {:?}", err);
+                let _ = sender.send(RequestMessage::Shutdown);
+                publisher_accessor.shutdown();
+                panic!("recv error: {:?}", err);
             }
         }
         let _ = handle.join();
@@ -107,14 +105,14 @@ fn main() {
                             match binparser::instruction(program.as_slice()) {
                                 nom::IResult::Done(&[0x81, b':', ref rest..], program) => {
                                     eval(&program[1..], rest, timestamp.clone());
-                                },
-                                other => panic!("test definition parse error {:?}", other)
+                                }
+                                other => panic!("test definition parse error {:?}", other),
                             }
                         }
                     }
 
                 }
-            },
+            }
             Err(_) => (),
         }
     }

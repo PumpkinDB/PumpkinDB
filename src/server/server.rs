@@ -48,7 +48,10 @@ pub struct Server {
 
 
 impl Server {
-    pub fn new(sock: TcpListener, senders: Vec<Sender<RequestMessage>>, publisher: pubsub::PublisherAccessor<Vec<u8>>) -> Server {
+    pub fn new(sock: TcpListener,
+               senders: Vec<Sender<RequestMessage>>,
+               publisher: pubsub::PublisherAccessor<Vec<u8>>)
+               -> Server {
         let (response_sender, _) = mpsc::channel();
         let (evented_sender, receiver) = mio_chan::channel();
 
@@ -82,7 +85,8 @@ impl Server {
             loop {
                 match receiver.recv() {
                     Ok((original_topic, message, callback)) => {
-                        if original_topic == "subscriptions".as_bytes() || original_topic == "unsubscriptions".as_bytes()  {
+                        if original_topic == "subscriptions".as_bytes() ||
+                           original_topic == "unsubscriptions".as_bytes() {
                             let mut input = Vec::from(message);
                             let topic = match script::binparser::data(input.clone().as_slice()) {
                                 nom::IResult::Done(rest, data) => {
@@ -90,14 +94,17 @@ impl Server {
                                     input = Vec::from(rest);
                                     Vec::from(&data[script::offset_by_size(size)..])
                                 }
-                                _ => continue
+                                _ => continue,
                             };
-                            let token = Token(match script::binparser::data(input.clone().as_slice()) {
+                            let token = Token(match script::binparser::data(input.clone()
+                                .as_slice()) {
                                 nom::IResult::Done(_, data) => {
                                     let (_, size) = script::binparser::data_size(data).unwrap();
-                                    BigUint::from_bytes_be(&data[script::offset_by_size(size)..]).to_u64().unwrap()
+                                    BigUint::from_bytes_be(&data[script::offset_by_size(size)..])
+                                        .to_u64()
+                                        .unwrap()
                                 }
-                                _ => continue
+                                _ => continue,
                             } as usize);
                             if original_topic == "subscriptions".as_bytes() {
                                 if !map.contains_key(&topic) {
@@ -110,7 +117,8 @@ impl Server {
                             } else {
                                 if map.contains_key(&topic) {
                                     let tokens = map.remove(&topic).unwrap();
-                                    let new_tokens = tokens.into_iter().filter(|t| t.0 != token.0).collect();
+                                    let new_tokens =
+                                        tokens.into_iter().filter(|t| t.0 != token.0).collect();
                                     map.insert(topic.clone(), new_tokens);
                                 }
                             }
@@ -119,11 +127,14 @@ impl Server {
                             let _ = callback.send(());
                             if map.contains_key(&original_topic) {
                                 for token in map.get(&original_topic).unwrap() {
-                                    let _ = evented_sender.send((*token, original_topic.clone(), message.clone()));
+                                    let _ =
+                                        evented_sender.send((*token,
+                                                             original_topic.clone(),
+                                                             message.clone()));
                                 }
                             }
                         }
-                    },
+                    }
                     Err(err) => {
                         println!("{:?}", err);
                     }
@@ -131,14 +142,11 @@ impl Server {
             }
         });
 
-        let _ = poll.register(
-            &self.receiver,
-            Token(1000000),
-            Ready::all(),
-            PollOpt::edge()
-        ).or_else(|e| {
-            Err(e)
-        });
+        let _ = poll.register(&self.receiver,
+                      Token(1000000),
+                      Ready::all(),
+                      PollOpt::edge())
+            .or_else(|e| Err(e));
 
         loop {
             let cnt = poll.poll(&mut self.events, None)?;
@@ -158,14 +166,8 @@ impl Server {
     }
 
     pub fn register(&mut self, poll: &mut Poll) -> io::Result<()> {
-        poll.register(
-            &self.sock,
-            self.token,
-            Ready::readable(),
-            PollOpt::edge()
-        ).or_else(|e| {
-            Err(e)
-        })
+        poll.register(&self.sock, self.token, Ready::readable(), PollOpt::edge())
+            .or_else(|e| Err(e))
     }
 
     fn tick(&mut self, poll: &mut Poll) {
@@ -216,9 +218,7 @@ impl Server {
             }
 
             let _ = conn.writable()
-                .unwrap_or_else(|_| {
-                    conn.mark_reset();
-                });
+                .unwrap_or_else(|_| { conn.mark_reset(); });
         }
 
         if event.is_readable() {
@@ -231,9 +231,7 @@ impl Server {
                 }
 
                 self.readable(token)
-                    .unwrap_or_else(|_| {
-                        self.find_connection_by_token(token).mark_reset();
-                    });
+                    .unwrap_or_else(|_| { self.find_connection_by_token(token).mark_reset(); });
             }
         }
 
@@ -246,7 +244,7 @@ impl Server {
         loop {
             let sock = match self.sock.accept() {
                 Ok((sock, _)) => sock,
-                Err(_) => return
+                Err(_) => return,
             };
 
             let token = match self.conns.vacant_entry() {
@@ -254,11 +252,11 @@ impl Server {
                     let c = Connection::new(sock, entry.index());
                     entry.insert(c).index()
                 }
-                None => return
+                None => return,
             };
 
             match self.find_connection_by_token(token).register(poll) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(_) => {
                     self.conns.remove(token);
                 }
@@ -270,15 +268,25 @@ impl Server {
         while let Some(mut message) = self.find_connection_by_token(token).readable()? {
             let id = EnvId::new();
             let mut vec = Vec::new();
-            let mut subscribe = parse(format!("[{} 2 WRAP \"subscriptions\" SEND] 'SUBSCRIBE DEF", token.0).as_str()).unwrap();
-            let mut unsubscribe = parse(format!("[{} 2 WRAP \"unsubscriptions\" SEND] 'UNSUBSCRIBE DEF", token.0).as_str()).unwrap();
+            let mut subscribe = parse(format!("[{} 2 WRAP \"subscriptions\" SEND] 'SUBSCRIBE DEF",
+                                              token.0)
+                    .as_str())
+                .unwrap();
+            let mut unsubscribe = parse(format!("[{} 2 WRAP \"unsubscriptions\" SEND] \
+                                                 'UNSUBSCRIBE DEF",
+                                                token.0)
+                    .as_str())
+                .unwrap();
             vec.append(&mut subscribe);
             vec.append(&mut unsubscribe);
             vec.append(&mut message);
             let mut rng = thread_rng();
             let index: usize = rng.gen_range(0, self.senders.len() - 1);
             let sender = self.senders.get(index);
-            let _ = sender.unwrap().send(RequestMessage::ScheduleEnv(id, Vec::from(vec), self.response_sender.clone()));
+            let _ = sender.unwrap()
+                .send(RequestMessage::ScheduleEnv(id,
+                                                  Vec::from(vec),
+                                                  self.response_sender.clone()));
 
         }
 
