@@ -12,13 +12,13 @@ use std::marker::PhantomData;
 use num_bigint::BigUint;
 use num_traits::ToPrimitive;
 
-word!(EQUALQ, (a, b => c), b"\x86EQUAL?");
-word!(LTQ, (a, b => c), b"\x83LT?");
-word!(GTQ, (a, b => c), b"\x83GT?");
-word!(LENGTH, (a => b), b"\x86LENGTH");
-word!(CONCAT, (a, b => c), b"\x86CONCAT");
-word!(SLICE, (a, b, c => d), b"\x85SLICE");
-word!(PAD, (a, b, c => d), b"\x83PAD");
+instruction!(EQUALQ, (a, b => c), b"\x86EQUAL?");
+instruction!(LTQ, (a, b => c), b"\x83LT?");
+instruction!(GTQ, (a, b => c), b"\x83GT?");
+instruction!(LENGTH, (a => b), b"\x86LENGTH");
+instruction!(CONCAT, (a, b => c), b"\x86CONCAT");
+instruction!(SLICE, (a, b, c => d), b"\x85SLICE");
+instruction!(PAD, (a, b, c => d), b"\x83PAD");
 
 
 pub struct Handler<'a> {
@@ -26,15 +26,15 @@ pub struct Handler<'a> {
 }
 
 impl<'a> Module<'a> for Handler<'a> {
-    fn handle(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_word!(env, self.handle_ltp(env, word, pid));
-        try_word!(env, self.handle_gtp(env, word, pid));
-        try_word!(env, self.handle_equal(env, word, pid));
-        try_word!(env, self.handle_concat(env, word, pid));
-        try_word!(env, self.handle_slice(env, word, pid));
-        try_word!(env, self.handle_pad(env, word, pid));
-        try_word!(env, self.handle_length(env, word, pid));
-        Err(Error::UnknownWord)
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        try_instruction!(env, self.handle_ltp(env, instruction, pid));
+        try_instruction!(env, self.handle_gtp(env, instruction, pid));
+        try_instruction!(env, self.handle_equal(env, instruction, pid));
+        try_instruction!(env, self.handle_concat(env, instruction, pid));
+        try_instruction!(env, self.handle_slice(env, instruction, pid));
+        try_instruction!(env, self.handle_pad(env, instruction, pid));
+        try_instruction!(env, self.handle_length(env, instruction, pid));
+        Err(Error::UnknownInstruction)
     }
 }
 
@@ -45,8 +45,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_equal(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, EQUALQ);
+    fn handle_equal(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, EQUALQ);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -60,8 +60,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_ltp(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, LTQ);
+    fn handle_ltp(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, LTQ);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -75,8 +75,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_gtp(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, GTQ);
+    fn handle_gtp(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, GTQ);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -90,8 +90,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_concat(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, CONCAT);
+    fn handle_concat(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, CONCAT);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -106,8 +106,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_slice(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, SLICE);
+    fn handle_slice(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, SLICE);
         let end = stack_pop!(env);
         let start = stack_pop!(env);
         let slice = stack_pop!(env);
@@ -134,8 +134,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_pad(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, PAD);
+    fn handle_pad(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, PAD);
         let byte = stack_pop!(env);
         let size = stack_pop!(env);
         let value = stack_pop!(env);
@@ -167,8 +167,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_length(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, LENGTH);
+    fn handle_length(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, LENGTH);
         let a = stack_pop!(env);
 
         let len = BigUint::from(a.len() as u64);

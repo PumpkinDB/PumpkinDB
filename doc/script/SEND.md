@@ -8,7 +8,7 @@ Input stack: `data topic`
 
 Output stack:
 
-This word is the way to communicate with the rest of the
+This instruction is the way to communicate with the rest of the
 actors in the database. It will send a data message to a particular
 topic, pushing nothing back to the stack. All topic subscribers will
 receive it.

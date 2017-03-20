@@ -16,8 +16,8 @@ use super::offset_by_size;
 /// Represents a [Program](type.Program.html) item
 pub enum Item<'a> {
     Data(&'a [u8]),
-    Word(&'a str),
-    WordRef(&'a str),
+    Instruction(&'a str),
+    InstructionRef(&'a str),
 }
 
 
@@ -26,14 +26,14 @@ impl<'a> Into<Vec<u8>> for Item<'a> {
     fn into(self) -> Vec<u8> {
         let mut vec : Vec<u8> = Vec::new();
         match self {
-            Item::Word(word) => {
-                vec.push(word.len() as u8 + 0x80);
-                vec.extend_from_slice(word.as_bytes());
+            Item::Instruction(instruction) => {
+                vec.push(instruction.len() as u8 + 0x80);
+                vec.extend_from_slice(instruction.as_bytes());
             }
-            Item::WordRef(word) => {
-                write_size!(word.len() + 1, vec);
-                vec.push(word.len() as u8 + 0x80);
-                vec.extend_from_slice(word.as_bytes());
+            Item::InstructionRef(instruction) => {
+                write_size!(instruction.len() + 1, vec);
+                vec.push(instruction.len() as u8 + 0x80);
+                vec.extend_from_slice(instruction.as_bytes());
             }
             Item::Data(data) => {
                 write_size_header!(data, vec);
@@ -73,7 +73,7 @@ mod tests {
 
     #[test]
     fn into() {
-        let p : Vec<u8> = Program(vec![Data(&vec![1]), Word("DUP"), WordRef("DUP")]).into();
+        let p : Vec<u8> = Program(vec![Data(&vec![1]), Instruction("DUP"), InstructionRef("DUP")]).into();
         assert_eq!(parse("1 DUP 'DUP").unwrap(), p);
 
     }

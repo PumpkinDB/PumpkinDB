@@ -49,10 +49,10 @@ macro_rules! handle_error {
     }};
 }
 
-macro_rules! try_word {
+macro_rules! try_instruction {
   ($env: expr, $handler : expr) => {
     match $handler {
-        Err(Error::UnknownWord) => (),
+        Err(Error::UnknownInstruction) => (),
         Err(err @ Error::ProgramError(_)) => return handle_error!($env, err),
         Err(err) => return Err(err),
         Ok(()) => return Ok(())
@@ -73,10 +73,10 @@ macro_rules! stack_pop {
     }
 }
 
-macro_rules! word_is {
-    ($env: expr, $word: expr, $exp: expr) => {
-        if $word != $exp {
-            return Err(Error::UnknownWord)
+macro_rules! instruction_is {
+    ($env: expr, $instruction: expr, $exp: expr) => {
+        if $instruction != $exp {
+            return Err(Error::UnknownInstruction)
         }
     };
 }
@@ -176,22 +176,22 @@ macro_rules! error_invalid_value {
     }}
 }
 
-macro_rules! error_unknown_word {
-    ($word: expr) => { {
-        let (_, w) = binparser::word_or_internal_word($word).unwrap();
+macro_rules! error_unknown_instruction {
+    ($instruction: expr) => { {
+        let (_, w) = binparser::instruction_or_internal_instruction($instruction).unwrap();
 
-        let word = match str::from_utf8(&w[1..]) {
-            Ok(word) => word,
-            Err(_) => "Error parsing word"
+        let instruction = match str::from_utf8(&w[1..]) {
+            Ok(instruction) => instruction,
+            Err(_) => "Error parsing instruction"
         };
 
-        let desc = format!("Unknown word: {}", word);
+        let desc = format!("Unknown instruction: {}", instruction);
         let desc_bytes = desc.as_bytes();
 
         error_program!(
             desc_bytes,
-            $word,
-            ERROR_UNKNOWN_WORD
+            $instruction,
+            ERROR_UNKNOWN_INSTRUCTION
         )
     } }
 }

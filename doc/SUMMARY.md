@@ -107,7 +107,7 @@
    * [HASH/SHA512](script/HASH/SHA512.md)
    * [HASH/SHA512-224](script/HASH/SHA512-224.md)
    * [HASH/SHA512-256](script/HASH/SHA512-256.md)
- * Words
+ * Instructions
    * [DEF](script/DEF.md)
    * [SET](script/SET.md)
  * Messaging
@@ -122,7 +122,7 @@
    * [FEATURE?](script/FEATUREQ.md)
    * [$SYSTEM/VERSION](script/_SYSTEM/VERSION.md)
  * Errors
-     * [Unknown word](script/errors/UNKNOWN_WORD.md)
+     * [Unknown instruction](script/errors/UNKNOWN_INSTRUCTION.md)
      * [Invalid value](script/errors/InvalidValue.md)
      * [Empty stack](script/errors/EmptyStack.md)
      * [Decoding error](script/errors/DECODING.md)

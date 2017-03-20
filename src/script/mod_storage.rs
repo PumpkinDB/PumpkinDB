@@ -6,7 +6,7 @@
 //!
 //! # Storage
 //!
-//! This module handles all words and state related to handling storage
+//! This module handles all instructions and state related to handling storage
 //! capabilities
 //!
 use lmdb;
@@ -25,31 +25,31 @@ use snowflake::ProcessUniqueId;
 
 pub type CursorId = ProcessUniqueId;
 
-word!(WRITE, b"\x85WRITE");
-word!(WRITE_END, b"\x80\x85WRITE"); // internal word
+instruction!(WRITE, b"\x85WRITE");
+instruction!(WRITE_END, b"\x80\x85WRITE"); // internal instruction
 
-word!(READ, b"\x84READ");
-word!(READ_END, b"\x80\x84READ"); // internal word
+instruction!(READ, b"\x84READ");
+instruction!(READ_END, b"\x80\x84READ"); // internal instruction
 
-word!(ASSOC, b"\x85ASSOC");
-word!(ASSOCQ, b"\x86ASSOC?");
-word!(RETR, b"\x84RETR");
+instruction!(ASSOC, b"\x85ASSOC");
+instruction!(ASSOCQ, b"\x86ASSOC?");
+instruction!(RETR, b"\x84RETR");
 
-word!(CURSOR, b"\x86CURSOR");
-word!(QCURSOR_FIRST, b"\x8D?CURSOR/FIRST");
-word!(CURSOR_FIRSTQ, b"\x8DCURSOR/FIRST?");
-word!(QCURSOR_LAST, b"\x8C?CURSOR/LAST");
-word!(CURSOR_LASTQ, b"\x8CCURSOR/LAST?");
-word!(QCURSOR_NEXT, b"\x8C?CURSOR/NEXT");
-word!(CURSOR_NEXTQ, b"\x8CCURSOR/NEXT?");
-word!(QCURSOR_PREV, b"\x8C?CURSOR/PREV");
-word!(CURSOR_PREVQ, b"\x8CCURSOR/PREV?");
-word!(QCURSOR_SEEK, b"\x8C?CURSOR/SEEK");
-word!(CURSOR_SEEKQ, b"\x8CCURSOR/SEEK?");
-word!(QCURSOR_CUR, b"\x8B?CURSOR/CUR");
-word!(CURSOR_CURQ, b"\x8BCURSOR/CUR?");
+instruction!(CURSOR, b"\x86CURSOR");
+instruction!(QCURSOR_FIRST, b"\x8D?CURSOR/FIRST");
+instruction!(CURSOR_FIRSTQ, b"\x8DCURSOR/FIRST?");
+instruction!(QCURSOR_LAST, b"\x8C?CURSOR/LAST");
+instruction!(CURSOR_LASTQ, b"\x8CCURSOR/LAST?");
+instruction!(QCURSOR_NEXT, b"\x8C?CURSOR/NEXT");
+instruction!(CURSOR_NEXTQ, b"\x8CCURSOR/NEXT?");
+instruction!(QCURSOR_PREV, b"\x8C?CURSOR/PREV");
+instruction!(CURSOR_PREVQ, b"\x8CCURSOR/PREV?");
+instruction!(QCURSOR_SEEK, b"\x8C?CURSOR/SEEK");
+instruction!(CURSOR_SEEKQ, b"\x8CCURSOR/SEEK?");
+instruction!(QCURSOR_CUR, b"\x8B?CURSOR/CUR");
+instruction!(CURSOR_CURQ, b"\x8BCURSOR/CUR?");
 
-word!(COMMIT, b"\x86COMMIT");
+instruction!(COMMIT, b"\x86COMMIT");
 
 use std::collections::BTreeMap;
 
@@ -208,21 +208,21 @@ impl<'a> Module<'a> for Handler<'a> {
 
     }
 
-    fn handle(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_word!(env, self.handle_write(env, word, pid));
-        try_word!(env, self.handle_read(env, word, pid));
-        try_word!(env, self.handle_assoc(env, word, pid));
-        try_word!(env, self.handle_assocq(env, word, pid));
-        try_word!(env, self.handle_retr(env, word, pid));
-        try_word!(env, self.handle_commit(env, word, pid));
-        try_word!(env, self.handle_cursor(env, word, pid));
-        try_word!(env, self.handle_cursor_first(env, word, pid));
-        try_word!(env, self.handle_cursor_next(env, word, pid));
-        try_word!(env, self.handle_cursor_prev(env, word, pid));
-        try_word!(env, self.handle_cursor_last(env, word, pid));
-        try_word!(env, self.handle_cursor_seek(env, word, pid));
-        try_word!(env, self.handle_cursor_cur(env, word, pid));
-        Err(Error::UnknownWord)
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        try_instruction!(env, self.handle_write(env, instruction, pid));
+        try_instruction!(env, self.handle_read(env, instruction, pid));
+        try_instruction!(env, self.handle_assoc(env, instruction, pid));
+        try_instruction!(env, self.handle_assocq(env, instruction, pid));
+        try_instruction!(env, self.handle_retr(env, instruction, pid));
+        try_instruction!(env, self.handle_commit(env, instruction, pid));
+        try_instruction!(env, self.handle_cursor(env, instruction, pid));
+        try_instruction!(env, self.handle_cursor_first(env, instruction, pid));
+        try_instruction!(env, self.handle_cursor_next(env, instruction, pid));
+        try_instruction!(env, self.handle_cursor_prev(env, instruction, pid));
+        try_instruction!(env, self.handle_cursor_last(env, instruction, pid));
+        try_instruction!(env, self.handle_cursor_seek(env, instruction, pid));
+        try_instruction!(env, self.handle_cursor_cur(env, instruction, pid));
+        Err(Error::UnknownInstruction)
     }
 }
 
@@ -239,8 +239,8 @@ impl<'a> Handler<'a> {
 
 
     #[inline]
-    pub fn handle_write(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        match word {
+    pub fn handle_write(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        match instruction {
             WRITE => {
                 let v = stack_pop!(env);
                 validate_lockout!(env, self.db_write_txn, pid);
@@ -266,13 +266,13 @@ impl<'a> Handler<'a> {
                 self.db_write_txn = None;
                 Ok(())
             }
-            _ => Err(Error::UnknownWord),
+            _ => Err(Error::UnknownInstruction),
         }
     }
 
     #[inline]
-    pub fn handle_read(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        match word {
+    pub fn handle_read(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        match instruction {
             READ => {
                 let v = stack_pop!(env);
 
@@ -296,13 +296,13 @@ impl<'a> Handler<'a> {
                 self.db_read_txns.remove(&pid);
                 Ok(())
             }
-            _ => Err(Error::UnknownWord),
+            _ => Err(Error::UnknownInstruction),
         }
     }
 
     #[inline]
-    pub fn handle_assoc(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == ASSOC {
+    pub fn handle_assoc(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        if instruction == ASSOC {
             validate_lockout!(env, self.db_write_txn, pid);
             if let Some((_, ref txn)) = self.db_write_txn {
                 let value = stack_pop!(env);
@@ -319,13 +319,13 @@ impl<'a> Handler<'a> {
                 Err(error_no_transaction!())
             }
         } else {
-            Err(Error::UnknownWord)
+            Err(Error::UnknownInstruction)
         }
     }
 
     #[inline]
-    pub fn handle_commit(&mut self, _: &Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == COMMIT {
+    pub fn handle_commit(&mut self, _: &Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        if instruction == COMMIT {
             validate_lockout!(env, self.db_write_txn, pid);
             if let Some((_, txn)) = mem::replace(&mut self.db_write_txn, None) {
                 match txn.commit() {
@@ -336,14 +336,14 @@ impl<'a> Handler<'a> {
                 Err(error_no_transaction!())
             }
         } else {
-            Err(Error::UnknownWord)
+            Err(Error::UnknownInstruction)
         }
     }
 
 
     #[inline]
-    pub fn handle_retr(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == RETR {
+    pub fn handle_retr(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        if instruction == RETR {
             validate_lockout!(env, self.db_write_txn, pid);
             validate_read_lockout!(self.db_read_txns, pid);
             let key = stack_pop!(env);
@@ -361,13 +361,13 @@ impl<'a> Handler<'a> {
                 Err(err) => Err(error_database!(err)),
             }
         } else {
-            Err(Error::UnknownWord)
+            Err(Error::UnknownInstruction)
         }
     }
 
     #[inline]
-    pub fn handle_assocq(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == ASSOCQ {
+    pub fn handle_assocq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        if instruction == ASSOCQ {
             validate_lockout!(env, self.db_write_txn, pid);
             let key = stack_pop!(env);
 
@@ -386,7 +386,7 @@ impl<'a> Handler<'a> {
                 Err(err) => Err(error_database!(err)),
             }
         } else {
-            Err(Error::UnknownWord)
+            Err(Error::UnknownInstruction)
         }
     }
 
@@ -395,8 +395,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_cursor(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == CURSOR {
+    pub fn handle_cursor(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        if instruction == CURSOR {
             validate_read_lockout!(self.db_read_txns, pid);
             validate_lockout!(env, self.db_write_txn, pid);
 
@@ -420,78 +420,78 @@ impl<'a> Handler<'a> {
                 Err(err) => Err(error_database!(err))
             }
         } else {
-            Err(Error::UnknownWord)
+            Err(Error::UnknownInstruction)
         }
     }
 
     #[inline]
-    pub fn handle_cursor_first(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == QCURSOR_FIRST {
+    pub fn handle_cursor_first(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        if instruction == QCURSOR_FIRST {
             qcursor_op!(self, env, pid, first, ())
-        } else if word == CURSOR_FIRSTQ {
+        } else if instruction == CURSOR_FIRSTQ {
             cursorq_op!(self, env, pid, first, ())
         } else {
-            Err(Error::UnknownWord)
+            Err(Error::UnknownInstruction)
         }
     }
 
 
     #[inline]
-    pub fn handle_cursor_next(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == QCURSOR_NEXT {
+    pub fn handle_cursor_next(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        if instruction == QCURSOR_NEXT {
             qcursor_op!(self, env, pid, next, ())
-        } else if word == CURSOR_NEXTQ {
+        } else if instruction == CURSOR_NEXTQ {
             cursorq_op!(self, env, pid, next, ())
         } else {
-            Err(Error::UnknownWord)
+            Err(Error::UnknownInstruction)
         }
     }
 
     #[inline]
-    pub fn handle_cursor_prev(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == QCURSOR_PREV {
+    pub fn handle_cursor_prev(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        if instruction == QCURSOR_PREV {
             qcursor_op!(self, env, pid, prev, ())
-        } else if word == CURSOR_PREVQ {
+        } else if instruction == CURSOR_PREVQ {
             cursorq_op!(self, env, pid, prev, ())
         } else {
-            Err(Error::UnknownWord)
+            Err(Error::UnknownInstruction)
         }
     }
 
     #[inline]
-    pub fn handle_cursor_last(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == QCURSOR_LAST {
+    pub fn handle_cursor_last(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        if instruction == QCURSOR_LAST {
             qcursor_op!(self, env, pid, last, ())
-        } else if word == CURSOR_LASTQ {
+        } else if instruction == CURSOR_LASTQ {
             cursorq_op!(self, env, pid, last, ())
         } else {
-            Err(Error::UnknownWord)
+            Err(Error::UnknownInstruction)
         }
     }
 
     #[inline]
-    pub fn handle_cursor_seek(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == QCURSOR_SEEK {
+    pub fn handle_cursor_seek(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        if instruction == QCURSOR_SEEK {
             let key = stack_pop!(env);
 
             qcursor_op!(self, env, pid, seek_range_k, (key))
-        } else if word == CURSOR_SEEKQ {
+        } else if instruction == CURSOR_SEEKQ {
             let key = stack_pop!(env);
 
             cursorq_op!(self, env, pid, seek_range_k, (key))
         } else {
-            Err(Error::UnknownWord)
+            Err(Error::UnknownInstruction)
         }
     }
 
     #[inline]
-    pub fn handle_cursor_cur(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        if word == QCURSOR_CUR {
+    pub fn handle_cursor_cur(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        if instruction == QCURSOR_CUR {
             qcursor_op!(self, env, pid, get_current, ())
-        } else if word == CURSOR_CURQ {
+        } else if instruction == CURSOR_CURQ {
             cursorq_op!(self, env, pid, get_current, ())
         } else {
-            Err(Error::UnknownWord)
+            Err(Error::UnknownInstruction)
         }
     }
 }

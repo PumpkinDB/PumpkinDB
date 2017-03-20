@@ -2,7 +2,7 @@
 
 {% method -%}
 
-Sets a word to value.
+Sets a instruction to value.
 
 Input stack: `v w`
 
@@ -12,11 +12,11 @@ Since it is rather bothersome to keep certain values (like handles
 or strings) around by manipulating the stack, it'd be nice to be able
 to refer to them directly.
 
-`SET` allows to define a value of a word for the scope of the script's
+`SET` allows to define a value of a instruction for the scope of the script's
 remainder.
 
 `SET` will put the second topmost item off the stack (`v`) into the
-word referenced by top item (`w`)
+instruction referenced by top item (`w`)
 
 {% common -%}
 
@@ -35,9 +35,9 @@ Allocates on the heap for the binary form definition.
 
 [EmptyStack](./errors/EmptyStack.md) error if there are less than two items on the stack
 
-It will error if the format of the word is incorrect
+It will error if the format of the instruction is incorrect
 
-It may error if this word is a built-in word that was previously
+It may error if this instruction is a built-in instruction that was previously
 defined.
 
 ## Tests

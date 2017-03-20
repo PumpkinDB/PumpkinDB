@@ -104,7 +104,7 @@ fn main() {
                     let programs = textparser::programs(cap[1].as_ref()).unwrap().1;
                     for program in programs {
                         if program.len() > 0 {
-                            match binparser::word(program.as_slice()) {
+                            match binparser::instruction(program.as_slice()) {
                                 nom::IResult::Done(&[0x81, b':', ref rest..], program) => {
                                     eval(&program[1..], rest, timestamp.clone());
                                 },

@@ -10,7 +10,7 @@ Output stack: `c`
 
 `SOME?` will push `1` if the item's length is larger than zero, `0` otherwise.
 
-It has a "sister" word of [NONE?](NONEQ.md). Together they allow to
+It has a "sister" instruction of [NONE?](NONEQ.md). Together they allow to
 express a concept of an optional value.
 
 {% common -%}

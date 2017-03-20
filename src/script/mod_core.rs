@@ -19,30 +19,30 @@ use core::ops::Sub;
 
 // Category: Control flow
 #[cfg(feature = "scoped_dictionary")]
-word!(EVAL_SCOPED, b"\x8BEVAL/SCOPED");
+instruction!(EVAL_SCOPED, b"\x8BEVAL/SCOPED");
 #[cfg(feature = "scoped_dictionary")]
-word!(SCOPE_END, b"\x80\x8BEVAL/SCOPED"); // internal word
-word!(DOWHILE, b"\x87DOWHILE");
-word!(TIMES, b"\x85TIMES");
-word!(EVAL, b"\x84EVAL");
-word!(EVAL_VALIDP, b"\x8BEVAL/VALID?");
-word!(SET, b"\x83SET");
-word!(DEF, b"\x83DEF");
-word!(IF, b"\x82IF"); // for reference, implemented in builtins
-word!(IFELSE, b"\x86IFELSE");
+instruction!(SCOPE_END, b"\x80\x8BEVAL/SCOPED"); // internal instruction
+instruction!(DOWHILE, b"\x87DOWHILE");
+instruction!(TIMES, b"\x85TIMES");
+instruction!(EVAL, b"\x84EVAL");
+instruction!(EVAL_VALIDP, b"\x8BEVAL/VALID?");
+instruction!(SET, b"\x83SET");
+instruction!(DEF, b"\x83DEF");
+instruction!(IF, b"\x82IF"); // for reference, implemented in builtins
+instruction!(IFELSE, b"\x86IFELSE");
 
 // Category: Logical operations
-word!(NOT, (a => c), b"\x83NOT");
-word!(AND, (a, b => c), b"\x83AND");
-word!(OR, (a, b => c), b"\x82OR");
+instruction!(NOT, (a => c), b"\x83NOT");
+instruction!(AND, (a, b => c), b"\x83AND");
+instruction!(OR, (a, b => c), b"\x82OR");
 
 // Category: pubsub
-word!(SEND, (a => ), b"\x84SEND");
+instruction!(SEND, (a => ), b"\x84SEND");
 
 // Category: experimental features
-word!(FEATUREQ, (a => b), b"\x88FEATURE?");
+instruction!(FEATUREQ, (a => b), b"\x88FEATURE?");
 
-// Builtin words that are implemented in PumpkinScript
+// Builtin instructions that are implemented in PumpkinScript
 lazy_static! {
   static ref BUILTIN_FILE: &'static [u8] = include_bytes!("builtins");
 
@@ -52,10 +52,10 @@ lazy_static! {
       let mut map = BTreeMap::new();
       let ref defs : Vec<Vec<u8>> = *BUILTIN_DEFS;
       for definition in defs {
-          match binparser::word(definition.as_slice()) {
+          match binparser::instruction(definition.as_slice()) {
               nom::IResult::Done(&[0x81, b':', ref rest..], _) => {
-                  let word = &definition[0..definition.len() - rest.len() - 2];
-                  map.insert(word, Vec::from(rest));
+                  let instruction = &definition[0..definition.len() - rest.len() - 2];
+                  map.insert(instruction, Vec::from(rest));
               },
               other => panic!("builtin definition parse error {:?}", other)
           }
@@ -70,23 +70,23 @@ pub struct Handler<'a> {
 }
 
 impl<'a> Module<'a> for Handler<'a> {
-    fn handle(&mut self, env: &mut Env<'a>, word: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_word!(env, self.handle_builtins(env, word, pid));
-        try_word!(env, self.handle_dowhile(env, word, pid));
-        try_word!(env, self.handle_times(env, word, pid));
-        try_word!(env, self.handle_scope_end(env, word, pid));
-        try_word!(env, self.handle_eval(env, word, pid));
-        try_word!(env, self.handle_eval_validp(env, word, pid));
-        try_word!(env, self.handle_eval_scoped(env, word, pid));
-        try_word!(env, self.handle_set(env, word, pid));
-        try_word!(env, self.handle_def(env, word, pid));
-        try_word!(env, self.handle_not(env, word, pid));
-        try_word!(env, self.handle_and(env, word, pid));
-        try_word!(env, self.handle_or(env, word, pid));
-        try_word!(env, self.handle_ifelse(env, word, pid));
-        try_word!(env, self.handle_send(env, word, pid));
-        try_word!(env, self.handle_featurep(env, word, pid));
-        Err(Error::UnknownWord)
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        try_instruction!(env, self.handle_builtins(env, instruction, pid));
+        try_instruction!(env, self.handle_dowhile(env, instruction, pid));
+        try_instruction!(env, self.handle_times(env, instruction, pid));
+        try_instruction!(env, self.handle_scope_end(env, instruction, pid));
+        try_instruction!(env, self.handle_eval(env, instruction, pid));
+        try_instruction!(env, self.handle_eval_validp(env, instruction, pid));
+        try_instruction!(env, self.handle_eval_scoped(env, instruction, pid));
+        try_instruction!(env, self.handle_set(env, instruction, pid));
+        try_instruction!(env, self.handle_def(env, instruction, pid));
+        try_instruction!(env, self.handle_not(env, instruction, pid));
+        try_instruction!(env, self.handle_and(env, instruction, pid));
+        try_instruction!(env, self.handle_or(env, instruction, pid));
+        try_instruction!(env, self.handle_ifelse(env, instruction, pid));
+        try_instruction!(env, self.handle_send(env, instruction, pid));
+        try_instruction!(env, self.handle_featurep(env, instruction, pid));
+        Err(Error::UnknownInstruction)
     }
 }
 
@@ -97,19 +97,19 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_builtins(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if BUILTINS.contains_key(word) {
-            let vec = BUILTINS.get(word).unwrap();
+    fn handle_builtins(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        if BUILTINS.contains_key(instruction) {
+            let vec = BUILTINS.get(instruction).unwrap();
             env.program.push(vec.as_slice());
             Ok(())
         } else {
-            Err(Error::UnknownWord)
+            Err(Error::UnknownInstruction)
         }
     }
 
     #[inline]
-    fn handle_not(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, NOT);
+    fn handle_not(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, NOT);
         let a = stack_pop!(env);
 
         if a == STACK_TRUE {
@@ -124,8 +124,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_and(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, AND);
+    fn handle_and(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, AND);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -146,8 +146,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_or(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, OR);
+    fn handle_or(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, OR);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -168,8 +168,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_ifelse(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, IFELSE);
+    fn handle_ifelse(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, IFELSE);
         let else_ = stack_pop!(env);
         let then = stack_pop!(env);
         let cond = stack_pop!(env);
@@ -187,8 +187,8 @@ impl<'a> Handler<'a> {
 
     #[inline]
     #[cfg(feature = "scoped_dictionary")]
-    fn handle_eval_scoped(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, EVAL_SCOPED);
+    fn handle_eval_scoped(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, EVAL_SCOPED);
         env.push_dictionary();
         let a = stack_pop!(env);
         env.program.push(SCOPE_END);
@@ -199,14 +199,14 @@ impl<'a> Handler<'a> {
     #[inline]
     #[cfg(not(feature = "scoped_dictionary"))]
     fn handle_eval_scoped(&mut self, _: &Env<'a>, _: &'a [u8], _: EnvId) -> PassResult<'a> {
-        Err(Error::UnknownWord)
+        Err(Error::UnknownInstruction)
     }
 
 
     #[inline]
     #[cfg(feature = "scoped_dictionary")]
-    fn handle_scope_end(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, SCOPE_END);
+    fn handle_scope_end(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, SCOPE_END);
         env.pop_dictionary();
         Ok(())
     }
@@ -215,20 +215,20 @@ impl<'a> Handler<'a> {
     #[inline]
     #[cfg(not(feature = "scoped_dictionary"))]
     fn handle_scope_end(&mut self, _: &mut Env<'a>, _: &'a [u8], _: EnvId) -> PassResult<'a> {
-        Err(Error::UnknownWord)
+        Err(Error::UnknownInstruction)
     }
 
     #[inline]
-    fn handle_eval(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, EVAL);
+    fn handle_eval(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, EVAL);
         let a = stack_pop!(env);
         env.program.push(a);
         Ok(())
     }
 
     #[inline]
-    fn handle_eval_validp(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, EVAL_VALIDP);
+    fn handle_eval_validp(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, EVAL_VALIDP);
         let a = stack_pop!(env);
         if parse_bin(a).is_ok() {
             env.push(STACK_TRUE);
@@ -239,8 +239,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_dowhile(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, DOWHILE);
+    fn handle_dowhile(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, DOWHILE);
         let v = stack_pop!(env);
 
         let mut vec = Vec::new();
@@ -269,8 +269,8 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_times(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, TIMES);
+    fn handle_times(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, TIMES);
         let count = stack_pop!(env);
 
         let v = stack_pop!(env);
@@ -304,11 +304,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_set(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, SET);
-        let word = stack_pop!(env);
+    fn handle_set(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, SET);
+        let instruction = stack_pop!(env);
         let value = stack_pop!(env);
-        match binparser::word(word) {
+        match binparser::instruction(instruction) {
             nom::IResult::Done(_, _) => {
                 let slice = alloc_slice!(value.len() + offset_by_size(value.len()), env);
                 write_size_into_slice!(value.len(), slice);
@@ -317,42 +317,42 @@ impl<'a> Handler<'a> {
                 #[cfg(feature = "scoped_dictionary")]
                 {
                     let mut dict = env.dictionary.pop().unwrap();
-                    dict.insert(word, slice);
+                    dict.insert(instruction, slice);
                     env.dictionary.push(dict);
                 }
                 #[cfg(not(feature = "scoped_dictionary"))]
-                env.dictionary.insert(word, slice);
+                env.dictionary.insert(instruction, slice);
                 Ok(())
             },
-            _ => Err(error_invalid_value!(word))
+            _ => Err(error_invalid_value!(instruction))
         }
     }
 
     #[inline]
-    fn handle_def(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, DEF);
-        let word = stack_pop!(env);
+    fn handle_def(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, DEF);
+        let instruction = stack_pop!(env);
         let value = stack_pop!(env);
-        match binparser::word(word) {
+        match binparser::instruction(instruction) {
             nom::IResult::Done(_, _) => {
                 #[cfg(feature = "scoped_dictionary")]
                 {
                     let mut dict = env.dictionary.pop().unwrap();
-                    dict.insert(word, value);
+                    dict.insert(instruction, value);
                     env.dictionary.push(dict);
                 }
                 #[cfg(not(feature = "scoped_dictionary"))]
-                env.dictionary.insert(word, value);
+                env.dictionary.insert(instruction, value);
                 Ok(())
             },
-            _ => Err(error_invalid_value!(word))
+            _ => Err(error_invalid_value!(instruction))
         }
     }
 
 
     #[inline]
-    fn handle_send(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, SEND);
+    fn handle_send(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, SEND);
         let topic = stack_pop!(env);
         let data = stack_pop!(env);
 
@@ -365,8 +365,8 @@ impl<'a> Handler<'a> {
 
     #[inline]
     #[allow(unused_variables)]
-    fn handle_featurep(&mut self, env: &mut Env<'a>, word: &'a [u8], _: EnvId) -> PassResult<'a> {
-        word_is!(env, word, FEATUREQ);
+    fn handle_featurep(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        instruction_is!(env, instruction, FEATUREQ);
         let name = stack_pop!(env);
 
         #[cfg(feature = "scoped_dictionary")]

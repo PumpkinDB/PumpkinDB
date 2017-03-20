@@ -12,7 +12,7 @@ Input stack: `code`
 Output stack: result of `code` evaluation
 
 `EVAL/SCOPED` is a sister version of [EVAL](../EVAL.md) with
-one important distinction: all new words defined inside
+one important distinction: all new instructions defined inside
 (or updated values for previously defined ones) within this
 evaluation (using [SET](../SET.md) and [DEF](../DEF.md)) will be
 gone after the evaluation.  

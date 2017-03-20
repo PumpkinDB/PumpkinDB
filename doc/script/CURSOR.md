@@ -8,7 +8,7 @@ Input stack: -
 
 Output stack: `cursor`
 
-This is the primary way of navigating the database. This word
+This is the primary way of navigating the database. This instruction
 creates a cursor in a given transactional context and pushes its
 identifier onto the stack.
 

@@ -7,7 +7,7 @@
 use nom::{IResult, Needed, ErrorKind};
 use script::{Program, ParseError};
 
-pub fn word_tag(i: &[u8]) -> IResult<&[u8], u8> {
+pub fn instruction_tag(i: &[u8]) -> IResult<&[u8], u8> {
     if i.len() < 1 {
         IResult::Incomplete(Needed::Size(1))
     } else if (i[0] & 128 != 128) || i[0] == 128 {
@@ -17,7 +17,7 @@ pub fn word_tag(i: &[u8]) -> IResult<&[u8], u8> {
     }
 }
 
-pub fn internal_word_tag(i: &[u8]) -> IResult<&[u8], u8> {
+pub fn internal_instruction_tag(i: &[u8]) -> IResult<&[u8], u8> {
     if i.len() < 2 {
         IResult::Incomplete(Needed::Size(2))
     } else if i[0] != 128 || i[1] < 129 {
@@ -98,10 +98,10 @@ fn flatten_program(p: Vec<&[u8]>) -> Vec<u8> {
 
 named!(pub data_size<usize>, alt!(micro_length | byte_length | small_length | big_length));
 named!(pub data, length_bytes!(data_size));
-named!(pub word, length_bytes!(word_tag));
-named!(pub internal_word, length_bytes!(internal_word_tag));
-named!(pub word_or_internal_word, alt!(internal_word | word));
-named!(item, alt!(word | data));
+named!(pub instruction, length_bytes!(instruction_tag));
+named!(pub internal_instruction, length_bytes!(internal_instruction_tag));
+named!(pub instruction_or_internal_instruction, alt!(internal_instruction | instruction));
+named!(item, alt!(instruction | data));
 named!(split_code<Vec<u8>>, do_parse!(
                              prog: many0!(item) >>
                                    (flatten_program(prog))));
@@ -131,7 +131,7 @@ mod tests {
 
     #[test]
     fn test_internal() {
-        // should not be able to parse "internal words"
+        // should not be able to parse "internal instructions"
         assert!(parse(vec![0x80, 0x81, b'A'].as_slice()).is_err());
     }
 

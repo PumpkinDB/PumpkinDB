@@ -107,11 +107,11 @@ fn main() {
                         Ok(compiled) => {
                             let uuid = Uuid::new_v4();
                             let msg : Vec<u8> = Program(vec![
-                                Data(&compiled), Word("TRY"),
-                                Data(uuid.as_bytes()), WordRef("topic"), Word("SET"),
-                                Word("topic"),
-                                Word("SUBSCRIBE"), Word("STACK"), Word("topic"), Word("SEND"),
-                                Word("topic"), Word("UNSUBSCRIBE")
+                                Data(&compiled), Instruction("TRY"),
+                                Data(uuid.as_bytes()), InstructionRef("topic"), Instruction("SET"),
+                                Instruction("topic"),
+                                Instruction("SUBSCRIBE"), Instruction("STACK"), Instruction("topic"), Instruction("SEND"),
+                                Instruction("topic"), Instruction("UNSUBSCRIBE")
                             ]).into();
                             let mut buf = [0u8; 4];
 
