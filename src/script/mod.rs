@@ -116,7 +116,7 @@ pub enum ParseError {
     /// Unknown error
     UnknownErr,
     /// Unparseable remainder
-    Superfluous(Vec<u8>)
+    Superfluous(Vec<u8>),
 }
 pub mod binparser;
 pub use self::binparser::parse as parse_bin;
@@ -145,7 +145,7 @@ pub struct Env<'a> {
     // current TRY status
     tracking_errors: usize,
     aborting_try: Vec<Error>,
-    send_ack: Option<mpsc::Receiver<()>>
+    send_ack: Option<mpsc::Receiver<()>>,
 }
 
 impl<'a> std::fmt::Debug for Env<'a> {
@@ -189,7 +189,7 @@ impl<'a> Env<'a> {
             dictionary: dictionary,
             tracking_errors: 0,
             aborting_try: Vec::new(),
-            send_ack: None
+            send_ack: None,
         })
     }
 
@@ -243,7 +243,7 @@ impl<'a> Env<'a> {
     /// Allocates a slice off the Env-specific heap. Will be collected
     /// once this Env is dropped.
     pub fn alloc(&mut self, len: usize) -> Result<&'a mut [u8], Error> {
-        Ok(unsafe { mem::transmute::<& mut [u8], &'a mut [u8]>(self.heap.alloc(len)) })
+        Ok(unsafe { mem::transmute::<&mut [u8], &'a mut [u8]>(self.heap.alloc(len)) })
     }
 
 
@@ -262,7 +262,6 @@ impl<'a> Env<'a> {
             self.dictionary.push(BTreeMap::new());
         }
     }
-
 }
 
 
@@ -459,11 +458,11 @@ impl<'a> Scheduler<'a> {
     /// * Response sender
     /// * Internal sender
     /// * Request receiver
-    pub fn new(
-        db: &'a storage::Storage<'a>,
-        publisher: pubsub::PublisherAccessor<Vec<u8>>,
-        timestamp_state: Arc<timestamp::Timestamp>,
-        receiver: Receiver<RequestMessage>) -> Self {
+    pub fn new(db: &'a storage::Storage<'a>,
+               publisher: pubsub::PublisherAccessor<Vec<u8>>,
+               timestamp_state: Arc<timestamp::Timestamp>,
+               receiver: Receiver<RequestMessage>)
+               -> Self {
         #[cfg(not(feature = "static_module_dispatch"))]
         return Scheduler {
             inbox: receiver,
@@ -474,8 +473,7 @@ impl<'a> Scheduler<'a> {
                           Box::new(mod_storage::Handler::new(db)),
                           Box::new(mod_hash::Handler::new()),
                           Box::new(mod_hlc::Handler::new(timestamp_state)),
-                          Box::new(mod_json::Handler::new()),
-            ],
+                          Box::new(mod_json::Handler::new())],
         };
         #[cfg(feature = "static_module_dispatch")]
         return Scheduler {
@@ -487,7 +485,7 @@ impl<'a> Scheduler<'a> {
             storage: mod_storage::Handler::new(db),
             hash: mod_hash::Handler::new(),
             hlc: mod_hlc::Handler::new(timestamp_state),
-            json: mod_json::Handler::new()
+            json: mod_json::Handler::new(),
         };
     }
 
@@ -515,7 +513,7 @@ impl<'a> Scheduler<'a> {
                         Err(Error::Reschedule) => {
                             env.program.push(program);
                             envs.push_back((pid, env, chan));
-                        },
+                        }
                         Err(err) => {
                             for_each_module!(module, self, module.done(&mut env, pid));
                             let _ = chan.send(ResponseMessage::EnvFailed(pid,
@@ -524,7 +522,8 @@ impl<'a> Scheduler<'a> {
                                                                          Some(env.stack_size)));
                         }
                         Ok(()) => {
-                            if env.program.is_empty() || (env.program.len() == 1 && env.program[0].len() == 0) {
+                            if env.program.is_empty() ||
+                                (env.program.len() == 1 && env.program[0].len() == 0) {
                                 for_each_module!(module, self, module.done(&mut env, pid));
                                 let _ = chan.send(ResponseMessage::EnvTerminated(pid,
                                                                                  env.stack_copy(),
@@ -534,8 +533,8 @@ impl<'a> Scheduler<'a> {
                             }
                         }
                     };
-                },
-                None => ()
+                }
+                None => (),
             }
             let message = if envs.len() == 0 {
                 self.inbox.recv()
@@ -560,18 +559,13 @@ impl<'a> Scheduler<'a> {
                                     envs.push_back((pid, env, chan));
                                 }
                                 Err(err) => {
-                                    let _ = chan.send(ResponseMessage::EnvFailed(pid,
-                                                                                 err,
-                                                                                 None,
-                                                                                 None));
+                                    let _ =
+                                        chan.send(ResponseMessage::EnvFailed(pid, err, None, None));
                                 }
                             }
                         }
                         Err(err) => {
-                            let _ = chan.send(ResponseMessage::EnvFailed(pid,
-                                                                         err,
-                                                                         None,
-                                                                         None));
+                            let _ = chan.send(ResponseMessage::EnvFailed(pid, err, None, None));
                         }
                     }
                 }
@@ -585,16 +579,17 @@ impl<'a> Scheduler<'a> {
         if env.send_ack.is_some() {
             match mem::replace(&mut env.send_ack, None) {
                 None => (),
-                Some(rcvr) =>
+                Some(rcvr) => {
                     match rcvr.try_recv() {
                         Err(mpsc::TryRecvError::Empty) => {
                             env.send_ack = Some(rcvr);
                             let _ = env.program.pop(); // reschedule will push it back
-                            return Err(Error::Reschedule)
-                        },
+                            return Err(Error::Reschedule);
+                        }
                         Err(mpsc::TryRecvError::Disconnected) => (),
-                        Ok(()) => ()
+                        Ok(()) => (),
                     }
+                }
             }
         }
         if env.program.len() == 0 {
@@ -612,18 +607,21 @@ impl<'a> Scheduler<'a> {
                 env.program.push(rest);
             }
             Ok(())
-        } else if let nom::IResult::Done(rest, instruction) = binparser::instruction_or_internal_instruction(program) {
+        } else if let nom::IResult::Done(rest, instruction) =
+            binparser::instruction_or_internal_instruction(program) {
             if rest.len() > 0 {
                 env.program.push(rest);
             }
             if instruction != TRY_END && !env.aborting_try.is_empty() {
-                return Ok(())
+                return Ok(());
             }
 
             try_instruction!(env, self.handle_try(env, instruction, pid));
             try_instruction!(env, self.handle_try_end(env, instruction, pid));
 
-            for_each_module!(module, self, try_instruction!(env, module.handle(env, instruction, pid)));
+            for_each_module!(module,
+                             self,
+                             try_instruction!(env, module.handle(env, instruction, pid)));
 
             // catch-all (NB: keep it last)
             try_instruction!(env, self.handle_dictionary(env, instruction, pid));
@@ -638,7 +636,11 @@ impl<'a> Scheduler<'a> {
 
     #[inline]
     #[cfg(not(feature = "scoped_dictionary"))]
-    fn handle_dictionary(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_dictionary(&mut self,
+                         env: &mut Env<'a>,
+                         instruction: &'a [u8],
+                         _: EnvId)
+                         -> PassResult<'a> {
         if env.dictionary.contains_key(instruction) {
             {
                 let def = env.dictionary.get(instruction).unwrap();
@@ -652,7 +654,11 @@ impl<'a> Scheduler<'a> {
 
     #[inline]
     #[cfg(feature = "scoped_dictionary")]
-    fn handle_dictionary(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_dictionary(&mut self,
+                         env: &mut Env<'a>,
+                         instruction: &'a [u8],
+                         _: EnvId)
+                         -> PassResult<'a> {
         let dict = env.dictionary.pop().unwrap();
         if dict.contains_key(instruction) {
             {
@@ -678,7 +684,11 @@ impl<'a> Scheduler<'a> {
     }
 
     #[inline]
-    fn handle_try_end(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    fn handle_try_end(&mut self,
+                      env: &mut Env<'a>,
+                      instruction: &'a [u8],
+                      pid: EnvId)
+                      -> PassResult<'a> {
         instruction_is!(env, instruction, TRY_END);
         env.tracking_errors -= 1;
         if env.aborting_try.is_empty() {
@@ -702,7 +712,8 @@ pub mod compose;
 #[allow(unused_variables, unused_must_use, unused_mut)]
 mod tests {
 
-    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, parse, offset_by_size};
+    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, parse,
+                 offset_by_size};
     use std::sync::mpsc;
     use std::sync::Arc;
     use timestamp;
@@ -718,7 +729,8 @@ mod tests {
 
     #[test]
     fn error_macro() {
-        if let Error::ProgramError(err) = error_program!("Test".as_bytes(), "123".as_bytes(),b"\x01\x33") {
+        if let Error::ProgramError(err) =
+            error_program!("Test".as_bytes(), "123".as_bytes(), b"\x01\x33") {
             assert_eq!(err, parsed_data!("[\"Test\" [\"123\"] 0x33]"));
         } else {
             assert!(false);
@@ -739,7 +751,8 @@ mod tests {
     #[test]
     fn unknown_instruction() {
         eval!("NOTANINSTRUCTION", env, result, {
-            assert_error!(result, "[\"Unknown instruction: NOTANINSTRUCTION\" ['NOTANINSTRUCTION] 2]");
+            assert_error!(result,
+                          "[\"Unknown instruction: NOTANINSTRUCTION\" ['NOTANINSTRUCTION] 2]");
         });
     }
 
@@ -761,19 +774,24 @@ mod tests {
 
         eval!("[DUP] TRY", env, result, {
             assert!(!result.is_err());
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Empty stack\" [] 4]"));
+            assert_eq!(Vec::from(env.pop().unwrap()),
+                       parsed_data!("[\"Empty stack\" [] 4]"));
             assert_eq!(env.pop(), None);
         });
 
         eval!("[NOTANINSTRUCTION] TRY", env, result, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Unknown instruction: NOTANINSTRUCTION\" ['NOTANINSTRUCTION] 2]"));
+            assert_eq!(Vec::from(env.pop().unwrap()),
+                       parsed_data!("[\"Unknown instruction: NOTANINSTRUCTION\" \
+                                     ['NOTANINSTRUCTION] 2]"));
             assert_eq!(env.pop(), None);
         });
 
         eval!("[[DUP] TRY 0x20 NOT] TRY", env, result, {
             assert!(!result.is_err());
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Invalid value\" [0x20] 3]"));
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Empty stack\" [] 4]"));
+            assert_eq!(Vec::from(env.pop().unwrap()),
+                       parsed_data!("[\"Invalid value\" [0x20] 3]"));
+            assert_eq!(Vec::from(env.pop().unwrap()),
+                       parsed_data!("[\"Empty stack\" [] 4]"));
             assert_eq!(env.pop(), None);
         });
 
@@ -786,7 +804,8 @@ mod tests {
         });
 
         eval!("1 TRY", env, result, {
-            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("[\"Decoding error\" [] 5]"));
+            assert_eq!(Vec::from(env.pop().unwrap()),
+                       parsed_data!("[\"Decoding error\" [] 5]"));
             assert_eq!(env.pop(), None);
         });
 
@@ -795,11 +814,13 @@ mod tests {
     use test::Bencher;
 
     #[bench]
-    fn ackermann(b: &mut Bencher) { // HT @5HT
+    fn ackermann(b: &mut Bencher) {
+        // HT @5HT
         bench_eval!("['n SET 'm SET m 0 EQUAL? [n 1 UINT/ADD] \
         [n 0 EQUAL? [m 1 UINT/SUB 1 ack] [m 1 UINT/SUB m n 1 UINT/SUB ack ack] IFELSE] IFELSE] \
         'ack DEF \
-        3 4 ack", b);
+        3 4 ack",
+                    b);
     }
 
 }

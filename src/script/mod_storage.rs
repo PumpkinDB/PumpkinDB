@@ -3,12 +3,13 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
-//!
+//
 //! # Storage
 //!
 //! This module handles all instructions and state related to handling storage
 //! capabilities
 //!
+
 use lmdb;
 use lmdb::traits::LmdbResultExt;
 use storage;
@@ -55,14 +56,15 @@ use std::collections::BTreeMap;
 
 #[derive(PartialEq)]
 enum TxType {
-    Read, Write
+    Read,
+    Write,
 }
 
 pub struct Handler<'a> {
     db: &'a storage::Storage<'a>,
     db_write_txn: Option<(EnvId, lmdb::WriteTransaction<'a>)>,
     db_read_txns: HashMap<EnvId, lmdb::ReadTransaction<'a>>,
-    cursors: BTreeMap<(EnvId, Vec<u8>), (TxType, lmdb::Cursor<'a, 'a>)>
+    cursors: BTreeMap<(EnvId, Vec<u8>), (TxType, lmdb::Cursor<'a, 'a>)>,
 }
 
 macro_rules! read_or_write_transaction {
@@ -130,7 +132,8 @@ macro_rules! qcursor_op {
         match item {
            Ok((key, val)) => {
                 let mut offset = 0;
-                let sz = key.len() + val.len() + offset_by_size(key.len()) + offset_by_size(val.len());
+                let sz = key.len() + val.len() +
+                         offset_by_size(key.len()) + offset_by_size(val.len());
                 let slice = alloc_slice!(sz, $env);
                 write_size_into_slice!(key.len(), &mut slice[offset..]);
                 offset += offset_by_size(key.len());
@@ -184,7 +187,6 @@ macro_rules! cursorq_op {
 }
 
 impl<'a> Module<'a> for Handler<'a> {
-
     fn done(&mut self, _: &mut Env, pid: EnvId) {
         let is_in_read = self.db_read_txns.contains_key(&pid);
         let mut is_in_write = false;
@@ -202,7 +204,7 @@ impl<'a> Module<'a> for Handler<'a> {
         if is_in_write {
             match mem::replace(&mut self.db_write_txn, None) {
                 Some((_, txn)) => drop(txn),
-                None => ()
+                None => (),
             }
         }
 
@@ -227,25 +229,28 @@ impl<'a> Module<'a> for Handler<'a> {
 }
 
 impl<'a> Handler<'a> {
-
     pub fn new(db: &'a storage::Storage<'a>) -> Self {
         Handler {
             db: db,
             db_write_txn: None,
             db_read_txns: HashMap::new(),
-            cursors: BTreeMap::new()
+            cursors: BTreeMap::new(),
         }
     }
 
 
     #[inline]
-    pub fn handle_write(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_write(&mut self,
+                        env: &mut Env<'a>,
+                        instruction: &'a [u8],
+                        pid: EnvId)
+                        -> PassResult<'a> {
         match instruction {
             WRITE => {
                 let v = stack_pop!(env);
                 validate_lockout!(env, self.db_write_txn, pid);
                 if self.db.try_lock() == false {
-                    return Err(Error::Reschedule)
+                    return Err(Error::Reschedule);
                 }
                 // prepare transaction
                 match lmdb::WriteTransaction::new(self.db.env) {
@@ -260,9 +265,10 @@ impl<'a> Handler<'a> {
             }
             WRITE_END => {
                 validate_lockout!(env, self.db_write_txn, pid);
-                self.cursors = mem::replace(&mut self.cursors,
-                                            BTreeMap::new()).into_iter()
-                    .filter(|t| ((*t).1).0 != TxType::Write).collect();
+                self.cursors = mem::replace(&mut self.cursors, BTreeMap::new())
+                    .into_iter()
+                    .filter(|t| ((*t).1).0 != TxType::Write)
+                    .collect();
                 self.db_write_txn = None;
                 Ok(())
             }
@@ -271,7 +277,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_read(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_read(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       pid: EnvId)
+                       -> PassResult<'a> {
         match instruction {
             READ => {
                 let v = stack_pop!(env);
@@ -290,9 +300,10 @@ impl<'a> Handler<'a> {
             }
             READ_END => {
                 validate_read_lockout!(self.db_read_txns, &pid);
-                self.cursors = mem::replace(&mut self.cursors,
-                                            BTreeMap::new()).into_iter()
-                    .filter(|t| ((*t).1).0 != TxType::Read).collect();
+                self.cursors = mem::replace(&mut self.cursors, BTreeMap::new())
+                    .into_iter()
+                    .filter(|t| ((*t).1).0 != TxType::Read)
+                    .collect();
                 self.db_read_txns.remove(&pid);
                 Ok(())
             }
@@ -301,7 +312,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_assoc(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_assoc(&mut self,
+                        env: &mut Env<'a>,
+                        instruction: &'a [u8],
+                        pid: EnvId)
+                        -> PassResult<'a> {
         if instruction == ASSOC {
             validate_lockout!(env, self.db_write_txn, pid);
             if let Some((_, ref txn)) = self.db_write_txn {
@@ -312,7 +327,9 @@ impl<'a> Handler<'a> {
 
                 match access.put(&self.db.db, key, value, lmdb::put::NOOVERWRITE) {
                     Ok(_) => Ok(()),
-                    Err(lmdb::Error::Code(code)) if lmdb::error::KEYEXIST == code => Err(error_duplicate_key!(key)),
+                    Err(lmdb::Error::Code(code)) if lmdb::error::KEYEXIST == code => {
+                        Err(error_duplicate_key!(key))
+                    }
                     Err(err) => Err(error_database!(err)),
                 }
             } else {
@@ -324,13 +341,17 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_commit(&mut self, _: &Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_commit(&mut self,
+                         _: &Env<'a>,
+                         instruction: &'a [u8],
+                         pid: EnvId)
+                         -> PassResult<'a> {
         if instruction == COMMIT {
             validate_lockout!(env, self.db_write_txn, pid);
             if let Some((_, txn)) = mem::replace(&mut self.db_write_txn, None) {
                 match txn.commit() {
                     Ok(_) => Ok(()),
-                    Err(reason) => Err(error_database!(reason))
+                    Err(reason) => Err(error_database!(reason)),
                 }
             } else {
                 Err(error_no_transaction!())
@@ -342,7 +363,11 @@ impl<'a> Handler<'a> {
 
 
     #[inline]
-    pub fn handle_retr(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_retr(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       pid: EnvId)
+                       -> PassResult<'a> {
         if instruction == RETR {
             validate_lockout!(env, self.db_write_txn, pid);
             validate_read_lockout!(self.db_read_txns, pid);
@@ -359,14 +384,18 @@ impl<'a> Handler<'a> {
                 }
                 Ok(None) => Err(error_unknown_key!(key)),
                 Err(err) => Err(error_database!(err)),
-            }
+            };
         } else {
             Err(Error::UnknownInstruction)
         }
     }
 
     #[inline]
-    pub fn handle_assocq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_assocq(&mut self,
+                         env: &mut Env<'a>,
+                         instruction: &'a [u8],
+                         pid: EnvId)
+                         -> PassResult<'a> {
         if instruction == ASSOCQ {
             validate_lockout!(env, self.db_write_txn, pid);
             let key = stack_pop!(env);
@@ -390,12 +419,16 @@ impl<'a> Handler<'a> {
         }
     }
 
-    fn cast_away(cursor: lmdb::Cursor) -> lmdb::Cursor<'a,'a> {
+    fn cast_away(cursor: lmdb::Cursor) -> lmdb::Cursor<'a, 'a> {
         unsafe { ::std::mem::transmute(cursor) }
     }
 
     #[inline]
-    pub fn handle_cursor(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_cursor(&mut self,
+                         env: &mut Env<'a>,
+                         instruction: &'a [u8],
+                         pid: EnvId)
+                         -> PassResult<'a> {
         if instruction == CURSOR {
             validate_read_lockout!(self.db_read_txns, pid);
             validate_lockout!(env, self.db_write_txn, pid);
@@ -412,12 +445,13 @@ impl<'a> Handler<'a> {
                         let _ = bytes.write_u32::<BigEndian>(id.prefix as u32);
                     }
                     let _ = bytes.write_u64::<BigEndian>(id.offset);
-                    self.cursors.insert((pid.clone(), bytes.clone()), (tx_type!(self, pid), Handler::cast_away(cursor)));
+                    self.cursors.insert((pid.clone(), bytes.clone()),
+                                        (tx_type!(self, pid), Handler::cast_away(cursor)));
                     let slice = alloc_and_write!(bytes.as_slice(), env);
                     env.push(slice);
                     Ok(())
-                },
-                Err(err) => Err(error_database!(err))
+                }
+                Err(err) => Err(error_database!(err)),
             }
         } else {
             Err(Error::UnknownInstruction)
@@ -425,7 +459,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_cursor_first(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_cursor_first(&mut self,
+                               env: &mut Env<'a>,
+                               instruction: &'a [u8],
+                               pid: EnvId)
+                               -> PassResult<'a> {
         if instruction == QCURSOR_FIRST {
             qcursor_op!(self, env, pid, first, ())
         } else if instruction == CURSOR_FIRSTQ {
@@ -437,7 +475,11 @@ impl<'a> Handler<'a> {
 
 
     #[inline]
-    pub fn handle_cursor_next(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_cursor_next(&mut self,
+                              env: &mut Env<'a>,
+                              instruction: &'a [u8],
+                              pid: EnvId)
+                              -> PassResult<'a> {
         if instruction == QCURSOR_NEXT {
             qcursor_op!(self, env, pid, next, ())
         } else if instruction == CURSOR_NEXTQ {
@@ -448,7 +490,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_cursor_prev(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_cursor_prev(&mut self,
+                              env: &mut Env<'a>,
+                              instruction: &'a [u8],
+                              pid: EnvId)
+                              -> PassResult<'a> {
         if instruction == QCURSOR_PREV {
             qcursor_op!(self, env, pid, prev, ())
         } else if instruction == CURSOR_PREVQ {
@@ -459,7 +505,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_cursor_last(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_cursor_last(&mut self,
+                              env: &mut Env<'a>,
+                              instruction: &'a [u8],
+                              pid: EnvId)
+                              -> PassResult<'a> {
         if instruction == QCURSOR_LAST {
             qcursor_op!(self, env, pid, last, ())
         } else if instruction == CURSOR_LASTQ {
@@ -470,7 +520,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_cursor_seek(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_cursor_seek(&mut self,
+                              env: &mut Env<'a>,
+                              instruction: &'a [u8],
+                              pid: EnvId)
+                              -> PassResult<'a> {
         if instruction == QCURSOR_SEEK {
             let key = stack_pop!(env);
 
@@ -485,7 +539,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_cursor_cur(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+    pub fn handle_cursor_cur(&mut self,
+                             env: &mut Env<'a>,
+                             instruction: &'a [u8],
+                             pid: EnvId)
+                             -> PassResult<'a> {
         if instruction == QCURSOR_CUR {
             qcursor_op!(self, env, pid, get_current, ())
         } else if instruction == CURSOR_CURQ {
@@ -499,7 +557,8 @@ impl<'a> Handler<'a> {
 #[cfg(test)]
 #[allow(unused_variables, unused_must_use, unused_mut, unused_imports)]
 mod tests {
-    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, parse, offset_by_size};
+    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, parse,
+                 offset_by_size};
     use byteorder::WriteBytesExt;
     use std::sync::mpsc;
     use std::sync::Arc;
@@ -522,7 +581,8 @@ mod tests {
               {
                   assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x00"));
               });
-        eval!("[[\"Hey\" ASSOC COMMIT] WRITE] TRY DROP [\"Hey\" \"there\" ASSOC COMMIT] WRITE [\"Hey\" ASSOC?] READ",
+        eval!("[[\"Hey\" ASSOC COMMIT] WRITE] TRY DROP [\"Hey\" \"there\" ASSOC COMMIT] WRITE \
+               [\"Hey\" ASSOC?] READ",
               env,
               result,
               {
@@ -535,7 +595,8 @@ mod tests {
 
     #[bench]
     fn write_1000_kv_pairs_in_isolated_txns(b: &mut Bencher) {
-        bench_eval!("[HLC \"Hello\"] 1000 TIMES [[ASSOC COMMIT] WRITE] 1000 TIMES", b);
+        bench_eval!("[HLC \"Hello\"] 1000 TIMES [[ASSOC COMMIT] WRITE] 1000 TIMES",
+                    b);
     }
 
     #[bench]
@@ -563,7 +624,11 @@ mod tests {
 
                     ts.write_bytes(&mut key);
 
-                    let _ = access.put(&db.db, key.as_slice(), "Hello".as_bytes(), lmdb::put::NOOVERWRITE).unwrap();
+                    let _ = access.put(&db.db,
+                             key.as_slice(),
+                             "Hello".as_bytes(),
+                             lmdb::put::NOOVERWRITE)
+                        .unwrap();
                 }
                 let _ = txn.commit().unwrap();
             }

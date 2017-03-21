@@ -13,6 +13,8 @@
 //! But it is also very useful for the mechanism of subscriptions. For example, what if we
 //! sent every event journalled into a topic of some kind and processed it there? This would
 //! open some really interesting opportunities.
+//!
+
 use std::sync::mpsc;
 use std::collections::BTreeMap;
 
@@ -22,27 +24,27 @@ pub type SubscriberReceiver<T> = mpsc::Receiver<(Topic, T)>;
 
 
 /// Main entry point for fanning data out
-pub struct Publisher<T : Sized + Clone> {
+pub struct Publisher<T: Sized + Clone> {
     receiver: mpsc::Receiver<PublisherMessage<T>>,
     sender: mpsc::Sender<PublisherMessage<T>>,
-    subscribers: BTreeMap<Topic, Vec<SubscriberSender<T>>>
+    subscribers: BTreeMap<Topic, Vec<SubscriberSender<T>>>,
 }
 
 /// Message types supported by the publisher
-enum PublisherMessage<T : Sized + Clone> {
+enum PublisherMessage<T: Sized + Clone> {
     Subscribe(Topic, SubscriberSender<T>),
     Send(Topic, T, mpsc::Sender<()>),
-    Shutdown
+    Shutdown,
 }
 
-impl<T : Sized + Clone> Publisher<T> {
+impl<T: Sized + Clone> Publisher<T> {
     /// Creates a new Publisher
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::channel();
-        Publisher{
+        Publisher {
             sender: sender,
             receiver: receiver,
-            subscribers: BTreeMap::new()
+            subscribers: BTreeMap::new(),
         }
     }
 
@@ -61,28 +63,30 @@ impl<T : Sized + Clone> Publisher<T> {
                         self.subscribers.insert(topic.clone(), Vec::new());
                     }
                     self.subscribers.get_mut(&topic).unwrap().push(chan);
-                },
+                }
                 Ok(PublisherMessage::Send(topic, data, callback)) => {
                     if self.subscribers.contains_key(&topic) {
                         let subscribers = self.subscribers.remove(&topic).unwrap();
-                        let new_subscribers =
-                        subscribers.into_iter().filter(|subscriber| {
-                            let (s, r) = mpsc::channel();
-                            let res = match (*subscriber).send((topic.clone(), data.clone(), s)) {
-                                Ok(_) => {
-                                    let _ = r.recv();
-                                    true
-                                },
-                                // Remove senders that failed
-                                Err(mpsc::SendError(_)) => false
-                            };
-                            res
-                        }).collect::<Vec<_>>();
+                        let new_subscribers = subscribers.into_iter()
+                            .filter(|subscriber| {
+                                let (s, r) = mpsc::channel();
+                                let res = match (*subscriber)
+                                    .send((topic.clone(), data.clone(), s)) {
+                                    Ok(_) => {
+                                        let _ = r.recv();
+                                        true
+                                    }
+                                    // Remove senders that failed
+                                    Err(mpsc::SendError(_)) => false,
+                                };
+                                res
+                            })
+                            .collect::<Vec<_>>();
                         self.subscribers.insert(topic.clone(), new_subscribers);
                         let _ = callback.send(());
                     }
-                },
-                Err(_) => ()
+                }
+                Err(_) => (),
             }
         }
     }
@@ -90,13 +94,13 @@ impl<T : Sized + Clone> Publisher<T> {
 
 /// PublisherAccessor is the gateway for Publisher
 #[derive(Clone)]
-pub struct PublisherAccessor<T : Sized + Clone> {
-    sender: mpsc::Sender<PublisherMessage<T>>
+pub struct PublisherAccessor<T: Sized + Clone> {
+    sender: mpsc::Sender<PublisherMessage<T>>,
 }
 
-impl<T : Sized + Clone> PublisherAccessor<T> {
+impl<T: Sized + Clone> PublisherAccessor<T> {
     fn new(sender: mpsc::Sender<PublisherMessage<T>>) -> Self {
-        PublisherAccessor{ sender: sender }
+        PublisherAccessor { sender: sender }
     }
 
     /// Subscribe to a topic
@@ -120,7 +124,6 @@ impl<T : Sized + Clone> PublisherAccessor<T> {
     pub fn shutdown(&self) {
         let _ = self.sender.send(PublisherMessage::Shutdown);
     }
-
 }
 
 #[cfg(test)]

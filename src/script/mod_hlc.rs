@@ -9,12 +9,13 @@
 //! This module handles issuance, management and comparison of Hybrid
 //! Logical Clock timestamps (https://www.cse.buffalo.edu/tech-reports/2014-04.pdf)
 //!
+
 instruction!(HLC, b"\x83HLC");
 instruction!(HLC_LC, b"\x86HLC/LC");
 instruction!(HLC_TICK, b"\x88HLC/TICK");
 
-use super::{Env, EnvId, Module, PassResult, Error, ERROR_EMPTY_STACK,
-            ERROR_INVALID_VALUE, offset_by_size};
+use super::{Env, EnvId, Module, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
+            offset_by_size};
 use timestamp;
 
 use hlc;
@@ -40,7 +41,7 @@ impl<'a> Handler<'a> {
     pub fn new(timestamp_state: Arc<timestamp::Timestamp>) -> Self {
         Handler {
             phantom: PhantomData,
-            timestamp: timestamp_state
+            timestamp: timestamp_state,
         }
     }
 
@@ -58,7 +59,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_hlc_tick(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    pub fn handle_hlc_tick(&mut self,
+                           env: &mut Env<'a>,
+                           instruction: &'a [u8],
+                           _: EnvId)
+                           -> PassResult<'a> {
         if instruction == HLC_TICK {
             let a = env.pop();
 
@@ -71,7 +76,7 @@ impl<'a> Handler<'a> {
             let t1_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut a1);
 
             if t1_.is_err() {
-                return Err(error_invalid_value!(a1))
+                return Err(error_invalid_value!(a1));
             }
 
             let mut t1 = t1_.unwrap();
@@ -88,7 +93,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_hlc_lc(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    pub fn handle_hlc_lc(&mut self,
+                         env: &mut Env<'a>,
+                         instruction: &'a [u8],
+                         _: EnvId)
+                         -> PassResult<'a> {
         if instruction == HLC_LC {
             let a = env.pop();
 
@@ -101,7 +110,7 @@ impl<'a> Handler<'a> {
             let t1_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut a1);
 
             if t1_.is_err() {
-                return Err(error_invalid_value!(a1))
+                return Err(error_invalid_value!(a1));
             }
 
             let t1 = t1_.unwrap();
@@ -116,5 +125,4 @@ impl<'a> Handler<'a> {
             Err(Error::UnknownInstruction)
         }
     }
-
 }

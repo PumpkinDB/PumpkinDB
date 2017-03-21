@@ -41,7 +41,6 @@ pub struct Connection {
 
     // track whether a write received `WouldBlock`
     write_continuation: bool,
-
 }
 
 impl Connection {
@@ -61,7 +60,9 @@ impl Connection {
     pub fn readable(&mut self) -> io::Result<Option<Vec<u8>>> {
 
         let msg_len = match try!(self.read_message_length()) {
-            None => { return Ok(None); },
+            None => {
+                return Ok(None);
+            }
             Some(n) => n,
         };
 
@@ -77,8 +78,10 @@ impl Connection {
             msg_len
         };
 
-        let mut recv_buf : Vec<u8> = Vec::with_capacity(alloc_len);
-        unsafe { recv_buf.set_len(alloc_len); }
+        let mut recv_buf: Vec<u8> = Vec::with_capacity(alloc_len);
+        unsafe {
+            recv_buf.set_len(alloc_len);
+        }
 
         let mut read = 0;
 
@@ -146,17 +149,18 @@ impl Connection {
 
     pub fn writable(&mut self) -> io::Result<()> {
 
-        self.send_queue.pop()
+        self.send_queue
+            .pop()
             .ok_or(Error::new(ErrorKind::Other, "Could not pop send queue"))
             .and_then(|buf| {
                 match self.write_message_length(&buf) {
                     Ok(None) => {
                         self.send_queue.push(buf);
                         return Ok(());
-                    },
+                    }
                     Ok(Some(())) => {
                         ()
-                    },
+                    }
                     Err(e) => {
                         return Err(e);
                     }
@@ -166,7 +170,7 @@ impl Connection {
                     Ok(_) => {
                         self.write_continuation = false;
                         Ok(())
-                    },
+                    }
                     Err(e) => {
                         if e.kind() == ErrorKind::WouldBlock {
                             self.send_queue.push(buf);
@@ -196,9 +200,7 @@ impl Connection {
         BigEndian::write_u32(&mut send_buf, len as u32);
 
         match self.sock.write(&send_buf) {
-            Ok(_) => {
-                Ok(Some(()))
-            }
+            Ok(_) => Ok(Some(())),
             Err(e) => {
                 if e.kind() == ErrorKind::WouldBlock {
                     Ok(None)

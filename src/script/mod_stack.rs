@@ -26,7 +26,7 @@ instruction!(UNWRAP, b"\x86UNWRAP");
 instruction!(WRAP, b"\x84WRAP");
 
 pub struct Handler<'a> {
-    phantom: PhantomData<&'a ()>
+    phantom: PhantomData<&'a ()>,
 }
 
 impl<'a> Module<'a> for Handler<'a> {
@@ -47,7 +47,6 @@ impl<'a> Module<'a> for Handler<'a> {
 }
 
 impl<'a> Handler<'a> {
-
     pub fn new() -> Self {
         Handler { phantom: PhantomData }
     }
@@ -63,7 +62,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_swap(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_swap(&mut self,
+                   env: &mut Env<'a>,
+                   instruction: &'a [u8],
+                   _: EnvId)
+                   -> PassResult<'a> {
         instruction_is!(env, instruction, SWAP);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
@@ -75,7 +78,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_2swap(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_2swap(&mut self,
+                    env: &mut Env<'a>,
+                    instruction: &'a [u8],
+                    _: EnvId)
+                    -> PassResult<'a> {
         instruction_is!(env, instruction, TWOSWAP);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
@@ -92,7 +99,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_over(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_over(&mut self,
+                   env: &mut Env<'a>,
+                   instruction: &'a [u8],
+                   _: EnvId)
+                   -> PassResult<'a> {
         instruction_is!(env, instruction, OVER);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
@@ -105,7 +116,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_2over(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_2over(&mut self,
+                    env: &mut Env<'a>,
+                    instruction: &'a [u8],
+                    _: EnvId)
+                    -> PassResult<'a> {
         instruction_is!(env, instruction, TWOOVER);
         let d = stack_pop!(env);
         let c = stack_pop!(env);
@@ -137,7 +152,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_2rot(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_2rot(&mut self,
+                   env: &mut Env<'a>,
+                   instruction: &'a [u8],
+                   _: EnvId)
+                   -> PassResult<'a> {
         instruction_is!(env, instruction, TWOROT);
         let f = stack_pop!(env);
         let e = stack_pop!(env);
@@ -157,7 +176,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_drop(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_drop(&mut self,
+                   env: &mut Env<'a>,
+                   instruction: &'a [u8],
+                   _: EnvId)
+                   -> PassResult<'a> {
         instruction_is!(env, instruction, DROP);
         let _ = stack_pop!(env);
 
@@ -165,7 +188,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_depth(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_depth(&mut self,
+                    env: &mut Env<'a>,
+                    instruction: &'a [u8],
+                    _: EnvId)
+                    -> PassResult<'a> {
         instruction_is!(env, instruction, DEPTH);
         let bytes = BigUint::from(env.stack_size).to_bytes_be();
         let slice = alloc_and_write!(bytes.as_slice(), env);
@@ -174,7 +201,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_wrap(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_wrap(&mut self,
+                   env: &mut Env<'a>,
+                   instruction: &'a [u8],
+                   _: EnvId)
+                   -> PassResult<'a> {
         instruction_is!(env, instruction, WRAP);
         let n = stack_pop!(env);
 
@@ -188,7 +219,8 @@ impl<'a> Handler<'a> {
             n_int -= 1;
         }
 
-        let size = vec.clone().into_iter()
+        let size = vec.clone()
+            .into_iter()
             .fold(0, |a, item| a + item.len() + offset_by_size(item.len()));
 
         let mut slice = alloc_slice!(size, env);
@@ -205,7 +237,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_unwrap(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_unwrap(&mut self,
+                     env: &mut Env<'a>,
+                     instruction: &'a [u8],
+                     _: EnvId)
+                     -> PassResult<'a> {
         instruction_is!(env, instruction, UNWRAP);
         let mut current = stack_pop!(env);
         while current.len() > 0 {
@@ -213,13 +249,10 @@ impl<'a> Handler<'a> {
                 nom::IResult::Done(rest, val) => {
                     env.push(&val[offset_by_size(val.len())..]);
                     current = rest
-                },
-                _ => {
-                    return Err(error_invalid_value!(current))
                 }
+                _ => return Err(error_invalid_value!(current)),
             }
         }
         Ok(())
     }
-
 }

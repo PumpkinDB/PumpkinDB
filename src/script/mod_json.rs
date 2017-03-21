@@ -31,7 +31,7 @@ use serde_json as json;
 use std::marker::PhantomData;
 
 pub struct Handler<'a> {
-    phantom: PhantomData<&'a ()>
+    phantom: PhantomData<&'a ()>,
 }
 
 macro_rules! json_is_a {
@@ -83,7 +83,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_jsonq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    pub fn handle_jsonq(&mut self,
+                        env: &mut Env<'a>,
+                        instruction: &'a [u8],
+                        _: EnvId)
+                        -> PassResult<'a> {
         instruction_is!(env, instruction, JSONQ);
         let a = stack_pop!(env);
 
@@ -96,36 +100,66 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_json_objectq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    pub fn handle_json_objectq(&mut self,
+                               env: &mut Env<'a>,
+                               instruction: &'a [u8],
+                               _: EnvId)
+                               -> PassResult<'a> {
         json_is_a!(env, instruction, JSON_OBJECTQ, Object)
     }
 
     #[inline]
-    pub fn handle_json_stringq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    pub fn handle_json_stringq(&mut self,
+                               env: &mut Env<'a>,
+                               instruction: &'a [u8],
+                               _: EnvId)
+                               -> PassResult<'a> {
         json_is_a!(env, instruction, JSON_STRINGQ, String)
     }
     #[inline]
-    pub fn handle_json_numberq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    pub fn handle_json_numberq(&mut self,
+                               env: &mut Env<'a>,
+                               instruction: &'a [u8],
+                               _: EnvId)
+                               -> PassResult<'a> {
         json_is_a!(env, instruction, JSON_NUMBERQ, Number)
     }
 
     #[inline]
-    pub fn handle_json_booleanq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    pub fn handle_json_booleanq(&mut self,
+                                env: &mut Env<'a>,
+                                instruction: &'a [u8],
+                                _: EnvId)
+                                -> PassResult<'a> {
         json_is_a!(env, instruction, JSON_BOOLEANQ, Bool)
     }
 
     #[inline]
-    pub fn handle_json_arrayq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    pub fn handle_json_arrayq(&mut self,
+                              env: &mut Env<'a>,
+                              instruction: &'a [u8],
+                              _: EnvId)
+                              -> PassResult<'a> {
         json_is_a!(env, instruction, JSON_ARRAYQ, Array)
     }
 
     #[inline]
-    pub fn handle_json_nullq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        json_is_a!(env, instruction, JSON_NULLQ, { Null })
+    pub fn handle_json_nullq(&mut self,
+                             env: &mut Env<'a>,
+                             instruction: &'a [u8],
+                             _: EnvId)
+                             -> PassResult<'a> {
+        json_is_a!(env, instruction, JSON_NULLQ, {
+            Null
+        })
     }
 
     #[inline]
-    pub fn handle_json_get(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    pub fn handle_json_get(&mut self,
+                           env: &mut Env<'a>,
+                           instruction: &'a [u8],
+                           _: EnvId)
+                           -> PassResult<'a> {
         instruction_is!(env, instruction, JSON_GET);
 
         let field = stack_pop!(env);
@@ -133,7 +167,7 @@ impl<'a> Handler<'a> {
 
         let key = match String::from_utf8(Vec::from(field)) {
             Ok(k) => k,
-            Err(_) => return Err(error_invalid_value!(field))
+            Err(_) => return Err(error_invalid_value!(field)),
         };
 
         match json::from_slice::<json::Value>(a) {
@@ -144,9 +178,7 @@ impl<'a> Handler<'a> {
                         let val = alloc_and_write!(s.as_bytes(), env);
                         env.push(val);
                     }
-                    None => {
-                        return Err(error_invalid_value!(field))
-                    }
+                    None => return Err(error_invalid_value!(field)),
                 }
             }
             Ok(_) => return Err(error_invalid_value!(a)),
@@ -157,7 +189,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_json_hasq(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    pub fn handle_json_hasq(&mut self,
+                            env: &mut Env<'a>,
+                            instruction: &'a [u8],
+                            _: EnvId)
+                            -> PassResult<'a> {
         instruction_is!(env, instruction, JSON_HASQ);
 
         let field = stack_pop!(env);
@@ -165,7 +201,7 @@ impl<'a> Handler<'a> {
 
         let key = match String::from_utf8(Vec::from(field)) {
             Ok(k) => k,
-            Err(_) => return Err(error_invalid_value!(field))
+            Err(_) => return Err(error_invalid_value!(field)),
         };
 
         match json::from_slice::<json::Value>(a) {
@@ -184,7 +220,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_json_set(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    pub fn handle_json_set(&mut self,
+                           env: &mut Env<'a>,
+                           instruction: &'a [u8],
+                           _: EnvId)
+                           -> PassResult<'a> {
         instruction_is!(env, instruction, JSON_SET);
 
         let value = stack_pop!(env);
@@ -193,7 +233,7 @@ impl<'a> Handler<'a> {
 
         let key = match String::from_utf8(Vec::from(field)) {
             Ok(k) => k,
-            Err(_) => return Err(error_invalid_value!(field))
+            Err(_) => return Err(error_invalid_value!(field)),
         };
 
         let value = match json::from_slice::<json::Value>(value) {
@@ -216,7 +256,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_json_string_to(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    pub fn handle_json_string_to(&mut self,
+                                 env: &mut Env<'a>,
+                                 instruction: &'a [u8],
+                                 _: EnvId)
+                                 -> PassResult<'a> {
         instruction_is!(env, instruction, JSON_STRING_TO);
 
         let a = stack_pop!(env);
@@ -234,14 +278,18 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    pub fn handle_json_to_string(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    pub fn handle_json_to_string(&mut self,
+                                 env: &mut Env<'a>,
+                                 instruction: &'a [u8],
+                                 _: EnvId)
+                                 -> PassResult<'a> {
         instruction_is!(env, instruction, JSON_TO_STRING);
 
         let a = stack_pop!(env);
 
         let s = match String::from_utf8(Vec::from(a)) {
             Ok(k) => k,
-            Err(_) => return Err(error_invalid_value!(a))
+            Err(_) => return Err(error_invalid_value!(a)),
         };
 
         let str = json::Value::String(s).to_string();
@@ -250,5 +298,4 @@ impl<'a> Handler<'a> {
 
         Ok(())
     }
-
 }

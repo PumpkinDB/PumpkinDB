@@ -8,6 +8,7 @@
 //!
 //! This module handles hashing data
 //!
+
 instruction!(HASH_SHA1, b"\x89HASH/SHA1");
 instruction!(HASH_SHA224, b"\x8BHASH/SHA224");
 instruction!(HASH_SHA256, b"\x8BHASH/SHA256");
@@ -16,14 +17,13 @@ instruction!(HASH_SHA512, b"\x8BHASH/SHA512");
 instruction!(HASH_SHA512_224, b"\x8FHASH/SHA512-224");
 instruction!(HASH_SHA512_256, b"\x8FHASH/SHA512-256");
 
-/*
- * `Sha224`, which is the 32-bit `Sha256` algorithm with the result truncated to 224 bits.
- * `Sha256`, which is the 32-bit `Sha256` algorithm.
- * `Sha384`, which is the 64-bit `Sha512` algorithm with the result truncated to 384 bits.
- * `Sha512`, which is the 64-bit `Sha512` algorithm.
- * `Sha512Trunc224`, which is the 64-bit `Sha512` algorithm with the result truncated to 224 bits.
- * `Sha512Trunc256`, which is the 64-bit `Sha512` algorithm with the result truncated to 256 bits.
-*/
+// `Sha224`, which is the 32-bit `Sha256` algorithm with the result truncated to 224 bits.
+// `Sha256`, which is the 32-bit `Sha256` algorithm.
+// `Sha384`, which is the 64-bit `Sha512` algorithm with the result truncated to 384 bits.
+// `Sha512`, which is the 64-bit `Sha512` algorithm.
+// `Sha512Trunc224`, which is the 64-bit `Sha512` algorithm with the result truncated to 224 bits.
+// `Sha512Trunc256`, which is the 64-bit `Sha512` algorithm with the result truncated to 256 bits.
+//
 
 use super::{Env, EnvId, Module, PassResult, Error, ERROR_EMPTY_STACK, offset_by_size};
 use crypto::digest::Digest;
@@ -33,7 +33,7 @@ use crypto::sha2::*;
 use std::marker::PhantomData;
 
 pub struct Handler<'a> {
-    phantom: PhantomData<&'a ()>
+    phantom: PhantomData<&'a ()>,
 }
 
 macro_rules! hash_instruction {
@@ -77,5 +77,4 @@ impl<'a> Handler<'a> {
     hash_instruction!(handle_hash_sha512, HASH_SHA512, Sha512, 64);
     hash_instruction!(handle_hash_sha512_224, HASH_SHA512_224, Sha512Trunc224, 28);
     hash_instruction!(handle_hash_sha512_256, HASH_SHA512_256, Sha512Trunc256, 32);
-
 }

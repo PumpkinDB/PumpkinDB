@@ -15,8 +15,9 @@ use self::server::*;
 
 use pubsub;
 
-pub fn run(port: i64, senders: Vec<script::Sender<script::RequestMessage>>,
-                        publisher: pubsub::PublisherAccessor<Vec<u8>>) {
+pub fn run(port: i64,
+           senders: Vec<script::Sender<script::RequestMessage>>,
+           publisher: pubsub::PublisherAccessor<Vec<u8>>) {
     let addr = format!("0.0.0.0:{}", port).parse().unwrap();
 
     info!("Listening on {}", addr);

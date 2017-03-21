@@ -66,7 +66,7 @@ lazy_static! {
 
 pub struct Handler<'a> {
     publisher: pubsub::PublisherAccessor<Vec<u8>>,
-    phantom: PhantomData<&'a ()>
+    phantom: PhantomData<&'a ()>,
 }
 
 impl<'a> Module<'a> for Handler<'a> {
@@ -91,13 +91,19 @@ impl<'a> Module<'a> for Handler<'a> {
 }
 
 impl<'a> Handler<'a> {
-
     pub fn new(publisher: pubsub::PublisherAccessor<Vec<u8>>) -> Self {
-        Handler { publisher: publisher, phantom: PhantomData }
+        Handler {
+            publisher: publisher,
+            phantom: PhantomData,
+        }
     }
 
     #[inline]
-    fn handle_builtins(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_builtins(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       _: EnvId)
+                       -> PassResult<'a> {
         if BUILTINS.contains_key(instruction) {
             let vec = BUILTINS.get(instruction).unwrap();
             env.program.push(vec.as_slice());
@@ -168,7 +174,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_ifelse(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_ifelse(&mut self,
+                     env: &mut Env<'a>,
+                     instruction: &'a [u8],
+                     _: EnvId)
+                     -> PassResult<'a> {
         instruction_is!(env, instruction, IFELSE);
         let else_ = stack_pop!(env);
         let then = stack_pop!(env);
@@ -187,7 +197,11 @@ impl<'a> Handler<'a> {
 
     #[inline]
     #[cfg(feature = "scoped_dictionary")]
-    fn handle_eval_scoped(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_eval_scoped(&mut self,
+                          env: &mut Env<'a>,
+                          instruction: &'a [u8],
+                          _: EnvId)
+                          -> PassResult<'a> {
         instruction_is!(env, instruction, EVAL_SCOPED);
         env.push_dictionary();
         let a = stack_pop!(env);
@@ -205,7 +219,11 @@ impl<'a> Handler<'a> {
 
     #[inline]
     #[cfg(feature = "scoped_dictionary")]
-    fn handle_scope_end(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_scope_end(&mut self,
+                        env: &mut Env<'a>,
+                        instruction: &'a [u8],
+                        _: EnvId)
+                        -> PassResult<'a> {
         instruction_is!(env, instruction, SCOPE_END);
         env.pop_dictionary();
         Ok(())
@@ -219,7 +237,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_eval(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_eval(&mut self,
+                   env: &mut Env<'a>,
+                   instruction: &'a [u8],
+                   _: EnvId)
+                   -> PassResult<'a> {
         instruction_is!(env, instruction, EVAL);
         let a = stack_pop!(env);
         env.program.push(a);
@@ -227,7 +249,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_eval_validp(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_eval_validp(&mut self,
+                          env: &mut Env<'a>,
+                          instruction: &'a [u8],
+                          _: EnvId)
+                          -> PassResult<'a> {
         instruction_is!(env, instruction, EVAL_VALIDP);
         let a = stack_pop!(env);
         if parse_bin(a).is_ok() {
@@ -239,14 +265,19 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_dowhile(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_dowhile(&mut self,
+                      env: &mut Env<'a>,
+                      instruction: &'a [u8],
+                      _: EnvId)
+                      -> PassResult<'a> {
         instruction_is!(env, instruction, DOWHILE);
         let v = stack_pop!(env);
 
         let mut vec = Vec::new();
 
         let mut header = vec![0;offset_by_size(v.len() + DOWHILE.len() + offset_by_size(v.len()))];
-        write_size_into_slice!(offset_by_size(v.len()) + v.len() + DOWHILE.len(), header.as_mut_slice());
+        write_size_into_slice!(offset_by_size(v.len()) + v.len() + DOWHILE.len(),
+                               header.as_mut_slice());
         vec.append(&mut header);
 
         // inject code closure size
@@ -269,7 +300,11 @@ impl<'a> Handler<'a> {
     }
 
     #[inline]
-    fn handle_times(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_times(&mut self,
+                    env: &mut Env<'a>,
+                    instruction: &'a [u8],
+                    _: EnvId)
+                    -> PassResult<'a> {
         instruction_is!(env, instruction, TIMES);
         let count = stack_pop!(env);
 
@@ -323,8 +358,8 @@ impl<'a> Handler<'a> {
                 #[cfg(not(feature = "scoped_dictionary"))]
                 env.dictionary.insert(instruction, slice);
                 Ok(())
-            },
-            _ => Err(error_invalid_value!(instruction))
+            }
+            _ => Err(error_invalid_value!(instruction)),
         }
     }
 
@@ -344,14 +379,18 @@ impl<'a> Handler<'a> {
                 #[cfg(not(feature = "scoped_dictionary"))]
                 env.dictionary.insert(instruction, value);
                 Ok(())
-            },
-            _ => Err(error_invalid_value!(instruction))
+            }
+            _ => Err(error_invalid_value!(instruction)),
         }
     }
 
 
     #[inline]
-    fn handle_send(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_send(&mut self,
+                   env: &mut Env<'a>,
+                   instruction: &'a [u8],
+                   _: EnvId)
+                   -> PassResult<'a> {
         instruction_is!(env, instruction, SEND);
         let topic = stack_pop!(env);
         let data = stack_pop!(env);
@@ -365,7 +404,11 @@ impl<'a> Handler<'a> {
 
     #[inline]
     #[allow(unused_variables)]
-    fn handle_featurep(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+    fn handle_featurep(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       _: EnvId)
+                       -> PassResult<'a> {
         instruction_is!(env, instruction, FEATUREQ);
         let name = stack_pop!(env);
 
@@ -373,7 +416,7 @@ impl<'a> Handler<'a> {
         {
             if name == "scoped_dictionary".as_bytes() {
                 env.push(STACK_TRUE);
-                return Ok(())
+                return Ok(());
             }
         }
 
@@ -381,14 +424,14 @@ impl<'a> Handler<'a> {
 
         Ok(())
     }
-
 }
 
 #[cfg(test)]
 #[allow(unused_variables, unused_must_use, unused_mut)]
 mod tests {
 
-    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, parse, offset_by_size};
+    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, parse,
+                 offset_by_size};
     use std::sync::mpsc;
     use std::sync::Arc;
     use std::fs;
@@ -407,36 +450,46 @@ mod tests {
 
     #[test]
     fn send() {
-        eval!("\"Hello\" \"Topic\" SEND", env, result, publisher_accessor, {
-            let (sender1, receiver1) = mpsc::channel();
-            publisher_accessor.subscribe(Vec::from("Topic"), sender1);
+        eval!("\"Hello\" \"Topic\" SEND",
+              env,
+              result,
+              publisher_accessor,
+              {
+                  let (sender1, receiver1) = mpsc::channel();
+                  publisher_accessor.subscribe(Vec::from("Topic"), sender1);
 
-            let (sender0, receiver0) = mpsc::channel();
-            thread::spawn(move ||  {
-               match receiver1.recv() {
-                  Ok((topic, message, callback)) => {
-                     callback.send(());
-                     sender0.send((topic, message));
-                  },
-                  e => panic!("unexpected result {:?}", e)
-               };
+                  let (sender0, receiver0) = mpsc::channel();
+                  thread::spawn(move || {
+                match receiver1.recv() {
+                    Ok((topic, message, callback)) => {
+                        callback.send(());
+                        sender0.send((topic, message));
+                    }
+                    e => panic!("unexpected result {:?}", e),
+                };
 
             });
 
-        }, {
-            assert!(!result.is_err());
+              },
+              {
+                  assert!(!result.is_err());
 
-            let result = receiver0.recv_timeout(Duration::from_secs(1)).unwrap();
-            assert_eq!(result, (Vec::from("Topic"), Vec::from("Hello")));
-        });
+                  let result = receiver0.recv_timeout(Duration::from_secs(1)).unwrap();
+                  assert_eq!(result, (Vec::from("Topic"), Vec::from("Hello")));
+              });
 
-        eval!("\"Hello\" \"Topic1\" SEND", env, result, publisher_accessor, {
-            let (sender, receiver) = mpsc::channel();
-            publisher_accessor.subscribe(Vec::from("Topic"), sender);
-        }, {
-            assert!(!result.is_err());
-            assert!(receiver.recv_timeout(Duration::from_secs(1)).is_err());
-        });
+        eval!("\"Hello\" \"Topic1\" SEND",
+              env,
+              result,
+              publisher_accessor,
+              {
+                  let (sender, receiver) = mpsc::channel();
+                  publisher_accessor.subscribe(Vec::from("Topic"), sender);
+              },
+              {
+                  assert!(!result.is_err());
+                  assert!(receiver.recv_timeout(Duration::from_secs(1)).is_err());
+              });
 
         eval!("\"Topic\" SEND", env, result, {
             assert_error!(result, "[\"Empty stack\" [] 4]");
