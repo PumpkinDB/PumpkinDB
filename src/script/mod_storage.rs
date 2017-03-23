@@ -616,6 +616,14 @@ mod tests {
 
     }
 
+    #[test]
+    fn txn_order() {
+        eval!("\"hello\" HLC CONCAT DUP [\"world\" ASSOC [ASSOC?] READ] WRITE 0x00 EQUAL?", env, result, {
+            assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
+            assert_eq!(env.pop(), None);
+        });
+    }
+
     use test::Bencher;
 
     #[bench]
