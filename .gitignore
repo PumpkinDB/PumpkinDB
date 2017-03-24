@@ -3,3 +3,4 @@ Cargo.lock
 .idea
 .DS_Store
 *.rs.bk
+pumpkin.db*
