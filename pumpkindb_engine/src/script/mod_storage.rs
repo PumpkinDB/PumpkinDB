@@ -11,7 +11,6 @@
 //!
 
 use lmdb;
-use lmdb::traits::{LmdbResultExt, AsLmdbBytes, FromLmdbBytes};
 use storage;
 use storage::GlobalWriteLock;
 use std::mem;
@@ -23,7 +22,7 @@ use super::{Env, EnvId, Module, PassResult, Error, STACK_TRUE, STACK_FALSE, offs
 use byteorder::{BigEndian, WriteBytesExt};
 use snowflake::ProcessUniqueId;
 use std::collections::BTreeMap;
-use script::txn_stack::TxnStack;
+use script::txn_stack::{TxnStack, TxType, Accessor, Txn, TxnT};
 
 pub type CursorId = ProcessUniqueId;
 
@@ -55,58 +54,6 @@ instruction!(QCURSOR_CUR, b"\x8B?CURSOR/CUR");
 instruction!(CURSOR_CURQ, b"\x8BCURSOR/CUR?");
 
 instruction!(COMMIT, b"\x86COMMIT");
-
-#[derive(PartialEq, Debug)]
-enum TxType {
-    Read,
-    Write,
-}
-
-enum Accessor<'a> {
-    Const(lmdb::ConstAccessor<'a>),
-    Write(lmdb::WriteAccessor<'a>),
-}
-
-impl<'a> Accessor<'a> {
-    fn get<K: AsLmdbBytes + ?Sized, V: FromLmdbBytes + ?Sized>(&self, db: &lmdb::Database, key: &K)
-        -> Result<Option<&V>, lmdb::Error> {
-        match self {
-            &Accessor::Write(ref access) => {
-                access.get::<K, V>(db, key)
-            },
-            &Accessor::Const(ref access) => {
-                access.get::<K, V>(db, key)
-            }
-        }.to_opt()
-    }
-}
-
-#[derive(Debug)]
-enum Txn<'a> {
-    Read(lmdb::ReadTransaction<'a>),
-    Write(lmdb::WriteTransaction<'a>),
-}
-
-impl<'a> Txn<'a> {
-    fn access(&self) -> Accessor {
-        match self {
-            &Txn::Read(ref txn) => Accessor::Const(txn.access()),
-            &Txn::Write(ref txn) => Accessor::Write(txn.access()),
-        }
-    }
-    fn cursor(&self, db: &'a lmdb::Database) -> Result<lmdb::Cursor, lmdb::Error> {
-        match self {
-            &Txn::Read(ref txn) => txn.cursor(db),
-            &Txn::Write(ref txn) => txn.cursor(db),
-        }
-    }
-    fn tx_type(&self) -> TxType {
-        match self {
-            &Txn::Read(_) => TxType::Read,
-            &Txn::Write(_) => TxType::Write,
-        }
-    }
-}
 
 pub struct Handler<'a> {
     db: &'a storage::Storage<'a>,
@@ -351,18 +298,14 @@ impl<'a> Handler<'a> {
 						 -> PassResult<'a> {
         if instruction == COMMIT {
             match self.txns.get_mut(&pid)
-                .and_then(|txn_stack| txn_stack.pop()) {
+                .and_then(|txn_stack| txn_stack.pop_tx_type(TxType::Write)) {
                 Some(Txn::Write(txn)) => {
                     match txn.commit() {
                         Ok(_) => Ok(()),
                         Err(reason) => Err(error_database!(reason))
                     }
                 },
-                Some(txn) => {
-                    let _ = self.txns.get_mut(&pid).unwrap().push(txn);
-                    Err(error_no_transaction!())
-                },
-                None => Err(error_no_transaction!())
+                _ => Err(error_no_transaction!())
             }
         } else {
             Err(Error::UnknownInstruction)
