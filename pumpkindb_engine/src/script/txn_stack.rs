@@ -1,5 +1,5 @@
 #[derive(Debug)]
-pub struct Queue<T> {
+pub struct TxnStack<T> {
     max_size: usize,
     count: usize,
     elements: Vec<T>
@@ -10,9 +10,9 @@ pub enum InsertError {
     Full
 }
 
-impl<T> Queue<T> {
+impl<T> TxnStack<T> {
     pub fn new(max_size: usize) -> Self {
-        Queue {
+        TxnStack {
             max_size: max_size,
             count: 0,
             elements: Vec::new()
@@ -53,29 +53,29 @@ impl<T> Queue<T> {
 
 #[cfg(test)]
 mod tests {
-    use script::queue::{Queue, InsertError};
+    use script::txn_stack::{TxnStack, InsertError};
 
     #[test]
-    fn create_queue() {
-        let queue: Queue<String> = Queue::new(usize::max_value());
-        assert_eq!(queue.capacity(), usize::max_value());
+    fn create_txn_stack() {
+        let txn_stack: TxnStack<String> = TxnStack::new(usize::max_value());
+        assert_eq!(txn_stack.capacity(), usize::max_value());
     }
 
     #[test]
     fn max_size() {
-        let mut queue: Queue<String> = Queue::new(1);
-        assert_eq!(queue.push("a".to_owned()).unwrap(), 1);
-        assert_eq!(queue.push("a".to_owned()).unwrap_err(), InsertError::Full);
+        let mut txn_stack: TxnStack<String> = TxnStack::new(1);
+        assert_eq!(txn_stack.push("a".to_owned()).unwrap(), 1);
+        assert_eq!(txn_stack.push("a".to_owned()).unwrap_err(), InsertError::Full);
     }
 
     #[test]
     fn push_pop() {
-        let mut queue: Queue<String> = Queue::new(10);
-        assert_eq!(queue.len(), 0);
-        assert_eq!(queue.push("a".to_owned()).unwrap(), 1);
-        assert_eq!(queue.len(), 1);
-        assert_eq!(queue.pop().unwrap(), "a".to_owned());
-        assert_eq!(queue.len(), 0);
+        let mut txn_stack: TxnStack<String> = TxnStack::new(10);
+        assert_eq!(txn_stack.len(), 0);
+        assert_eq!(txn_stack.push("a".to_owned()).unwrap(), 1);
+        assert_eq!(txn_stack.len(), 1);
+        assert_eq!(txn_stack.pop().unwrap(), "a".to_owned());
+        assert_eq!(txn_stack.len(), 0);
     }
 
 }

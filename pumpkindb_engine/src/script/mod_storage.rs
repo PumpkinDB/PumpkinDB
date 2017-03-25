@@ -23,7 +23,7 @@ use super::{Env, EnvId, Module, PassResult, Error, STACK_TRUE, STACK_FALSE, offs
 use byteorder::{BigEndian, WriteBytesExt};
 use snowflake::ProcessUniqueId;
 use std::collections::BTreeMap;
-use script::queue::Queue;
+use script::txn_stack::TxnStack;
 
 pub type CursorId = ProcessUniqueId;
 
@@ -110,14 +110,14 @@ impl<'a> Txn<'a> {
 
 pub struct Handler<'a> {
     db: &'a storage::Storage<'a>,
-    txns: HashMap<EnvId, Queue<Txn<'a>>>,
+    txns: HashMap<EnvId, TxnStack<Txn<'a>>>,
     cursors: BTreeMap<(EnvId, Vec<u8>), (TxType, lmdb::Cursor<'a, 'a>)>
 }
 
 macro_rules! read_or_write_transaction {
     ($me: expr, $env_id: expr) => {
         match $me.txns.get(&$env_id)
-            .and_then(|queue| queue.peek()) {
+            .and_then(|txn_stack| txn_stack.peek()) {
             None => return Err(error_no_transaction!()),
             Some(txn) => txn
         }
@@ -127,7 +127,7 @@ macro_rules! read_or_write_transaction {
 macro_rules! tx_type {
     ($me: expr, $env_id: expr) => {{
         let txn_type = $me.txns.get(&$env_id)
-            .and_then(|queue| queue.peek())
+            .and_then(|txn_stack| txn_stack.peek())
             .and_then(|txn| Some(txn.tx_type()));
         if txn_type.is_none() {
             return Err(error_no_transaction!())
@@ -194,9 +194,9 @@ macro_rules! cursorq_op {
 impl<'a> Module<'a> for Handler<'a> {
     fn done(&mut self, _: &mut Env, pid: EnvId) {
         self.txns.get_mut(&pid)
-            .and_then(|queue| {
-                while queue.len() > 0 {
-                    let txn = queue.pop();
+            .and_then(|txn_stack| {
+                while txn_stack.len() > 0 {
+                    let txn = txn_stack.pop();
                     drop(txn)
                 }
                 Some(())
@@ -248,7 +248,7 @@ impl<'a> Handler<'a> {
                     Err(e) => Err(error_database!(e)),
                     Ok(txn) => {
                         if !self.txns.contains_key(&pid) {
-                            self.txns.insert(pid, Queue::new(MAX_TXNS_PER_ENV));
+                            self.txns.insert(pid, TxnStack::new(MAX_TXNS_PER_ENV));
                         }
                         let _ = self.txns.get_mut(&pid).unwrap().push(Txn::Write(txn));
                         env.program.push(WRITE_END);
@@ -287,7 +287,7 @@ impl<'a> Handler<'a> {
                     Err(e) => Err(error_database!(e)),
                     Ok(txn) => {
                         if !self.txns.contains_key(&pid) {
-                            self.txns.insert(pid, Queue::new(MAX_TXNS_PER_ENV));
+                            self.txns.insert(pid, TxnStack::new(MAX_TXNS_PER_ENV));
                         }
                         let _ = self.txns.get_mut(&pid).unwrap().push(Txn::Read(txn));
                         env.program.push(READ_END);
@@ -319,7 +319,7 @@ impl<'a> Handler<'a> {
 						-> PassResult<'a> {
         if instruction == ASSOC {
             match self.txns.get(&pid)
-                .and_then(|queue| queue.peek())
+                .and_then(|txn_stack| txn_stack.peek())
                 .and_then(|txn| match txn.tx_type() {
                     TxType::Write => Some(txn),
                     _ => None
@@ -351,7 +351,7 @@ impl<'a> Handler<'a> {
 						 -> PassResult<'a> {
         if instruction == COMMIT {
             match self.txns.get_mut(&pid)
-                .and_then(|queue| queue.pop()) {
+                .and_then(|txn_stack| txn_stack.pop()) {
                 Some(Txn::Write(txn)) => {
                     match txn.commit() {
                         Ok(_) => Ok(()),
@@ -379,7 +379,7 @@ impl<'a> Handler<'a> {
         if instruction == RETR {
             let key = stack_pop!(env);
             self.txns.get(&pid)
-                .and_then(|queue| queue.peek())
+                .and_then(|txn_stack| txn_stack.peek())
                 .and_then(|txn| Some(txn.access()))
                 .map_or_else(|| Err(error_no_transaction!()), |acc| {
                     match acc.get::<[u8], [u8]>(&self.db.db, key) {
@@ -406,7 +406,7 @@ impl<'a> Handler<'a> {
         if instruction == ASSOCQ {
             let key = stack_pop!(env);
             self.txns.get(&pid)
-                .and_then(|queue| queue.peek())
+                .and_then(|txn_stack| txn_stack.peek())
                 .and_then(|txn| Some(txn.access()))
                 .map_or_else(|| Err(error_no_transaction!()),  |acc| {
                     match acc.get::<[u8], [u8]>(&self.db.db, key) {
@@ -438,7 +438,7 @@ impl<'a> Handler<'a> {
 						 -> PassResult<'a> {
         if instruction == CURSOR {
             let cursor = self.txns.get(&pid)
-                .and_then(|queue| queue.peek())
+                .and_then(|txn_stack| txn_stack.peek())
                 .map(|txn| txn.cursor(&self.db.db));
             match cursor {
                 Some(cursor) => {
