@@ -66,7 +66,7 @@ mod tests {
 
     use super::Program;
     use super::Item::*;
-    use script::parse;
+    use textparser::parse;
 
     #[test]
     fn into() {

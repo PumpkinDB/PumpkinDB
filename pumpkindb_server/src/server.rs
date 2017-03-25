@@ -6,33 +6,27 @@
 
 use std::io;
 use std::rc::Rc;
+use std::sync::mpsc;
+use std::thread;
+use std::sync::Mutex;
+use std::collections::BTreeMap;
 
+use slab;
+use nom;
+use num_bigint::BigUint;
+use num_traits::ToPrimitive;
+use mio::channel as mio_chan;
 use mio::*;
 use mio::tcp::*;
-use slab;
+use rand::{thread_rng, Rng};
 
 use super::connection::Connection;
 
 type Slab<T> = slab::Slab<T, Token>;
 
-use script;
-use script::{EnvId, Sender, RequestMessage, ResponseMessage, parse};
-use nom;
-use num_bigint::BigUint;
-use num_traits::ToPrimitive;
-
-use std::sync::mpsc;
-
-use pubsub;
-
-use std::thread;
-use std::sync::Mutex;
-
-use mio::channel as mio_chan;
-
-use std::collections::BTreeMap;
-
-use rand::{thread_rng, Rng};
+use pumpkinscript::{self, binparser};
+use pumpkindb_engine::{script, pubsub};
+use pumpkindb_engine::script::{EnvId, Sender, RequestMessage, ResponseMessage};
 
 pub struct Server {
     senders: Vec<Sender<RequestMessage>>,
@@ -88,18 +82,18 @@ impl Server {
                         if original_topic == "subscriptions".as_bytes() ||
                            original_topic == "unsubscriptions".as_bytes() {
                             let mut input = Vec::from(message);
-                            let topic = match script::binparser::data(input.clone().as_slice()) {
+                            let topic = match binparser::data(input.clone().as_slice()) {
                                 nom::IResult::Done(rest, data) => {
-                                    let (_, size) = script::binparser::data_size(data).unwrap();
+                                    let (_, size) = binparser::data_size(data).unwrap();
                                     input = Vec::from(rest);
-                                    Vec::from(&data[script::offset_by_size(size)..])
+                                    Vec::from(&data[pumpkinscript::offset_by_size(size)..])
                                 }
                                 _ => continue,
                             };
-                            let token = Token(match script::binparser::data(input.clone()
+                            let token = Token(match binparser::data(input.clone()
                                 .as_slice()) {
                                 nom::IResult::Done(_, data) => {
-                                    let (_, size) = script::binparser::data_size(data).unwrap();
+                                    let (_, size) = binparser::data_size(data).unwrap();
                                     BigUint::from_bytes_be(&data[script::offset_by_size(size)..])
                                         .to_u64()
                                         .unwrap()
@@ -268,11 +262,11 @@ impl Server {
         while let Some(mut message) = self.find_connection_by_token(token).readable()? {
             let id = EnvId::new();
             let mut vec = Vec::new();
-            let mut subscribe = parse(format!("[{} 2 WRAP \"subscriptions\" SEND] 'SUBSCRIBE DEF",
+            let mut subscribe = pumpkinscript::parse(format!("[{} 2 WRAP \"subscriptions\" SEND] 'SUBSCRIBE DEF",
                                               token.0)
                     .as_str())
                 .unwrap();
-            let mut unsubscribe = parse(format!("[{} 2 WRAP \"unsubscriptions\" SEND] \
+            let mut unsubscribe = pumpkinscript::parse(format!("[{} 2 WRAP \"unsubscriptions\" SEND] \
                                                  'UNSUBSCRIBE DEF",
                                                 token.0)
                     .as_str())

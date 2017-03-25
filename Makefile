@@ -1,13 +1,12 @@
 .PHONY: test doc
 
 test:
-	cargo test -- --nocapture
-	cargo test --features="experimental" -- --nocapture
-	cargo test --features="scoped_dictionary" -- --nocapture
-	cargo test --features="static_module_dispatch" -- --nocapture
-	cargo run --bin pumpkindb-doctests
-	cargo run --bin pumpkindb-doctests --features="experimental"
-	cargo run --bin pumpkindb-doctests --features="static_module_dispatch"
+	cargo build --all --verbose
+	cargo test --all -- --nocapture
+	cargo test --all --features="experimental" -- --nocapture
+	cargo test --all --features="scoped_dictionary" -- --nocapture
+	cargo test --all --features="static_module_dispatch" -- --nocapture
+	./target/debug/pumpkindb-doctests
 
 doc:
-	cargo doc --lib
+	cargo doc --all --lib

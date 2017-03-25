@@ -4,8 +4,8 @@ rust:
   - nightly-2017-03-14
 matrix:
   allow_failures:
-    - rust: stable 
+    - rust: stable
 script:
-  - cargo build --verbose
-  - cargo build --features="experimental" --verbose
+  - cargo build --all --verbose
+  - cargo build --all --features="experimental" --verbose
   - make test

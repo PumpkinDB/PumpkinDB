@@ -4,7 +4,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-extern crate pumpkindb;
 
 extern crate config;
 extern crate nom;
@@ -13,33 +12,32 @@ extern crate ansi_term;
 extern crate uuid;
 #[macro_use]
 extern crate clap;
-
-use pumpkindb::script;
-use pumpkindb::script::compose::*;
-use pumpkindb::script::compose::Item::*;
-
 extern crate byteorder;
+
+extern crate pumpkinscript;
+extern crate pumpkindb_engine;
 
 use std::io::prelude::*;
 use std::net::TcpStream;
+use std::fmt::Write;
+use std::io::Write as IoWrite;
+use std::str;
 
 use byteorder::{ByteOrder, BigEndian};
-
 
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use rustyline::history::History;
 
-use std::fmt::Write;
-use std::io::Write as IoWrite;
-
 use ansi_term::Colour::Red;
-
-use std::str;
 
 use uuid::Uuid;
 
 use clap::{Arg, App};
+
+use pumpkindb_engine::script;
+use pumpkinscript::compose::*;
+use pumpkinscript::compose::Item::*;
 
 fn main() {
 
@@ -104,7 +102,7 @@ fn main() {
                 }
                 if program.len() > 0 {
                     rl.add_history_entry(format!("{}.", &program).as_str());
-                    match script::parse(&program) {
+                    match pumpkinscript::parse(&program) {
                         Ok(compiled) => {
                             let uuid = Uuid::new_v4();
                             let msg: Vec<u8> = Program(vec![Data(&compiled),
@@ -141,9 +139,9 @@ fn main() {
                                     let mut top_level = true;
                                     let mut s = String::new();
                                     while input.len() > 0 {
-                                        match script::binparser::data(input.clone().as_slice()) {
+                                        match pumpkinscript::binparser::data(input.clone().as_slice()) {
                                             nom::IResult::Done(rest, data) => {
-                                                let (_, size) = script::binparser::data_size(data)
+                                                let (_, size) = pumpkinscript::binparser::data_size(data)
                                                     .unwrap();
                                                 let data = &data[script::offset_by_size(size)..];
 

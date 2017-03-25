@@ -118,11 +118,6 @@ pub enum ParseError {
     /// Unparseable remainder
     Superfluous(Vec<u8>),
 }
-pub mod binparser;
-pub use self::binparser::parse as parse_bin;
-
-pub mod textparser;
-pub use self::textparser::parse;
 
 /// Initial stack size
 pub const STACK_SIZE: usize = 32_768;
@@ -453,6 +448,8 @@ const ERROR_DATABASE: &'static [u8] = b"\x01\x09";
 
 use std::sync::Arc;
 
+use pumpkinscript::{binparser};
+
 impl<'a> Scheduler<'a> {
     /// Creates an instance of Scheduler with three communication channels:
     ///
@@ -707,14 +704,12 @@ impl<'a> Scheduler<'a> {
     }
 }
 
-pub mod compose;
-
 #[cfg(test)]
 #[allow(unused_variables, unused_must_use, unused_mut)]
 mod tests {
 
-    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, parse,
-                 offset_by_size};
+    use pumpkinscript::{parse, offset_by_size};
+    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId};
     use std::sync::mpsc;
     use std::sync::Arc;
     use timestamp;

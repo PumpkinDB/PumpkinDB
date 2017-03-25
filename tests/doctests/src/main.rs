@@ -7,29 +7,30 @@
 // This program is used to run doctests defined in doc/script
 //
 #![feature(slice_patterns)]
+
 extern crate glob;
-extern crate pumpkindb;
 extern crate regex;
 extern crate crossbeam;
 extern crate tempdir;
 extern crate lmdb_zero as lmdb;
 extern crate nom;
 
+extern crate pumpkinscript;
+extern crate pumpkindb_engine;
+
 use std::io::prelude::*;
 use std::fs;
 use std::fs::File;
 use std::sync::mpsc;
+use std::sync::Arc;
 
 use regex::Regex;
 use glob::glob;
-
-use pumpkindb::script::{RequestMessage, ResponseMessage, EnvId, Env, Scheduler};
-use pumpkindb::script::{textparser, binparser};
-use pumpkindb::pubsub;
-use pumpkindb::storage;
-use pumpkindb::timestamp;
-use std::sync::Arc;
 use tempdir::TempDir;
+
+use pumpkindb_engine::script::{RequestMessage, ResponseMessage, EnvId, Env, Scheduler};
+use pumpkinscript::{textparser, binparser};
+use pumpkindb_engine::{pubsub, storage, timestamp};
 
 fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp>) {
     let dir = TempDir::new("pumpkindb").unwrap();

@@ -74,7 +74,8 @@ $ rustup override set nightly # in PumpkinDB directory
 After that, you can run PumpkinDB server this way:
 
 ```shell
-$ cargo run --bin pumpkindb
+$ cargo build --all
+$ ./target/debug/pumpkindb
 2017-03-18T09:55:24.510400-07:00 WARN pumpkindb - No logging configuration specified, switching to console logging
 2017-03-18T09:55:24.511821-07:00 INFO pumpkindb - Starting up
 2017-03-18T09:55:24.512955-07:00 INFO pumpkindb::storage - Available disk space is approx. 26Gb, setting database map size to it
@@ -87,7 +88,7 @@ $ cargo run --bin pumpkindb
 You can connect to it using `pumpkindb-term`:
 
 ```shell
-$ cargo run --bin pumpkindb-term
+$ ./target/debug/pumpkindb-term
 Connected to PumpkinDB at 0.0.0.0:9981
 To send an expression, end it with `.`
 Type \h for help.

@@ -13,7 +13,6 @@ extern crate matches;
 extern crate test;
 
 // Parser
-#[macro_use]
 extern crate nom;
 
 extern crate core;
@@ -28,9 +27,6 @@ extern crate tempdir;
 extern crate crossbeam;
 
 extern crate libc;
-
-extern crate mio;
-extern crate slab;
 
 extern crate hybrid_clocks as hlc;
 
@@ -51,3 +47,6 @@ extern crate rand;
 extern crate log;
 
 extern crate memmap;
+
+#[macro_use]
+extern crate pumpkinscript;

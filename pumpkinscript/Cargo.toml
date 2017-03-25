@@ -1,0 +1,17 @@
+[package]
+name = "pumpkinscript"
+version = "0.2.0"
+license = "MPL-2.0"
+repository = "https://github.com/PumpkinDB/PumpkinDB"
+homepage = "http://pumpkindb.org"
+keywords = [ "pumpkindb", "pumpkinscript", "parsing" ]
+categories = [ "database", "parsing" ]
+
+authors = ["Guillaume Gauvrit <guillaume@gauvr.it>",
+           "Ómar Yasin <omarkj@gmail.com>",
+           "Yurii Rashkovskii <yrashk@gmail.com>"]
+
+[dependencies]
+nom = "^2.1"
+num-bigint = "0.1.35"
+num-traits = "0.1.36"
