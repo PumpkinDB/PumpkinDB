@@ -187,16 +187,18 @@ impl<'a> Handler<'a> {
         match instruction {
             WRITE => {
                 let v = stack_pop!(env);
-                if self.db.try_lock() == false {
-                    return Err(Error::Reschedule);
+                if !self.txns.contains_key(&pid) {
+                    self.txns.insert(pid, TxnStack::new(MAX_TXNS_PER_ENV));
+                }
+                if !self.txns.get(&pid).unwrap().has_write_txn() {
+                    if self.db.try_lock() == false {
+                        return Err(Error::Reschedule);
+                    }
                 }
                 // prepare transaction
                 match lmdb::WriteTransaction::new(self.db.env) {
                     Err(e) => Err(error_database!(e)),
                     Ok(txn) => {
-                        if !self.txns.contains_key(&pid) {
-                            self.txns.insert(pid, TxnStack::new(MAX_TXNS_PER_ENV));
-                        }
                         let _ = self.txns.get_mut(&pid).unwrap().push(Txn::Write(txn));
                         env.program.push(WRITE_END);
                         env.program.push(v);
@@ -205,14 +207,11 @@ impl<'a> Handler<'a> {
                 }
             }
             WRITE_END => {
-                match self.txns.get_mut(&pid).unwrap().pop() {
-                    Some(_) => {
-                        self.cursors = mem::replace(&mut self.cursors,
-                                                    BTreeMap::new()).into_iter()
-                            .filter(|t| ((*t).1).0 != TxType::Read).collect();
-                    },
-                    _ => {}
-                };
+                if let Some(_) = self.txns.get_mut(&pid).unwrap().pop() {
+                    self.cursors = mem::replace(&mut self.cursors,
+                                                BTreeMap::new()).into_iter()
+                        .filter(|t| ((*t).1).0 != TxType::Read).collect();
+                }
                 Ok(())
             }
             _ => Err(Error::UnknownInstruction),

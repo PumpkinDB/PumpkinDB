@@ -64,6 +64,7 @@ pub trait TxnT {
 pub struct TxnStack<T: TxnT> {
     max_size: usize,
     count: usize,
+    count_write_txns: usize,
     elements: Vec<T>
 }
 
@@ -77,6 +78,7 @@ impl<T: TxnT> TxnStack<T> {
         TxnStack {
             max_size: max_size,
             count: 0,
+            count_write_txns: 0,
             elements: Vec::new()
         }
     }
@@ -94,6 +96,9 @@ impl<T: TxnT> TxnStack<T> {
             return Err(InsertError::Full)
         }
         self.count += 1;
+        if el.tx_type() == TxType::Write {
+            self.count_write_txns += 1;
+        }
         self.elements.push(el);
         Ok(self.count)
     }
@@ -115,10 +120,17 @@ impl<T: TxnT> TxnStack<T> {
         match self.elements.pop() {
             Some(el) => {
                 self.count -= 1;
+                if el.tx_type() == TxType::Write {
+                    self.count_write_txns -= 1;
+                }
                 Some(el)
             },
             None => None
         }
+    }
+
+    pub fn has_write_txn(&self) -> bool {
+        return self.count_write_txns > 0
     }
 }
 
