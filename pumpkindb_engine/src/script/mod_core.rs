@@ -4,8 +4,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use pumpkinscript::{parse_bin, binparser, textparser};
+
 use super::{Env, EnvId, Module, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size, STACK_TRUE, STACK_FALSE, binparser, textparser, parse_bin};
+            offset_by_size, STACK_TRUE, STACK_FALSE};
 use super::super::pubsub;
 
 use std::marker::PhantomData;
@@ -430,8 +432,8 @@ impl<'a> Handler<'a> {
 #[allow(unused_variables, unused_must_use, unused_mut)]
 mod tests {
 
-    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, parse,
-                 offset_by_size};
+    use pumpkinscript::{parse, offset_by_size};
+    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId};
     use std::sync::mpsc;
     use std::sync::Arc;
     use std::fs;

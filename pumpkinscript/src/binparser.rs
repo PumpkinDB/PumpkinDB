@@ -5,7 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use nom::{IResult, Needed, ErrorKind};
-use script::{Program, ParseError};
+use super::{Program, ParseError};
 
 pub fn instruction_tag(i: &[u8]) -> IResult<&[u8], u8> {
     if i.len() < 1 {
@@ -120,8 +120,8 @@ pub fn parse(code: &[u8]) -> Result<Program, ParseError> {
 
 #[cfg(test)]
 mod tests {
-    use script::parse as parse_text;
-    use script::binparser::parse;
+    use textparser::parse as parse_text;
+    use binparser::parse;
 
     #[test]
     fn test() {

@@ -582,8 +582,9 @@ fn copy_to_stack(env: &mut Env, (key, val): (&[u8], &[u8])) -> Result<(), Error>
 #[cfg(test)]
 #[allow(unused_variables, unused_must_use, unused_mut, unused_imports)]
 mod tests {
-    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, parse,
-                 offset_by_size};
+    use pumpkinscript::{parse, offset_by_size};
+    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId};
+
     use byteorder::WriteBytesExt;
     use std::sync::mpsc;
     use std::sync::Arc;

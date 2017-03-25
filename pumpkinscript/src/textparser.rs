@@ -12,7 +12,7 @@ use num_traits::Zero;
 use core::str::FromStr;
 use std::str;
 
-use script::{Program, ParseError};
+use super::{Program, ParseError};
 
 fn prefix_instruction(instruction: &[u8]) -> Vec<u8> {
     let mut vec = Vec::new();
@@ -324,7 +324,7 @@ pub fn parse(script: &str) -> Result<Program, ParseError> {
 
 #[cfg(test)]
 mod tests {
-    use script::textparser::{parse, programs};
+    use textparser::{parse, programs};
     use num_bigint::BigUint;
     use core::str::FromStr;
 

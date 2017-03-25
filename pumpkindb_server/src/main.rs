@@ -6,26 +6,40 @@
 #![feature(slice_patterns, advanced_slice_patterns)]
 #![cfg_attr(test, feature(test))]
 
-#![cfg_attr(not(target_os = "windows"), feature(alloc, heap_api))]
-#![feature(alloc)]
-
-include!("crates.rs");
-
+extern crate mio;
+extern crate memmap;
+extern crate byteorder;
+extern crate nom;
+extern crate rand;
 extern crate num_cpus;
+#[macro_use]
+extern crate log;
 extern crate log4rs;
+extern crate slab;
+extern crate num_bigint;
+extern crate num_traits;
+extern crate lmdb_zero as lmdb;
+#[macro_use]
+extern crate lazy_static;
+extern crate config;
 
-pub mod script;
-pub mod server;
-pub mod timestamp;
-pub mod pubsub;
-pub mod storage;
+extern crate pumpkinscript;
+extern crate pumpkindb_engine;
+
+mod connection;
+mod server;
 
 use std::fs;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::thread;
 use std::sync::Arc;
+
 use memmap::{Mmap, Protection};
+use mio::*;
+use mio::tcp::*;
+
+use pumpkindb_engine::{script, pubsub, storage, timestamp};
 
 lazy_static! {
  static ref ENVIRONMENT: lmdb::Environment = {
@@ -35,6 +49,22 @@ lazy_static! {
     let map_size = config::get_int("storage.mapsize");
     storage::create_environment(storage_path, map_size)
  };
+}
+
+pub fn run(port: i64,
+           senders: Vec<script::Sender<script::RequestMessage>>,
+           publisher: pubsub::PublisherAccessor<Vec<u8>>) {
+    let addr = format!("0.0.0.0:{}", port).parse().unwrap();
+
+    info!("Listening on {}", addr);
+
+    let sock = TcpListener::bind(&addr).expect("Failed to bind address");
+
+    let mut poll = Poll::new().expect("Failed to initialize polling");
+
+    let mut server = server::Server::new(sock, senders, publisher);
+    server.run(&mut poll).expect("Failed to run server");
+
 }
 
 /// Accepts storage path, filename and length and prepares the file. It is important that the length
@@ -120,7 +150,7 @@ fn main() {
         senders.push(sender)
     }
 
-    server::run(config::get_int("server.port").unwrap(),
+    run(config::get_int("server.port").unwrap(),
                 senders,
                 publisher_accessor.clone());
 
