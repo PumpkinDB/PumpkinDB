@@ -22,6 +22,8 @@ extern crate lmdb_zero as lmdb;
 #[macro_use]
 extern crate lazy_static;
 extern crate config;
+#[macro_use]
+extern crate clap;
 
 extern crate pumpkinscript;
 extern crate pumpkindb_engine;
@@ -38,6 +40,7 @@ use std::sync::Arc;
 use memmap::{Mmap, Protection};
 use mio::*;
 use mio::tcp::*;
+use clap::{App, Arg};
 
 use pumpkindb_engine::{script, pubsub, storage, timestamp};
 
@@ -88,8 +91,22 @@ fn prepare_mmap(storage_path: &str, filename: &str, length: u64) -> Mmap {
 }
 
 fn main() {
+    let args = App::new("PumpkinDB Server")
+        .version(crate_version!())
+        .about("Event Sourcing Database Engine http://pumpkindb.org")
+        .author("PumpkinDB Contributors")
+        .setting(clap::AppSettings::ColoredHelp)
+        .arg(Arg::with_name("config")
+            .help("Configuration file")
+            .required(false)
+            .long("config")
+            .short("c")
+            .default_value("pumpkindb.toml")
+            .takes_value(true))
+        .get_matches();
     let _ = config::merge(config::Environment::new("pumpkindb"));
-    let _ = config::merge(config::File::new("pumpkindb.toml", config::FileFormat::Toml));
+    let _ = config::merge(config::File::new(args.value_of("config").unwrap(),
+                                            config::FileFormat::Toml));
     let _ = config::set_default("server.port", 9981);
     let _ = config::set_default("storage.path", "pumpkin.db");
     let storage_path = config::get_str("storage.path").unwrap().into_owned();
