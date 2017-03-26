@@ -12,7 +12,6 @@ authors = ["Guillaume Gauvrit <guillaume@gauvr.it>",
            "Yurii Rashkovskii <yrashk@gmail.com>"]
 
 [dependencies]
-nom = "^2.1"
 snowflake = { git = "https://github.com/yrashk/snowflake.git", branch="pub-fields" }
 lmdb-zero = "0.4.0"
 config = "0.3.1"

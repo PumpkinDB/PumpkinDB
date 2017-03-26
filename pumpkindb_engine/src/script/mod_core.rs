@@ -14,7 +14,7 @@ use std::marker::PhantomData;
 
 use std::collections::BTreeMap;
 
-use nom;
+use pumpkinscript;
 use num_bigint::BigUint;
 use num_traits::{Zero, One};
 use core::ops::Sub;
@@ -55,7 +55,7 @@ lazy_static! {
       let ref defs : Vec<Vec<u8>> = *BUILTIN_DEFS;
       for definition in defs {
           match binparser::instruction(definition.as_slice()) {
-              nom::IResult::Done(&[0x81, b':', ref rest..], _) => {
+              pumpkinscript::ParseResult::Done(&[0x81, b':', ref rest..], _) => {
                   let instruction = &definition[0..definition.len() - rest.len() - 2];
                   map.insert(instruction, Vec::from(rest));
               },
@@ -346,7 +346,7 @@ impl<'a> Handler<'a> {
         let instruction = stack_pop!(env);
         let value = stack_pop!(env);
         match binparser::instruction(instruction) {
-            nom::IResult::Done(_, _) => {
+            pumpkinscript::ParseResult::Done(_, _) => {
                 let slice = alloc_slice!(value.len() + offset_by_size(value.len()), env);
                 write_size_into_slice!(value.len(), slice);
                 let offset = offset_by_size(value.len());
@@ -371,7 +371,7 @@ impl<'a> Handler<'a> {
         let instruction = stack_pop!(env);
         let value = stack_pop!(env);
         match binparser::instruction(instruction) {
-            nom::IResult::Done(_, _) => {
+            pumpkinscript::ParseResult::Done(_, _) => {
                 #[cfg(feature = "scoped_dictionary")]
                 {
                     let mut dict = env.dictionary.pop().unwrap();

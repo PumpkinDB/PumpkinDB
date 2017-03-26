@@ -9,7 +9,6 @@
 extern crate mio;
 extern crate memmap;
 extern crate byteorder;
-extern crate nom;
 extern crate rand;
 extern crate num_cpus;
 #[macro_use]

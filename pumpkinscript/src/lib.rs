@@ -101,3 +101,5 @@ pub enum ParseError {
     /// Unparseable remainder
     Superfluous(Vec<u8>),
 }
+
+pub use nom::IResult as ParseResult;

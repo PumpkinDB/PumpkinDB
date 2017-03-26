@@ -12,9 +12,6 @@ extern crate matches;
 #[cfg(test)]
 extern crate test;
 
-// Parser
-extern crate nom;
-
 extern crate core;
 
 extern crate num_bigint;
