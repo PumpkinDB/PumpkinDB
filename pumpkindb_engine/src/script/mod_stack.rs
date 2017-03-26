@@ -9,7 +9,7 @@ use super::{Env, EnvId, Module, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVA
 
 use std::marker::PhantomData;
 
-use nom;
+use pumpkinscript;
 use num_bigint::BigUint;
 use num_traits::ToPrimitive;
 
@@ -246,7 +246,7 @@ impl<'a> Handler<'a> {
         let mut current = stack_pop!(env);
         while current.len() > 0 {
             match binparser::data(current) {
-                nom::IResult::Done(rest, val) => {
+                pumpkinscript::ParseResult::Done(rest, val) => {
                     env.push(&val[offset_by_size(val.len())..]);
                     current = rest
                 }

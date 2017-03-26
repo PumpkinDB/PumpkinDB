@@ -12,7 +12,6 @@ use std::sync::Mutex;
 use std::collections::BTreeMap;
 
 use slab;
-use nom;
 use num_bigint::BigUint;
 use num_traits::ToPrimitive;
 use mio::channel as mio_chan;
@@ -83,7 +82,7 @@ impl Server {
                            original_topic == "unsubscriptions".as_bytes() {
                             let mut input = Vec::from(message);
                             let topic = match binparser::data(input.clone().as_slice()) {
-                                nom::IResult::Done(rest, data) => {
+                                pumpkinscript::ParseResult::Done(rest, data) => {
                                     let (_, size) = binparser::data_size(data).unwrap();
                                     input = Vec::from(rest);
                                     Vec::from(&data[pumpkinscript::offset_by_size(size)..])
@@ -92,7 +91,7 @@ impl Server {
                             };
                             let token = Token(match binparser::data(input.clone()
                                 .as_slice()) {
-                                nom::IResult::Done(_, data) => {
+                                pumpkinscript::ParseResult::Done(_, data) => {
                                     let (_, size) = binparser::data_size(data).unwrap();
                                     BigUint::from_bytes_be(&data[script::offset_by_size(size)..])
                                         .to_u64()

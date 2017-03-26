@@ -6,7 +6,6 @@
 
 
 extern crate config;
-extern crate nom;
 extern crate rustyline;
 extern crate ansi_term;
 extern crate uuid;
@@ -140,7 +139,7 @@ fn main() {
                                     let mut s = String::new();
                                     while input.len() > 0 {
                                         match pumpkinscript::binparser::data(input.clone().as_slice()) {
-                                            nom::IResult::Done(rest, data) => {
+                                            pumpkinscript::ParseResult::Done(rest, data) => {
                                                 let (_, size) = pumpkinscript::binparser::data_size(data)
                                                     .unwrap();
                                                 let data = &data[script::offset_by_size(size)..];

@@ -260,7 +260,7 @@ impl<'a> Env<'a> {
 }
 
 
-use nom;
+use pumpkinscript;
 
 #[inline]
 pub fn offset_by_size(size: usize) -> usize {
@@ -597,7 +597,7 @@ impl<'a> Scheduler<'a> {
         if program.len() == 0 {
             return Ok(());
         }
-        if let nom::IResult::Done(rest, data) = binparser::data(program) {
+        if let pumpkinscript::ParseResult::Done(rest, data) = binparser::data(program) {
             if env.aborting_try.is_empty() {
                 env.push(&data[offset_by_size(data.len())..]);
             }
@@ -605,7 +605,7 @@ impl<'a> Scheduler<'a> {
                 env.program.push(rest);
             }
             Ok(())
-        } else if let nom::IResult::Done(rest, instruction) =
+        } else if let pumpkinscript::ParseResult::Done(rest, instruction) =
             binparser::instruction_or_internal_instruction(program) {
             if rest.len() > 0 {
                 env.program.push(rest);
