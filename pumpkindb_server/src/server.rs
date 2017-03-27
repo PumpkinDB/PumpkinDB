@@ -12,8 +12,6 @@ use std::sync::Mutex;
 use std::collections::BTreeMap;
 
 use slab;
-use num_bigint::BigUint;
-use num_traits::ToPrimitive;
 use mio::channel as mio_chan;
 use mio::*;
 use mio::tcp::*;
@@ -27,15 +25,19 @@ use pumpkinscript::{self, binparser};
 use pumpkindb_engine::{script, pubsub};
 use pumpkindb_engine::script::{EnvId, Sender, RequestMessage, ResponseMessage};
 
+use uuid::Uuid;
+
 pub struct Server {
     senders: Vec<Sender<RequestMessage>>,
     response_sender: Sender<ResponseMessage>,
-    evented_sender: mio_chan::Sender<(Token, Vec<u8>, Vec<u8>)>,
-    receiver: mio_chan::Receiver<(Token, Vec<u8>, Vec<u8>)>,
+    evented_sender: mio_chan::Sender<(Vec<u8>, Vec<u8>, Vec<u8>)>,
+    receiver: mio_chan::Receiver<(Vec<u8>, Vec<u8>, Vec<u8>)>,
     publisher: pubsub::PublisherAccessor<Vec<u8>>,
     sock: TcpListener,
     token: Token,
     conns: Slab<Connection>,
+    session_token: BTreeMap<Vec<u8>, Token>,
+    token_session: BTreeMap<Token, Vec<u8>>,
     events: Events,
 }
 
@@ -57,6 +59,8 @@ impl Server {
             publisher: publisher,
             token: Token(10_000_000),
             conns: Slab::with_capacity(128),
+            session_token: BTreeMap::new(),
+            token_session: BTreeMap::new(),
             events: Events::with_capacity(1024),
         }
     }
@@ -73,6 +77,7 @@ impl Server {
             let publisher = publisher.lock().unwrap();
             let (sender, receiver) = mpsc::channel();
             publisher.subscribe(Vec::from("subscriptions"), sender.clone());
+            publisher.subscribe(Vec::from("unsubscriptions"), sender.clone());
             let mut map = BTreeMap::new();
 
             loop {
@@ -89,39 +94,39 @@ impl Server {
                                 }
                                 _ => continue,
                             };
-                            let token = Token(match binparser::data(input.clone()
-                                .as_slice()) {
+                            let session = match binparser::data(&input) {
                                 pumpkinscript::ParseResult::Done(_, data) => {
                                     let (_, size) = binparser::data_size(data).unwrap();
-                                    BigUint::from_bytes_be(&data[script::offset_by_size(size)..])
-                                        .to_u64()
-                                        .unwrap()
-                                }
-                                _ => continue,
-                            } as usize);
+                                    Vec::from(&data[script::offset_by_size(size)..])
+                                },
+                                _ => continue
+                            };
                             if original_topic == "subscriptions".as_bytes() {
-                                if !map.contains_key(&topic) {
+                                let subscribed = map.contains_key(&topic);
+                                if !subscribed {
                                     map.insert(topic.clone(), Vec::new());
                                 }
-                                let mut tokens = map.remove(&topic).unwrap();
-                                tokens.push(token);
-                                map.insert(topic.clone(), tokens);
-                                publisher.subscribe(topic, sender.clone());
+                                let mut sessions = map.remove(&topic).unwrap();
+                                sessions.push(session);
+                                map.insert(topic.clone(), sessions);
+                                if !subscribed {
+                                    publisher.subscribe(topic, sender.clone());
+                                }
                             } else {
                                 if map.contains_key(&topic) {
-                                    let tokens = map.remove(&topic).unwrap();
-                                    let new_tokens =
-                                        tokens.into_iter().filter(|t| t.0 != token.0).collect();
-                                    map.insert(topic.clone(), new_tokens);
+                                    let sessions = map.remove(&topic).unwrap();
+                                    let new_sessions: Vec<Vec<u8>> =
+                                        sessions.into_iter().filter(|s| *s != session).collect();
+                                    map.insert(topic.clone(), new_sessions);
                                 }
                             }
                             let _ = callback.send(());
                         } else {
                             let _ = callback.send(());
                             if map.contains_key(&original_topic) {
-                                for token in map.get(&original_topic).unwrap() {
+                                for session in map.get(&original_topic).unwrap() {
                                     let _ =
-                                        evented_sender.send((*token,
+                                        evented_sender.send((session.clone(),
                                                              original_topic.clone(),
                                                              message.clone()));
                                 }
@@ -129,7 +134,7 @@ impl Server {
                         }
                     }
                     Err(err) => {
-                        println!("{:?}", err);
+                        error!("{:?}", err);
                     }
                 }
             }
@@ -180,14 +185,26 @@ impl Server {
 
         for token in reset_tokens {
             self.conns.remove(token);
+            if let Some(session) = self.token_session.remove(&token) {
+                let _ = self.session_token.remove(&session);
+            }
         }
     }
 
     fn ready(&mut self, poll: &mut Poll, token: Token, event: Ready) {
         if token == Token(1000000) {
-            let (token, _, msg) = self.receiver.try_recv().unwrap();
-            let _ = self.find_connection_by_token(token).send_message(Rc::new(msg));
-            self.find_connection_by_token(token).mark_idle();
+            let (session, _, msg) = self.receiver.try_recv().unwrap();
+            let _ = poll.reregister(&self.receiver,
+                            Token(1000000),
+                            Ready::all(),
+                            PollOpt::edge());
+            let target = match self.session_token.get(&session) {
+                Some(target) => target.clone(),
+                None => return
+            };
+            let conn = self.find_connection_by_token(target);
+            let _ = conn.send_message(Rc::new(msg));
+            conn.mark_idle();
             return;
         }
 
@@ -249,7 +266,11 @@ impl Server {
             };
 
             match self.find_connection_by_token(token).register(poll) {
-                Ok(_) => {}
+                Ok(_) => {
+                    let session = Vec::from(&Uuid::new_v4().as_bytes()[..]);
+                    self.session_token.insert(session.clone(), token);
+                    self.token_session.insert(token, session);
+                }
                 Err(_) => {
                     self.conns.remove(token);
                 }
@@ -258,21 +279,34 @@ impl Server {
     }
 
     fn readable(&mut self, token: Token) -> io::Result<()> {
+        use pumpkinscript::compose::Item::*;
+        use pumpkinscript::compose::Program;
         while let Some(mut message) = self.find_connection_by_token(token).readable()? {
             let id = EnvId::new();
+            let session = self.token_session.get(&token).unwrap();
+            let subscribe_def: Vec<u8> = Program(vec![
+                Data(&session),
+                Data(&[2]), Instruction("WRAP"),
+                Data("subscriptions".as_bytes()), Instruction("SEND")
+            ]).into();
+            let mut subscribe: Vec<u8> = Program(vec![
+                Data(&subscribe_def),
+                InstructionRef("SUBSCRIBE"), Instruction("DEF")]).into();
+
+            let unsubscribe_def: Vec<u8> = Program(vec![
+                Data(&session),
+                Data(&[2]), Instruction("WRAP"),
+                Data("unsubscriptions".as_bytes()), Instruction("SEND")
+            ]).into();
+            let mut unsubscribe: Vec<u8> = Program(vec![
+                Data(&unsubscribe_def),
+                InstructionRef("UNSUBSCRIBE"), Instruction("DEF")]).into();
+
             let mut vec = Vec::new();
-            let mut subscribe = pumpkinscript::parse(format!("[{} 2 WRAP \"subscriptions\" SEND] 'SUBSCRIBE DEF",
-                                              token.0)
-                    .as_str())
-                .unwrap();
-            let mut unsubscribe = pumpkinscript::parse(format!("[{} 2 WRAP \"unsubscriptions\" SEND] \
-                                                 'UNSUBSCRIBE DEF",
-                                                token.0)
-                    .as_str())
-                .unwrap();
             vec.append(&mut subscribe);
             vec.append(&mut unsubscribe);
             vec.append(&mut message);
+
             let mut rng = thread_rng();
             let index: usize = rng.gen_range(0, self.senders.len() - 1);
             let sender = self.senders.get(index);
@@ -289,4 +323,5 @@ impl Server {
     fn find_connection_by_token(&mut self, token: Token) -> &mut Connection {
         &mut self.conns[token]
     }
+
 }

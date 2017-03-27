@@ -30,6 +30,7 @@ log4rs = { version = "0.6.1", features = ["toml_format"] }
 config = "0.3.1"
 lazy_static = "0.2.2"
 lmdb-zero = "0.4.0"
+uuid = { version = "0.4", features = ["v4"] }
 
 pumpkinscript = { version = "0.2", path = "../pumpkinscript" }
 pumpkindb_engine = { version = "0.2", path = "../pumpkindb_engine" }
