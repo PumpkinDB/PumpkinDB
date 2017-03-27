@@ -23,6 +23,7 @@ extern crate lazy_static;
 extern crate config;
 #[macro_use]
 extern crate clap;
+extern crate uuid;
 
 extern crate pumpkinscript;
 extern crate pumpkindb_engine;
