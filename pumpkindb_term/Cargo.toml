@@ -6,7 +6,8 @@ repository = "https://github.com/PumpkinDB/PumpkinDB"
 homepage = "http://pumpkindb.org"
 keywords = [ "pumpkindb", "database" ]
 
-authors = ["Guillaume Gauvrit <guillaume@gauvr.it>",
+authors = ["Christoph Herzog <chris@theduke.at>",
+           "Guillaume Gauvrit <guillaume@gauvr.it>",
            "Ómar Yasin <omarkj@gmail.com>",
            "Stuart Hinson <stuart.hinson@gmail.com>",
            "Yurii Rashkovskii <yrashk@gmail.com>"]
