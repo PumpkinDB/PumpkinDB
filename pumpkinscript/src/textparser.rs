@@ -177,7 +177,8 @@ named!(string<Vec<u8>>,  alt!(do_parse!(tag!(b"\"\"") >> (vec![0])) |
                                          escaped!(is_not!("\"\\"), '\\', one_of!("\"n\\")),
                                          char!('"')) >>
                               (string_to_vec(str)))));
-named!(comment<Vec<u8>>, do_parse!(delimited!(char!('('), is_not!(")"), char!(')')) >> (vec![])));
+named!(comment<Vec<u8>>, do_parse!(delimited!(char!('('), opt!(is_not!(")")), char!(')')) >>
+                               (vec![])));
 named!(item<Vec<u8>>, alt!(comment | binary | string | uint | sint |
                            wrap | instructionref | instruction));
 
@@ -347,6 +348,12 @@ mod tests {
     #[test]
     fn test_comment() {
         let script = parse("1 (hello) 2").unwrap();
+        assert_eq!(script, parse("1 2").unwrap());
+    }
+
+    #[test]
+    fn test_empty_comment() {
+        let script = parse("1 () 2").unwrap();
         assert_eq!(script, parse("1 2").unwrap());
     }
 
