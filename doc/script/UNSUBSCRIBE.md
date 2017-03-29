@@ -4,7 +4,7 @@
 
 Unsubscribes the connection from a topic
 
-Input stack: `topic`
+Input stack: `subscription`
 
 Output stack: ``
 
@@ -14,7 +14,7 @@ topic it previously subscribed to.
 {% common -%}
 
 ```
-PumpkinDB> "topic" SUBSCRIBE
+PumpkinDB> "topic" SUBSCRIBE UNSUBSCRIBE
 ```
 
 {% endmethod %}
@@ -29,5 +29,6 @@ Runtime allocations necessary for the server
 
 ## Tests
 
-No tests defined as this functionality is currently provided by the server,
-not the scheduler.
+```test
+empty_stack : [UNSUBSCRIBE] TRY UNWRAP 0x04 EQUAL?.
+```

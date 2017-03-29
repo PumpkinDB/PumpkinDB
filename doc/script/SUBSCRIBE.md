@@ -6,15 +6,16 @@ Subscribes the connection to a topic
 
 Input stack: `topic`
 
-Output stack: -
+Output stack: `subscription`
 
 `SUBSCRIBE` allows connected client to subscribe any message topic
-on the server.
+on the server. Pushes subscription identifier back to the top of the stack.
 
 {% common -%}
 
 ```
 PumpkinDB> "topic" SUBSCRIBE
+0xea60d7d866144e0184ac8c9b462d0737
 ```
 
 {% endmethod %}
@@ -29,5 +30,6 @@ Runtime allocations necessary for the server
 
 ## Tests
 
-No tests defined as this functionality is currently provided by the server,
-not the scheduler.
+```test
+empty_stack : [SUBSCRIBE] TRY UNWRAP 0x04 EQUAL?.
+```

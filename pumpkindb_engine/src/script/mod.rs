@@ -64,6 +64,7 @@ use std::collections::BTreeMap;
 pub mod envheap;
 
 use self::envheap::EnvHeap;
+use super::messaging;
 
 /// `instruction!` macro is used to define a built-in instruction, its signature (if applicable)
 /// and representation
@@ -141,6 +142,7 @@ pub struct Env<'a> {
     tracking_errors: usize,
     aborting_try: Vec<Error>,
     send_ack: Option<mpsc::Receiver<()>>,
+    published_message_callback: Option<Box<messaging::PublishedMessageCallback + Send>>,
 }
 
 impl<'a> std::fmt::Debug for Env<'a> {
@@ -185,6 +187,7 @@ impl<'a> Env<'a> {
             tracking_errors: 0,
             aborting_try: Vec::new(),
             send_ack: None,
+            published_message_callback: None,
         })
     }
 
@@ -257,6 +260,18 @@ impl<'a> Env<'a> {
             self.dictionary.push(BTreeMap::new());
         }
     }
+
+    pub fn set_published_message_callback(&mut self,
+                                          callback: Box<messaging::PublishedMessageCallback + Send>) {
+        self.published_message_callback = Some(callback);
+    }
+
+    pub fn published_message_callback(&self) -> Option<Box<messaging::PublishedMessageCallback + Send>> {
+        match self.published_message_callback {
+            None => None,
+            Some(ref cb) => Some(cb.cloned())
+        }
+    }
 }
 
 
@@ -285,11 +300,11 @@ pub type Sender<T> = mpsc::Sender<T>;
 pub type Receiver<T> = mpsc::Receiver<T>;
 
 /// Communication messages used to talk with the [Scheduler](struct.Scheduler.html) thread.
-#[derive(Debug)]
 pub enum RequestMessage {
     /// Requests scheduling a new environment with a given
     /// id and a program.
-    ScheduleEnv(EnvId, Vec<u8>, Sender<ResponseMessage>),
+    ScheduleEnv(EnvId, Vec<u8>, Sender<ResponseMessage>,
+                Box<messaging::PublishedMessageCallback + Send>),
     /// Requests Scheduler shutdown
     Shutdown,
 }
@@ -309,10 +324,10 @@ pub type TrySendError<T> = std::sync::mpsc::TrySendError<T>;
 
 use storage;
 use timestamp;
-use pubsub;
 
 pub mod queue;
 pub mod mod_core;
+pub mod mod_msg;
 pub mod mod_stack;
 pub mod mod_numbers;
 pub mod mod_binaries;
@@ -371,6 +386,10 @@ macro_rules! for_each_module {
            let ref mut $module = $scheduler.json;
            $expr
         }
+        {
+           let ref mut $module = $scheduler.msg;
+           $expr
+        }
     }};
 }
 
@@ -380,7 +399,7 @@ macro_rules! for_each_module {
 /// # Example
 ///
 /// ```norun
-/// let mut scheduler = Scheduler::new(&env, &db); // lmdb comes from outside
+/// let mut scheduler = Scheduler::new(&db, publisher, subscriber, timestamp, receiver);
 ///
 /// let sender = scheduler.sender();
 /// let handle = thread::spawn(move || {
@@ -428,6 +447,8 @@ pub struct Scheduler<'a> {
     hlc: mod_hlc::Handler<'a>,
     #[cfg(feature = "static_module_dispatch")]
     json: mod_json::Handler<'a>,
+    #[cfg(feature = "static_module_dispatch")]
+    msg: mod_msg::Handler<'a>,
 }
 
 unsafe impl<'a> Send for Scheduler<'a> {}
@@ -456,27 +477,30 @@ impl<'a> Scheduler<'a> {
     /// * Response sender
     /// * Internal sender
     /// * Request receiver
-    pub fn new(db: &'a storage::Storage<'a>,
-               publisher: pubsub::PublisherAccessor<Vec<u8>>,
+    pub fn new<P: 'a, S: 'a>(db: &'a storage::Storage<'a>,
+               publisher: P,
+               subscriber: S,
                timestamp_state: Arc<timestamp::Timestamp>,
                receiver: Receiver<RequestMessage>)
-               -> Self {
+               -> Self where P : messaging::Publisher,
+                             S : messaging::Subscriber {
         #[cfg(not(feature = "static_module_dispatch"))]
         return Scheduler {
             inbox: receiver,
-            modules: vec![Box::new(mod_core::Handler::new(publisher)),
+            modules: vec![Box::new(mod_core::Handler::new()),
                           Box::new(mod_stack::Handler::new()),
                           Box::new(mod_binaries::Handler::new()),
                           Box::new(mod_numbers::Handler::new()),
                           Box::new(mod_storage::Handler::new(db)),
                           Box::new(mod_hash::Handler::new()),
                           Box::new(mod_hlc::Handler::new(timestamp_state)),
-                          Box::new(mod_json::Handler::new())],
+                          Box::new(mod_json::Handler::new()),
+                          Box::new(mod_msg::Handler::new(publisher, subscriber))],
         };
         #[cfg(feature = "static_module_dispatch")]
         return Scheduler {
             inbox: receiver,
-            core: mod_core::Handler::new(publisher),
+            core: mod_core::Handler::new(),
             stack: mod_stack::Handler::new(),
             binaries: mod_binaries::Handler::new(),
             numbers: mod_numbers::Handler::new(),
@@ -484,6 +508,7 @@ impl<'a> Scheduler<'a> {
             hash: mod_hash::Handler::new(),
             hlc: mod_hlc::Handler::new(timestamp_state),
             json: mod_json::Handler::new(),
+            msg: mod_msg::Handler::new(publisher, subscriber),
         };
     }
 
@@ -546,9 +571,10 @@ impl<'a> Scheduler<'a> {
             match message {
                 Err(err) => panic!("error receiving: {:?}", err),
                 Ok(RequestMessage::Shutdown) => break,
-                Ok(RequestMessage::ScheduleEnv(pid, program, chan)) => {
+                Ok(RequestMessage::ScheduleEnv(pid, program, chan, cb)) => {
                     match Env::new() {
                         Ok(mut env) => {
+                            env.set_published_message_callback(cb);
                             match env.alloc(program.len()) {
                                 Ok(slice) => {
                                     slice.copy_from_slice(program.as_slice());
@@ -709,6 +735,7 @@ impl<'a> Scheduler<'a> {
 mod tests {
 
     use pumpkinscript::{parse, offset_by_size};
+    use messaging;
     use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId};
     use std::sync::mpsc;
     use std::sync::Arc;
@@ -718,7 +745,6 @@ mod tests {
     use lmdb;
     use crossbeam;
     use super::binparser;
-    use pubsub;
     use storage;
 
     const _EMPTY: &'static [u8] = b"";

@@ -7,8 +7,6 @@
 use std::io;
 use std::rc::Rc;
 use std::sync::mpsc;
-use std::thread;
-use std::sync::Mutex;
 use std::collections::BTreeMap;
 
 use slab;
@@ -21,18 +19,36 @@ use super::connection::Connection;
 
 type Slab<T> = slab::Slab<T, Token>;
 
-use pumpkinscript::{self, binparser};
-use pumpkindb_engine::{script, pubsub};
+use pumpkindb_engine::messaging;
 use pumpkindb_engine::script::{EnvId, Sender, RequestMessage, ResponseMessage};
 
 use uuid::Uuid;
 
+pub type RelayedPublishedMessage = (Vec<u8>, Vec<u8>, Vec<u8>);
+
+struct RelayedPublishedMessageSender {
+    identifier: Vec<u8>,
+    sender: mio_chan::Sender<RelayedPublishedMessage>
+}
+
+impl messaging::PublishedMessageCallback for RelayedPublishedMessageSender  {
+    fn call(&self, topic: &[u8], message: &[u8]) {
+        let _ = self.sender.send((self.identifier.clone(), topic.to_vec(), message.to_vec()));
+    }
+
+    fn cloned(&self) -> Box<messaging::PublishedMessageCallback + Send> {
+        Box::new(RelayedPublishedMessageSender{
+            identifier: self.identifier.clone(),
+            sender: self.sender.clone(),
+        })
+    }
+}
+
 pub struct Server {
     senders: Vec<Sender<RequestMessage>>,
     response_sender: Sender<ResponseMessage>,
-    evented_sender: mio_chan::Sender<(Vec<u8>, Vec<u8>, Vec<u8>)>,
-    receiver: mio_chan::Receiver<(Vec<u8>, Vec<u8>, Vec<u8>)>,
-    publisher: pubsub::PublisherAccessor<Vec<u8>>,
+    relay_sender: mio_chan::Sender<RelayedPublishedMessage>,
+    relay_receiver: mio_chan::Receiver<RelayedPublishedMessage>,
     sock: TcpListener,
     token: Token,
     conns: Slab<Connection>,
@@ -41,22 +57,20 @@ pub struct Server {
     events: Events,
 }
 
-
 impl Server {
     pub fn new(sock: TcpListener,
-               senders: Vec<Sender<RequestMessage>>,
-               publisher: pubsub::PublisherAccessor<Vec<u8>>)
+               relay_sender: mio_chan::Sender<RelayedPublishedMessage>,
+               relay_receiver: mio_chan::Receiver<RelayedPublishedMessage>,
+               senders: Vec<Sender<RequestMessage>>)
                -> Server {
         let (response_sender, _) = mpsc::channel();
-        let (evented_sender, receiver) = mio_chan::channel();
 
         Server {
             sock: sock,
             senders: senders,
             response_sender: response_sender,
-            evented_sender: evented_sender,
-            receiver: receiver,
-            publisher: publisher,
+            relay_sender: relay_sender,
+            relay_receiver: relay_receiver,
             token: Token(10_000_000),
             conns: Slab::with_capacity(128),
             session_token: BTreeMap::new(),
@@ -69,81 +83,10 @@ impl Server {
 
         self.register(poll)?;
 
-        let publisher = Mutex::new(self.publisher.clone());
-
-        let evented_sender = self.evented_sender.clone();
-
-        thread::spawn(move || {
-            let publisher = publisher.lock().unwrap();
-            let (sender, receiver) = mpsc::channel();
-            publisher.subscribe(Vec::from("subscriptions"), sender.clone());
-            publisher.subscribe(Vec::from("unsubscriptions"), sender.clone());
-            let mut map = BTreeMap::new();
-
-            loop {
-                match receiver.recv() {
-                    Ok((original_topic, message, callback)) => {
-                        if original_topic == "subscriptions".as_bytes() ||
-                           original_topic == "unsubscriptions".as_bytes() {
-                            let mut input = Vec::from(message);
-                            let topic = match binparser::data(input.clone().as_slice()) {
-                                pumpkinscript::ParseResult::Done(rest, data) => {
-                                    let (_, size) = binparser::data_size(data).unwrap();
-                                    input = Vec::from(rest);
-                                    Vec::from(&data[pumpkinscript::offset_by_size(size)..])
-                                }
-                                _ => continue,
-                            };
-                            let session = match binparser::data(&input) {
-                                pumpkinscript::ParseResult::Done(_, data) => {
-                                    let (_, size) = binparser::data_size(data).unwrap();
-                                    Vec::from(&data[script::offset_by_size(size)..])
-                                },
-                                _ => continue
-                            };
-                            if original_topic == "subscriptions".as_bytes() {
-                                let subscribed = map.contains_key(&topic);
-                                if !subscribed {
-                                    map.insert(topic.clone(), Vec::new());
-                                }
-                                let mut sessions = map.remove(&topic).unwrap();
-                                sessions.push(session);
-                                map.insert(topic.clone(), sessions);
-                                if !subscribed {
-                                    publisher.subscribe(topic, sender.clone());
-                                }
-                            } else {
-                                if map.contains_key(&topic) {
-                                    let sessions = map.remove(&topic).unwrap();
-                                    let new_sessions: Vec<Vec<u8>> =
-                                        sessions.into_iter().filter(|s| *s != session).collect();
-                                    map.insert(topic.clone(), new_sessions);
-                                }
-                            }
-                            let _ = callback.send(());
-                        } else {
-                            let _ = callback.send(());
-                            if map.contains_key(&original_topic) {
-                                for session in map.get(&original_topic).unwrap() {
-                                    let _ =
-                                        evented_sender.send((session.clone(),
-                                                             original_topic.clone(),
-                                                             message.clone()));
-                                }
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        error!("{:?}", err);
-                    }
-                }
-            }
-        });
-
-        let _ = poll.register(&self.receiver,
-                      Token(1000000),
-                      Ready::all(),
-                      PollOpt::edge())
+        let _ = poll.register(&self.relay_receiver,
+                              Token(1000000),
+                              Ready::all(),
+                              PollOpt::edge())
             .or_else(|e| Err(e));
 
         loop {
@@ -193,11 +136,11 @@ impl Server {
 
     fn ready(&mut self, poll: &mut Poll, token: Token, event: Ready) {
         if token == Token(1000000) {
-            let (session, _, msg) = self.receiver.try_recv().unwrap();
-            let _ = poll.reregister(&self.receiver,
-                            Token(1000000),
-                            Ready::all(),
-                            PollOpt::edge());
+            let (session, _, msg) = self.relay_receiver.try_recv().unwrap();
+            let _ = poll.reregister(&self.relay_receiver,
+                                    Token(1000000),
+                                    Ready::all(),
+                                    PollOpt::edge());
             let target = match self.session_token.get(&session) {
                 Some(target) => target.clone(),
                 None => return
@@ -279,41 +222,21 @@ impl Server {
     }
 
     fn readable(&mut self, token: Token) -> io::Result<()> {
-        use pumpkinscript::compose::Item::*;
-        use pumpkinscript::compose::Program;
-        while let Some(mut message) = self.find_connection_by_token(token).readable()? {
+        while let Some(message) = self.find_connection_by_token(token).readable()? {
             let id = EnvId::new();
             let session = self.token_session.get(&token).unwrap();
-            let subscribe_def: Vec<u8> = Program(vec![
-                Data(&session),
-                Data(&[2]), Instruction("WRAP"),
-                Data("subscriptions".as_bytes()), Instruction("SEND")
-            ]).into();
-            let mut subscribe: Vec<u8> = Program(vec![
-                Data(&subscribe_def),
-                InstructionRef("SUBSCRIBE"), Instruction("DEF")]).into();
-
-            let unsubscribe_def: Vec<u8> = Program(vec![
-                Data(&session),
-                Data(&[2]), Instruction("WRAP"),
-                Data("unsubscriptions".as_bytes()), Instruction("SEND")
-            ]).into();
-            let mut unsubscribe: Vec<u8> = Program(vec![
-                Data(&unsubscribe_def),
-                InstructionRef("UNSUBSCRIBE"), Instruction("DEF")]).into();
-
-            let mut vec = Vec::new();
-            vec.append(&mut subscribe);
-            vec.append(&mut unsubscribe);
-            vec.append(&mut message);
 
             let mut rng = thread_rng();
             let index: usize = rng.gen_range(0, self.senders.len() - 1);
             let sender = self.senders.get(index);
             let _ = sender.unwrap()
                 .send(RequestMessage::ScheduleEnv(id,
-                                                  Vec::from(vec),
-                                                  self.response_sender.clone()));
+                                                  message,
+                                                  self.response_sender.clone(),
+                                                  Box::new(RelayedPublishedMessageSender {
+                                                      identifier: session.to_vec(),
+                                                      sender: self.relay_sender.clone(),
+                                                  })));
 
         }
 

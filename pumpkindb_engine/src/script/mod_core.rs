@@ -8,7 +8,6 @@ use pumpkinscript::{parse_bin, binparser, textparser};
 
 use super::{Env, EnvId, Module, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
             offset_by_size, STACK_TRUE, STACK_FALSE};
-use super::super::pubsub;
 
 use std::marker::PhantomData;
 
@@ -38,9 +37,6 @@ instruction!(NOT, (a => c), b"\x83NOT");
 instruction!(AND, (a, b => c), b"\x83AND");
 instruction!(OR, (a, b => c), b"\x82OR");
 
-// Category: pubsub
-instruction!(SEND, (a => ), b"\x84SEND");
-
 // Category: experimental features
 instruction!(FEATUREQ, (a => b), b"\x88FEATURE?");
 
@@ -67,7 +63,6 @@ lazy_static! {
 }
 
 pub struct Handler<'a> {
-    publisher: pubsub::PublisherAccessor<Vec<u8>>,
     phantom: PhantomData<&'a ()>,
 }
 
@@ -86,16 +81,14 @@ impl<'a> Module<'a> for Handler<'a> {
         try_instruction!(env, self.handle_and(env, instruction, pid));
         try_instruction!(env, self.handle_or(env, instruction, pid));
         try_instruction!(env, self.handle_ifelse(env, instruction, pid));
-        try_instruction!(env, self.handle_send(env, instruction, pid));
         try_instruction!(env, self.handle_featurep(env, instruction, pid));
         Err(Error::UnknownInstruction)
     }
 }
 
 impl<'a> Handler<'a> {
-    pub fn new(publisher: pubsub::PublisherAccessor<Vec<u8>>) -> Self {
+    pub fn new() -> Self {
         Handler {
-            publisher: publisher,
             phantom: PhantomData,
         }
     }
@@ -386,24 +379,6 @@ impl<'a> Handler<'a> {
         }
     }
 
-
-    #[inline]
-    fn handle_send(&mut self,
-                   env: &mut Env<'a>,
-                   instruction: &'a [u8],
-                   _: EnvId)
-                   -> PassResult<'a> {
-        instruction_is!(env, instruction, SEND);
-        let topic = stack_pop!(env);
-        let data = stack_pop!(env);
-
-        let receiver = self.publisher.send_async(Vec::from(topic), Vec::from(data));
-
-        env.send_ack = Some(receiver);
-
-        Ok(())
-    }
-
     #[inline]
     #[allow(unused_variables)]
     fn handle_featurep(&mut self,
@@ -432,75 +407,19 @@ impl<'a> Handler<'a> {
 #[allow(unused_variables, unused_must_use, unused_mut)]
 mod tests {
 
-    use pumpkinscript::{parse, offset_by_size};
-    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId};
+    use pumpkinscript::parse;
+    use messaging;
+    use script::{Scheduler, RequestMessage, ResponseMessage, EnvId};
     use std::sync::mpsc;
     use std::sync::Arc;
     use std::fs;
-    use std::thread;
     use tempdir::TempDir;
     use lmdb;
     use crossbeam;
-    use super::binparser;
-    use pubsub;
     use storage;
     use timestamp;
 
     const _EMPTY: &'static [u8] = b"";
-
-    use std::time::Duration;
-
-    #[test]
-    fn send() {
-        eval!("\"Hello\" \"Topic\" SEND",
-              env,
-              result,
-              publisher_accessor,
-              {
-                  let (sender1, receiver1) = mpsc::channel();
-                  publisher_accessor.subscribe(Vec::from("Topic"), sender1);
-
-                  let (sender0, receiver0) = mpsc::channel();
-                  thread::spawn(move || {
-                match receiver1.recv() {
-                    Ok((topic, message, callback)) => {
-                        callback.send(());
-                        sender0.send((topic, message));
-                    }
-                    e => panic!("unexpected result {:?}", e),
-                };
-
-            });
-
-              },
-              {
-                  assert!(!result.is_err());
-
-                  let result = receiver0.recv_timeout(Duration::from_secs(1)).unwrap();
-                  assert_eq!(result, (Vec::from("Topic"), Vec::from("Hello")));
-              });
-
-        eval!("\"Hello\" \"Topic1\" SEND",
-              env,
-              result,
-              publisher_accessor,
-              {
-                  let (sender, receiver) = mpsc::channel();
-                  publisher_accessor.subscribe(Vec::from("Topic"), sender);
-              },
-              {
-                  assert!(!result.is_err());
-                  assert!(receiver.recv_timeout(Duration::from_secs(1)).is_err());
-              });
-
-        eval!("\"Topic\" SEND", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-
-        eval!("SEND", env, result, {
-            assert_error!(result, "[\"Empty stack\" [] 4]");
-        });
-    }
 
     use test::Bencher;
 

@@ -47,3 +47,5 @@ extern crate memmap;
 
 #[macro_use]
 extern crate pumpkinscript;
+
+extern crate uuid;

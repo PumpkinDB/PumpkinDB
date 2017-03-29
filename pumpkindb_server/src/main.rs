@@ -42,7 +42,7 @@ use mio::*;
 use mio::tcp::*;
 use clap::{App, Arg};
 
-use pumpkindb_engine::{script, pubsub, storage, timestamp};
+use pumpkindb_engine::{script, storage, timestamp};
 
 lazy_static! {
  static ref ENVIRONMENT: lmdb::Environment = {
@@ -54,9 +54,14 @@ lazy_static! {
  };
 }
 
+use mio::channel as mio_chan;
+
+
+
 pub fn run(port: i64,
            senders: Vec<script::Sender<script::RequestMessage>>,
-           publisher: pubsub::PublisherAccessor<Vec<u8>>) {
+           relay_sender: mio_chan::Sender<server::RelayedPublishedMessage>,
+           relay_receiver: mio_chan::Receiver<server::RelayedPublishedMessage>) {
     let addr = format!("0.0.0.0:{}", port).parse().unwrap();
 
     info!("Listening on {}", addr);
@@ -65,7 +70,7 @@ pub fn run(port: i64,
 
     let mut poll = Poll::new().expect("Failed to initialize polling");
 
-    let mut server = server::Server::new(sock, senders, publisher);
+    let mut server = server::Server::new(sock, relay_sender, relay_receiver, senders);
     server.run(&mut poll).expect("Failed to run server");
 
 }
@@ -147,28 +152,33 @@ fn main() {
 
     let mut senders = Vec::new();
 
-    let mut publisher = pubsub::Publisher::new();
-    let publisher_accessor = publisher.accessor();
-    let _ = thread::spawn(move || publisher.run());
+    let (relay_sender, relay_receiver) = mio_chan::channel();
+    let mut client_messaging = pumpkindb_engine::messaging::Simple::new();
+    let publisher_accessor = client_messaging.accessor();
+    let subscriber_accessor = client_messaging.accessor();
+    let _ = thread::spawn(move || client_messaging.run());
     let storage = Arc::new(storage::Storage::new(&ENVIRONMENT));
     let timestamp = Arc::new(timestamp::Timestamp::new(Some(hlc_state)));
 
     for i in 0..num_cpus::get() {
         info!("Starting scheduler on core {}.", i);
         let (sender, receiver) = script::Scheduler::create_sender();
-        let publisher_clone = publisher_accessor.clone();
         let storage_clone = storage.clone();
         let timestamp_clone = timestamp.clone();
+
+        let publisher_accessor1 = publisher_accessor.clone();
+        let subscriber_accessor1 = subscriber_accessor.clone();
+
         thread::spawn(move || {
             let mut scheduler =
-                script::Scheduler::new(&storage_clone, publisher_clone, timestamp_clone, receiver);
+                script::Scheduler::new(&storage_clone, publisher_accessor1, subscriber_accessor1,
+                                       timestamp_clone, receiver);
             scheduler.run()
         });
         senders.push(sender)
     }
 
     run(config::get_int("server.port").unwrap(),
-                senders,
-                publisher_accessor.clone());
+                senders, relay_sender, relay_receiver);
 
 }

@@ -111,7 +111,7 @@
    * [DEF](script/DEF.md)
    * [SET](script/SET.md)
  * Messaging
-   * [SEND](script/SEND.md)
+   * [PUBLISH](script/PUBLISH.md)
    * [SUBSCRIBE](script/SUBSCRIBE.md)
    * [UNSUBSCRIBE](script/UNSUBSCRIBE.md)
  * Sequencing

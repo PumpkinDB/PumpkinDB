@@ -109,12 +109,12 @@ fn main() {
                                                             Data(uuid.as_bytes()),
                                                             InstructionRef("topic"),
                                                             Instruction("SET"),
-                                                            Instruction("topic"),
-                                                            Instruction("SUBSCRIBE"),
                                                             Instruction("STACK"),
                                                             Instruction("topic"),
-                                                            Instruction("SEND"),
+                                                            Instruction("SUBSCRIBE"),
+                                                            Instruction("SWAP"),
                                                             Instruction("topic"),
+                                                            Instruction("PUBLISH"),
                                                             Instruction("UNSUBSCRIBE")])
                                 .into();
                             let mut buf = [0u8; 4];

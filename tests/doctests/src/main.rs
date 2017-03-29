@@ -30,7 +30,7 @@ use tempdir::TempDir;
 
 use pumpkindb_engine::script::{RequestMessage, ResponseMessage, EnvId, Env, Scheduler};
 use pumpkinscript::{textparser, binparser};
-use pumpkindb_engine::{pubsub, storage, timestamp};
+use pumpkindb_engine::{messaging, storage, timestamp};
 
 fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp>) {
     let dir = TempDir::new("pumpkindb").unwrap();
@@ -45,22 +45,27 @@ fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp>) {
     let name = String::from(std::str::from_utf8(name).unwrap());
     let db = storage::Storage::new(&env);
     crossbeam::scope(|scope| {
-        let mut publisher = pubsub::Publisher::new();
-        let publisher_accessor = publisher.accessor();
-        let publisher_thread = scope.spawn(move || publisher.run());
-        let publisher_clone = publisher_accessor.clone();
+        let mut simple = messaging::Simple::new();
+        let simple_accessor = simple.accessor();
+        let publisher_thread = scope.spawn(move || simple.run());
+        let publisher_clone = simple_accessor.clone();
+        let subscriber_clone = simple_accessor.clone();
         let timestamp_clone = timestamp.clone();
         let (sender, receiver) = Scheduler::create_sender();
         let handle = scope.spawn(move || {
-            let mut scheduler = Scheduler::new(&db, publisher_clone, timestamp_clone, receiver);
+            let mut scheduler = Scheduler::new(&db,
+                                               publisher_clone, subscriber_clone,
+                                               timestamp_clone, receiver);
             scheduler.run()
         });
         let (callback, receiver) = mpsc::channel::<ResponseMessage>();
-        let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(), Vec::from(script), callback));
+        let (sender0, _) = mpsc::channel();
+        let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(), Vec::from(script), callback,
+                                                        Box::new(sender0)));
         match receiver.recv() {
             Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
                 let _ = sender.send(RequestMessage::Shutdown);
-                publisher_accessor.shutdown();
+                simple_accessor.shutdown();
                 let mut stack_ = Vec::with_capacity(stack.len());
                 for i in 0..(&stack).len() {
                     stack_.push((&stack[i]).as_slice());
@@ -75,12 +80,12 @@ fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp>) {
             }
             Ok(ResponseMessage::EnvFailed(_, err, _, _)) => {
                 let _ = sender.send(RequestMessage::Shutdown);
-                publisher_accessor.shutdown();
+                simple_accessor.shutdown();
                 panic!("Error while executing {:?}: {:?}", &name, err)
             }
             Err(err) => {
                 let _ = sender.send(RequestMessage::Shutdown);
-                publisher_accessor.shutdown();
+                simple_accessor.shutdown();
                 panic!("recv error: {:?}", err);
             }
         }

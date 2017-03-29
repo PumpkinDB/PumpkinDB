@@ -12,7 +12,6 @@
 include!("crates.rs");
 
 pub mod script;
-#[allow(dead_code)]
-pub mod pubsub;
+pub mod messaging;
 pub mod storage;
 pub mod timestamp;
