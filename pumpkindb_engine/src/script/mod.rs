@@ -819,4 +819,14 @@ mod tests {
                     b);
     }
 
+    #[bench]
+    fn ackermann_stack(b: &mut Bencher) {
+        // HT @5HT
+        bench_eval!("[OVER 0 EQUAL? [1 UINT/ADD NIP] \
+        [DUP 0 EQUAL? [DROP 1 UINT/SUB 1 ack] [OVER 1 UINT/SUB -ROT 1 UINT/SUB ack ack] IFELSE] IFELSE] \
+        'ack DEF \
+        3 4 ack",
+                    b);
+    }
+
 }
