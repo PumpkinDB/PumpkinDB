@@ -7,11 +7,7 @@ homepage = "http://pumpkindb.org"
 keywords = [ "pumpkindb", "database" ]
 categories = [ "database" ]
 
-authors = ["Christoph Herzog <chris@theduke.at>",
-           "Guillaume Gauvrit <guillaume@gauvr.it>",
-           "Ómar Yasin <omarkj@gmail.com>",
-           "Stuart Hinson <stuart.hinson@gmail.com>",
-           "Yurii Rashkovskii <yrashk@gmail.com>"]
+authors = ["Yurii Rashkovskii <yrashk@gmail.com>"]
 
 [[bin]]
 doc = false
