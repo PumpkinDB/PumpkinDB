@@ -16,8 +16,7 @@ use std::collections::BTreeMap;
 
 use pumpkinscript;
 use num_bigint::BigUint;
-use num_traits::{Zero, One};
-use core::ops::Sub;
+use num_traits::Zero;
 
 // Category: Control flow
 #[cfg(feature = "scoped_dictionary")]
@@ -313,31 +312,11 @@ impl<'a> Handler<'a> {
         let v = stack_pop!(env);
 
         let counter = BigUint::from_bytes_be(count);
-        if counter.is_zero() {
-            Ok(())
-        } else {
-            let mut vec = Vec::new();
-            if counter != BigUint::one() {
-                // inject the prefix for the code
-                let mut header = vec![0;offset_by_size(v.len())];
-                write_size_into_slice!(v.len(), header.as_mut_slice());
-                vec.append(&mut header);
-                vec.extend_from_slice(v);
-                // inject the decremented counter
-                let counter = counter.sub(BigUint::one());
-                let mut counter_bytes = counter.to_bytes_be();
-                let mut header = vec![0;offset_by_size(counter_bytes.len())];
-                write_size_into_slice!(counter_bytes.len(), header.as_mut_slice());
-                vec.append(&mut header);
-                vec.append(&mut counter_bytes);
-                // inject TIMES
-                vec.extend_from_slice(TIMES);
-            }
-            let slice = alloc_and_write!(vec.as_slice(), env);
-            env.program.push(slice);
+        use num_iter;
+        for _ in num_iter::range(BigUint::zero(), counter) {
             env.program.push(v);
-            Ok(())
         }
+        Ok(())
     }
 
     #[inline]
