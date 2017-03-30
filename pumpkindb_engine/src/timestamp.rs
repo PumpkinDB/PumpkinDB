@@ -47,6 +47,19 @@ impl Timestamp {
         let _ = unsafe { &now.write_bytes(&mut state.as_mut_slice()).unwrap() };
         now
     }
+
+    pub fn observe(&self, other_time: &hlc::Timestamp<hlc::WallT>) -> Result<(), ()> {
+        let mut clock = self.clock.lock().unwrap();
+        match clock.0.observe(&other_time) {
+            Ok(_) => {
+                let _ = unsafe { 
+                    clock.0.now().write_bytes(&mut clock.1.as_mut_slice()).unwrap() 
+                };
+                Ok(())
+            },
+            Err(_) => Err(())
+        }
+    }
 }
 
 #[cfg(test)]
@@ -80,6 +93,21 @@ mod tests {
         let p1 = timestamp.hlc();
         let p2 = timestamp.hlc();
         assert!(p1 < p2);
+    }
+
+    
+    #[test]
+    fn observe_updates_hlc() {
+        let timestamp = Timestamp::new(None);
+        let t0 = timestamp.hlc();
+        let mut wall_clock = hlc::Clock::wall();
+        let wall_epoch = t0.epoch + 1;
+        wall_clock.set_epoch(wall_epoch);
+        timestamp.observe(&wall_clock.now()).unwrap();
+
+        let t1 = timestamp.hlc();
+
+        assert_eq!(t1.epoch, wall_epoch);
     }
 
     use test::Bencher;
