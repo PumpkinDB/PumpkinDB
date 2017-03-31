@@ -141,7 +141,6 @@ pub struct Env<'a> {
     // current TRY status
     tracking_errors: usize,
     aborting_try: Vec<Error>,
-    send_ack: Option<mpsc::Receiver<()>>,
     published_message_callback: Option<Box<messaging::PublishedMessageCallback + Send>>,
 }
 
@@ -186,7 +185,6 @@ impl<'a> Env<'a> {
             dictionary: dictionary,
             tracking_errors: 0,
             aborting_try: Vec::new(),
-            send_ack: None,
             published_message_callback: None,
         })
     }
@@ -599,23 +597,6 @@ impl<'a> Scheduler<'a> {
 
     #[allow(unused_mut)]
     fn pass(&mut self, env: &mut Env<'a>, pid: EnvId) -> PassResult<'a> {
-        // Check if this Env has a pending SEND
-        if env.send_ack.is_some() {
-            match mem::replace(&mut env.send_ack, None) {
-                None => (),
-                Some(rcvr) => {
-                    match rcvr.try_recv() {
-                        Err(mpsc::TryRecvError::Empty) => {
-                            env.send_ack = Some(rcvr);
-                            let _ = env.program.pop(); // reschedule will push it back
-                            return Err(Error::Reschedule);
-                        }
-                        Err(mpsc::TryRecvError::Disconnected) => (),
-                        Ok(()) => (),
-                    }
-                }
-            }
-        }
         if env.program.len() == 0 {
             return Ok(());
         }
