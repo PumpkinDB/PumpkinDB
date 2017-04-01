@@ -324,15 +324,25 @@ use storage;
 use timestamp;
 
 pub mod queue;
+#[cfg(feature="mod_core")]
 pub mod mod_core;
-pub mod mod_msg;
+#[cfg(feature="mod_stack")]
 pub mod mod_stack;
+#[cfg(feature="mod_numbers")]
 pub mod mod_numbers;
+#[cfg(feature="mod_binaries")]
 pub mod mod_binaries;
+#[cfg(feature="mod_storage")]
 pub mod mod_storage;
+#[cfg(feature="mod_hlc")]
 pub mod mod_hlc;
+#[cfg(feature="mod_hash")]
 pub mod mod_hash;
+#[cfg(feature="mod_json")]
 pub mod mod_json;
+#[cfg(feature="mod_msg")]
+pub mod mod_msg;
+
 
 pub trait Module<'a> {
     fn init(&mut self, _: &mut Env<'a>, _: EnvId) {}
@@ -352,34 +362,42 @@ macro_rules! for_each_module {
 #[cfg(feature = "static_module_dispatch")]
 macro_rules! for_each_module {
     ($module: ident, $scheduler : expr, $expr: expr) => {{
+        #[cfg(feature="mod_core")]
         {
            let ref mut $module = $scheduler.core;
            $expr
         }
+        #[cfg(feature="mod_stack")]
         {
            let ref mut $module = $scheduler.stack;
            $expr
         }
+        #[cfg(feature="mod_binaries")]
         {
            let ref mut $module = $scheduler.binaries;
            $expr
         }
+        #[cfg(feature="mod_numbers")]
         {
            let ref mut $module = $scheduler.numbers;
            $expr
         }
+        #[cfg(feature="mod_storage")]
         {
            let ref mut $module = $scheduler.storage;
            $expr
         }
+        #[cfg(feature="mod_hash")]
         {
            let ref mut $module = $scheduler.hash;
            $expr
         }
+        #[cfg(feature="mod_hlc")]
         {
            let ref mut $module = $scheduler.hlc;
            $expr
         }
+        #[cfg(feature="mod_json")]
         {
            let ref mut $module = $scheduler.json;
            $expr
@@ -429,21 +447,21 @@ pub struct Scheduler<'a> {
     inbox: Receiver<RequestMessage>,
     #[cfg(not(feature = "static_module_dispatch"))]
     modules: Vec<Box<Module<'a> + 'a>>,
-    #[cfg(feature = "static_module_dispatch")]
+    #[cfg(all(feature = "static_module_dispatch", feature = "mod_core"))]
     core: mod_core::Handler<'a>,
-    #[cfg(feature = "static_module_dispatch")]
+    #[cfg(all(feature = "static_module_dispatch", feature = "mod_stack"))]
     stack: mod_stack::Handler<'a>,
-    #[cfg(feature = "static_module_dispatch")]
+    #[cfg(all(feature = "static_module_dispatch", feature = "mod_binaries"))]
     binaries: mod_binaries::Handler<'a>,
-    #[cfg(feature = "static_module_dispatch")]
+    #[cfg(all(feature = "static_module_dispatch", feature = "mod_numbers"))]
     numbers: mod_numbers::Handler<'a>,
-    #[cfg(feature = "static_module_dispatch")]
+    #[cfg(all(feature = "static_module_dispatch", feature = "mod_storage"))]
     storage: mod_storage::Handler<'a>,
-    #[cfg(feature = "static_module_dispatch")]
+    #[cfg(all(feature = "static_module_dispatch", feature = "mod_hash"))]
     hash: mod_hash::Handler<'a>,
-    #[cfg(feature = "static_module_dispatch")]
+    #[cfg(all(feature = "static_module_dispatch", feature = "mod_hlc"))]
     hlc: mod_hlc::Handler<'a>,
-    #[cfg(feature = "static_module_dispatch")]
+    #[cfg(all(feature = "static_module_dispatch", feature = "mod_json"))]
     json: mod_json::Handler<'a>,
     #[cfg(feature = "static_module_dispatch")]
     msg: mod_msg::Handler<'a>,
@@ -482,32 +500,56 @@ impl<'a> Scheduler<'a> {
                receiver: Receiver<RequestMessage>)
                -> Self where P : messaging::Publisher,
                              S : messaging::Subscriber {
-        #[cfg(not(feature = "static_module_dispatch"))]
-        return Scheduler {
-            inbox: receiver,
-            modules: vec![Box::new(mod_core::Handler::new()),
-                          Box::new(mod_stack::Handler::new()),
-                          Box::new(mod_binaries::Handler::new()),
-                          Box::new(mod_numbers::Handler::new()),
-                          Box::new(mod_storage::Handler::new(db)),
-                          Box::new(mod_hash::Handler::new()),
-                          Box::new(mod_hlc::Handler::new(timestamp_state)),
-                          Box::new(mod_json::Handler::new()),
-                          Box::new(mod_msg::Handler::new(publisher, subscriber))],
-        };
+        #[cfg(not(feature="static_module_dispatch"))]
+        {
+            let mut mods : Vec<Box<Module<'a> + 'a>> = Vec::new();
+            #[cfg(feature="mod_core")]
+            mods.push(Box::new(mod_core::Handler::new(publisher)));
+            #[cfg(feature="mod_stack")]
+            mods.push(Box::new(mod_stack::Handler::new()));
+            #[cfg(feature="mod_binaries")]
+            mods.push(Box::new(mod_binaries::Handler::new()));
+            #[cfg(feature="mod_numbers")]
+            mods.push(Box::new(mod_numbers::Handler::new()));
+            #[cfg(feature="mod_storage")]
+            mods.push(Box::new(mod_storage::Handler::new(db)));
+            #[cfg(feature="mod_hash")]
+            mods.push(Box::new(mod_hash::Handler::new()));
+            #[cfg(feature="mod_hlc")]
+            mods.push(Box::new(mod_hlc::Handler::new(timestamp_state)));
+            #[cfg(feature="mod_json")]
+            mods.push(Box::new(mod_json::Handler::new()));
+            #[cfg(feature="mod_msg")]
+            mods.push(Box::new(mod_msg::Handler::new(publisher, subscriber)));
+            return Scheduler {
+                inbox: receiver,
+                modules: mods,
+            }
+        }
         #[cfg(feature = "static_module_dispatch")]
-        return Scheduler {
-            inbox: receiver,
-            core: mod_core::Handler::new(),
-            stack: mod_stack::Handler::new(),
-            binaries: mod_binaries::Handler::new(),
-            numbers: mod_numbers::Handler::new(),
-            storage: mod_storage::Handler::new(db),
-            hash: mod_hash::Handler::new(),
-            hlc: mod_hlc::Handler::new(timestamp_state),
-            json: mod_json::Handler::new(),
-            msg: mod_msg::Handler::new(publisher, subscriber),
-        };
+        {
+            return Scheduler {
+                inbox: receiver,
+            #[cfg(feature = "mod_core")]
+                core: mod_core::Handler::new(publisher),
+            #[cfg(feature = "mod_stack")]
+                stack: mod_stack::Handler::new(),
+            #[cfg(feature = "mod_binaries")]
+                binaries: mod_binaries::Handler::new(),
+            #[cfg(feature = "mod_numbers")]
+                numbers: mod_numbers::Handler::new(),
+            #[cfg(feature = "mod_storage")]
+                storage: mod_storage::Handler::new(db),
+            #[cfg(feature = "mod_hash")]
+                hash: mod_hash::Handler::new(),
+            #[cfg(feature = "mod_hlc")]
+                hlc: mod_hlc::Handler::new(timestamp_state),
+            #[cfg(feature = "mod_json")]
+                json: mod_json::Handler::new(),
+            #[cfg(feature = "mod_msg")]
+                msg: mod_msg::Handler::new(publisher, subscriber),
+           }
+        }
     }
 
     pub fn create_sender() -> (Sender<RequestMessage>, Receiver<RequestMessage>) {

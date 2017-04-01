@@ -41,7 +41,30 @@ quickcheck_macros = "0.4.1"
 matches = "0.1.4"
 
 [features]
-default = ["scoped_dictionary"]
+default = ["scoped_dictionary", "standard_mods"]
+
 experimental = []
 scoped_dictionary = []
 static_module_dispatch = []
+
+# Modules
+
+standard_mods = [ "mod_binaries",
+                  "mod_core",
+                  "mod_hash",
+                  "mod_hlc",
+                  "mod_json",
+                  "mod_numbers",
+                  "mod_stack",
+                  "mod_storage",
+                  "mod_msg"]
+
+mod_binaries = []
+mod_core = []
+mod_hash = []
+mod_hlc = []
+mod_json = []
+mod_numbers = []
+mod_stack = []
+mod_storage = []
+mod_msg = []
