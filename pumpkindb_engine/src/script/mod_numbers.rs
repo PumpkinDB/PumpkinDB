@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use super::{Env, EnvId, Module, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
+use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
             offset_by_size, STACK_TRUE, STACK_FALSE};
 
 use std::marker::PhantomData;
@@ -102,7 +102,7 @@ pub struct Handler<'a> {
     phantom: PhantomData<&'a ()>,
 }
 
-impl<'a> Module<'a> for Handler<'a> {
+impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
         try_instruction!(env, self.handle_uint_add(env, instruction, pid));
         try_instruction!(env, self.handle_uint_sub(env, instruction, pid));

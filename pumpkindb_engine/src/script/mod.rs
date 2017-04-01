@@ -62,6 +62,8 @@
 use std::collections::BTreeMap;
 
 pub mod envheap;
+pub mod dispatcher;
+pub use self::dispatcher::Dispatcher;
 
 use self::envheap::EnvHeap;
 use super::messaging;
@@ -343,79 +345,13 @@ pub mod mod_json;
 #[cfg(feature="mod_msg")]
 pub mod mod_msg;
 
-
-pub trait Module<'a> {
-    fn init(&mut self, _: &mut Env<'a>, _: EnvId) {}
-    fn done(&mut self, _: &mut Env<'a>, _: EnvId) {}
-    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a>;
-}
-
-#[cfg(not(feature = "static_module_dispatch"))]
-macro_rules! for_each_module {
-    ($module: ident, $scheduler : expr, $expr: expr) => {
-        for mut $module in $scheduler.modules.iter_mut() {
-            $expr
-        }
-    };
-}
-
-#[cfg(feature = "static_module_dispatch")]
-macro_rules! for_each_module {
-    ($module: ident, $scheduler : expr, $expr: expr) => {{
-        #[cfg(feature="mod_core")]
-        {
-           let ref mut $module = $scheduler.core;
-           $expr
-        }
-        #[cfg(feature="mod_stack")]
-        {
-           let ref mut $module = $scheduler.stack;
-           $expr
-        }
-        #[cfg(feature="mod_binaries")]
-        {
-           let ref mut $module = $scheduler.binaries;
-           $expr
-        }
-        #[cfg(feature="mod_numbers")]
-        {
-           let ref mut $module = $scheduler.numbers;
-           $expr
-        }
-        #[cfg(feature="mod_storage")]
-        {
-           let ref mut $module = $scheduler.storage;
-           $expr
-        }
-        #[cfg(feature="mod_hash")]
-        {
-           let ref mut $module = $scheduler.hash;
-           $expr
-        }
-        #[cfg(feature="mod_hlc")]
-        {
-           let ref mut $module = $scheduler.hlc;
-           $expr
-        }
-        #[cfg(feature="mod_json")]
-        {
-           let ref mut $module = $scheduler.json;
-           $expr
-        }
-        {
-           let ref mut $module = $scheduler.msg;
-           $expr
-        }
-    }};
-}
-
 /// Scheduler is a PumpkinScript scheduler and interpreter. This is the
 /// most central part of this module.
 ///
 /// # Example
 ///
 /// ```norun
-/// let mut scheduler = Scheduler::new(&db, publisher, subscriber, timestamp, receiver);
+/// let mut scheduler = Scheduler::new(dispatcher, receiver);
 ///
 /// let sender = scheduler.sender();
 /// let handle = thread::spawn(move || {
@@ -443,31 +379,15 @@ macro_rules! for_each_module {
 
 use std::collections::VecDeque;
 
-pub struct Scheduler<'a> {
+use std::marker::PhantomData;
+
+pub struct Scheduler<'a, T : Dispatcher<'a>> {
     inbox: Receiver<RequestMessage>,
-    #[cfg(not(feature = "static_module_dispatch"))]
-    modules: Vec<Box<Module<'a> + 'a>>,
-    #[cfg(all(feature = "static_module_dispatch", feature = "mod_core"))]
-    core: mod_core::Handler<'a>,
-    #[cfg(all(feature = "static_module_dispatch", feature = "mod_stack"))]
-    stack: mod_stack::Handler<'a>,
-    #[cfg(all(feature = "static_module_dispatch", feature = "mod_binaries"))]
-    binaries: mod_binaries::Handler<'a>,
-    #[cfg(all(feature = "static_module_dispatch", feature = "mod_numbers"))]
-    numbers: mod_numbers::Handler<'a>,
-    #[cfg(all(feature = "static_module_dispatch", feature = "mod_storage"))]
-    storage: mod_storage::Handler<'a>,
-    #[cfg(all(feature = "static_module_dispatch", feature = "mod_hash"))]
-    hash: mod_hash::Handler<'a>,
-    #[cfg(all(feature = "static_module_dispatch", feature = "mod_hlc"))]
-    hlc: mod_hlc::Handler<'a>,
-    #[cfg(all(feature = "static_module_dispatch", feature = "mod_json"))]
-    json: mod_json::Handler<'a>,
-    #[cfg(feature = "static_module_dispatch")]
-    msg: mod_msg::Handler<'a>,
+    dispatcher: T,
+    phantom: PhantomData<&'a ()>,
 }
 
-unsafe impl<'a> Send for Scheduler<'a> {}
+unsafe impl<'a, T : Dispatcher<'a>> Send for Scheduler<'a, T> {}
 
 type PassResult<'a> = Result<(), Error>;
 
@@ -487,68 +407,15 @@ use std::sync::Arc;
 
 use pumpkinscript::{binparser};
 
-impl<'a> Scheduler<'a> {
+impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
     /// Creates an instance of Scheduler with three communication channels:
-    ///
-    /// * Response sender
-    /// * Internal sender
-    /// * Request receiver
-    pub fn new<P: 'a, S: 'a>(db: &'a storage::Storage<'a>,
-               publisher: P,
-               subscriber: S,
-               timestamp_state: Arc<timestamp::Timestamp>,
+    pub fn new(dispatcher: T,
                receiver: Receiver<RequestMessage>)
-               -> Self where P : messaging::Publisher,
-                             S : messaging::Subscriber {
-        #[cfg(not(feature="static_module_dispatch"))]
-        {
-            let mut mods : Vec<Box<Module<'a> + 'a>> = Vec::new();
-            #[cfg(feature="mod_core")]
-            mods.push(Box::new(mod_core::Handler::new(publisher)));
-            #[cfg(feature="mod_stack")]
-            mods.push(Box::new(mod_stack::Handler::new()));
-            #[cfg(feature="mod_binaries")]
-            mods.push(Box::new(mod_binaries::Handler::new()));
-            #[cfg(feature="mod_numbers")]
-            mods.push(Box::new(mod_numbers::Handler::new()));
-            #[cfg(feature="mod_storage")]
-            mods.push(Box::new(mod_storage::Handler::new(db)));
-            #[cfg(feature="mod_hash")]
-            mods.push(Box::new(mod_hash::Handler::new()));
-            #[cfg(feature="mod_hlc")]
-            mods.push(Box::new(mod_hlc::Handler::new(timestamp_state)));
-            #[cfg(feature="mod_json")]
-            mods.push(Box::new(mod_json::Handler::new()));
-            #[cfg(feature="mod_msg")]
-            mods.push(Box::new(mod_msg::Handler::new(publisher, subscriber)));
-            return Scheduler {
-                inbox: receiver,
-                modules: mods,
-            }
-        }
-        #[cfg(feature = "static_module_dispatch")]
-        {
-            return Scheduler {
-                inbox: receiver,
-            #[cfg(feature = "mod_core")]
-                core: mod_core::Handler::new(publisher),
-            #[cfg(feature = "mod_stack")]
-                stack: mod_stack::Handler::new(),
-            #[cfg(feature = "mod_binaries")]
-                binaries: mod_binaries::Handler::new(),
-            #[cfg(feature = "mod_numbers")]
-                numbers: mod_numbers::Handler::new(),
-            #[cfg(feature = "mod_storage")]
-                storage: mod_storage::Handler::new(db),
-            #[cfg(feature = "mod_hash")]
-                hash: mod_hash::Handler::new(),
-            #[cfg(feature = "mod_hlc")]
-                hlc: mod_hlc::Handler::new(timestamp_state),
-            #[cfg(feature = "mod_json")]
-                json: mod_json::Handler::new(),
-            #[cfg(feature = "mod_msg")]
-                msg: mod_msg::Handler::new(publisher, subscriber),
-           }
+               -> Self {
+        Scheduler::<'a, T> {
+            inbox: receiver,
+            dispatcher: dispatcher,
+            phantom: PhantomData,
         }
     }
 
@@ -578,7 +445,7 @@ impl<'a> Scheduler<'a> {
                             envs.push_back((pid, env, chan));
                         }
                         Err(err) => {
-                            for_each_module!(module, self, module.done(&mut env, pid));
+                            self.dispatcher.done(&mut env, pid);
                             let stack_size = env.stack_size;
                             let _ = chan.send(ResponseMessage::EnvFailed(pid,
                                                                          err,
@@ -588,7 +455,7 @@ impl<'a> Scheduler<'a> {
                         Ok(()) => {
                             if env.program.is_empty() ||
                                 (env.program.len() == 1 && env.program[0].len() == 0) {
-                                for_each_module!(module, self, module.done(&mut env, pid));
+                                self.dispatcher.done(&mut env, pid);
                                 let stack_size = env.stack_size;
                                 let _ = chan.send(ResponseMessage::EnvTerminated(pid,
                                                                                  env.stack_copy(),
@@ -621,7 +488,7 @@ impl<'a> Scheduler<'a> {
                                 Ok(slice) => {
                                     slice.copy_from_slice(program.as_slice());
                                     env.program.push(slice);
-                                    for_each_module!(module, self, module.init(&mut env, pid));
+                                    self.dispatcher.init(&mut env, pid);
                                     envs.push_back((pid, env, chan));
                                 }
                                 Err(err) => {
@@ -657,7 +524,7 @@ impl<'a> Scheduler<'a> {
             }
             Ok(())
         } else if let pumpkinscript::ParseResult::Done(rest, instruction) =
-            binparser::instruction_or_internal_instruction(program) {
+        binparser::instruction_or_internal_instruction(program) {
             if rest.len() > 0 {
                 env.program.push(rest);
             }
@@ -665,15 +532,7 @@ impl<'a> Scheduler<'a> {
                 return Ok(());
             }
 
-            try_instruction!(env, self.handle_try(env, instruction, pid));
-            try_instruction!(env, self.handle_try_end(env, instruction, pid));
-
-            for_each_module!(module,
-                             self,
-                             try_instruction!(env, module.handle(env, instruction, pid)));
-
-            // catch-all (NB: keep it last)
-            try_instruction!(env, self.handle_dictionary(env, instruction, pid));
+            try_instruction!(env, self.handle(env, instruction, pid));
 
             // if nothing worked...
             handle_error!(env, error_unknown_instruction!(instruction))
@@ -741,7 +600,7 @@ impl<'a> Scheduler<'a> {
             env.push(_EMPTY);
             Ok(())
         } else if let Some(Error::ProgramError(err)) = env.aborting_try.pop() {
-            for_each_module!(module, self, module.done(env, pid));
+            self.dispatcher.done(env, pid);
             let slice = alloc_and_write!(err.as_slice(), env);
             env.push(slice);
             Ok(())
@@ -752,13 +611,27 @@ impl<'a> Scheduler<'a> {
     }
 }
 
+impl<'a, T: Dispatcher<'a>> Dispatcher<'a> for Scheduler<'a, T> {
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        try_instruction!(env, self.handle_try(env, instruction, pid));
+        try_instruction!(env, self.handle_try_end(env, instruction, pid));
+
+        try_instruction!(env, self.dispatcher.handle(env, instruction, pid));
+
+        // catch-all (NB: keep it last)
+        try_instruction!(env, self.handle_dictionary(env, instruction, pid));
+        Err(Error::UnknownInstruction)
+    }
+}
+
+
 #[cfg(test)]
 #[allow(unused_variables, unused_must_use, unused_mut)]
 mod tests {
 
     use pumpkinscript::{parse, offset_by_size};
     use messaging;
-    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId};
+    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, dispatcher};
     use std::sync::mpsc;
     use std::sync::Arc;
     use timestamp;

@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use super::{Env, EnvId, Module, PassResult, Error, ERROR_EMPTY_STACK, offset_by_size};
+use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, offset_by_size};
 use super::super::messaging;
 
 use std::marker::PhantomData;
@@ -19,7 +19,7 @@ pub struct Handler<'a, P: messaging::Publisher, S: messaging::Subscriber> {
     phantom: PhantomData<&'a ()>,
 }
 
-impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Module<'a> for Handler<'a, P, S> {
+impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Dispatcher<'a> for Handler<'a, P, S> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
         try_instruction!(env, self.handle_publish(env, instruction, pid));
         try_instruction!(env, self.handle_subscribe(env, instruction, pid));
@@ -97,7 +97,7 @@ mod tests {
 
     use pumpkinscript::parse;
     use messaging;
-    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId};
+    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, dispatcher};
     use std::sync::mpsc;
     use std::sync::Arc;
     use std::fs;

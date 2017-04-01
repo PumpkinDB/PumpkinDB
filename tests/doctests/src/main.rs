@@ -28,7 +28,7 @@ use regex::Regex;
 use glob::glob;
 use tempdir::TempDir;
 
-use pumpkindb_engine::script::{RequestMessage, ResponseMessage, EnvId, Env, Scheduler};
+use pumpkindb_engine::script::{RequestMessage, ResponseMessage, EnvId, Env, Scheduler, dispatcher};
 use pumpkinscript::{textparser, binparser};
 use pumpkindb_engine::{messaging, storage, timestamp};
 
@@ -51,11 +51,12 @@ fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp>) {
         let publisher_clone = simple_accessor.clone();
         let subscriber_clone = simple_accessor.clone();
         let timestamp_clone = timestamp.clone();
-        let (sender, receiver) = Scheduler::create_sender();
+        let (sender, receiver) = Scheduler::<dispatcher::StandardDispatcher>::create_sender();
         let handle = scope.spawn(move || {
-            let mut scheduler = Scheduler::new(&db,
-                                               publisher_clone, subscriber_clone,
-                                               timestamp_clone, receiver);
+            let mut scheduler = Scheduler::new(
+                dispatcher::StandardDispatcher::new(&db, publisher_clone, subscriber_clone,
+                                                    timestamp_clone),
+                receiver);
             scheduler.run()
         });
         let (callback, receiver) = mpsc::channel::<ResponseMessage>();

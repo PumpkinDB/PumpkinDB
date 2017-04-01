@@ -17,7 +17,7 @@ use storage::GlobalWriteLock;
 use std::mem;
 use std::error::Error as StdError;
 use std::collections::HashMap;
-use super::{Env, EnvId, Module, PassResult, Error, STACK_TRUE, STACK_FALSE, offset_by_size,
+use super::{Env, EnvId, Dispatcher, PassResult, Error, STACK_TRUE, STACK_FALSE, offset_by_size,
             ERROR_EMPTY_STACK, ERROR_INVALID_VALUE, ERROR_DUPLICATE_KEY, ERROR_NO_TX,
             ERROR_UNKNOWN_KEY, ERROR_DATABASE};
 use byteorder::{BigEndian, WriteBytesExt};
@@ -191,7 +191,7 @@ macro_rules! cursorq_op {
     }};
 }
 
-impl<'a> Module<'a> for Handler<'a> {
+impl<'a> Dispatcher<'a> for Handler<'a> {
     fn done(&mut self, _: &mut Env, pid: EnvId) {
         self.txns.get_mut(&pid)
             .and_then(|queue| {
@@ -584,7 +584,7 @@ fn copy_to_stack(env: &mut Env, (key, val): (&[u8], &[u8])) -> Result<(), Error>
 mod tests {
     use pumpkinscript::{parse, offset_by_size};
     use messaging;
-    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId};
+    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, dispatcher};
 
     use byteorder::WriteBytesExt;
     use std::sync::mpsc;
