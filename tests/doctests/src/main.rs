@@ -51,7 +51,8 @@ fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp>) {
         let publisher_clone = simple_accessor.clone();
         let subscriber_clone = simple_accessor.clone();
         let timestamp_clone = timestamp.clone();
-        let (sender, receiver) = Scheduler::<dispatcher::StandardDispatcher>::create_sender();
+        let (sender, receiver) = Scheduler::<dispatcher::StandardDispatcher<
+            messaging::SimpleAccessor, messaging::SimpleAccessor>>::create_sender();
         let handle = scope.spawn(move || {
             let mut scheduler = Scheduler::new(
                 dispatcher::StandardDispatcher::new(&db, publisher_clone, subscriber_clone,

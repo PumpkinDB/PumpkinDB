@@ -214,7 +214,8 @@ macro_rules! eval {
                 let publisher_clone = messaging_accessor.clone();
                 let subscriber_clone = messaging_accessor.clone();
                 let timestamp_clone = timestamp.clone();
-                let (sender, receiver) = Scheduler::<dispatcher::StandardDispatcher>::create_sender();
+                let (sender, receiver) = Scheduler::<dispatcher::StandardDispatcher<
+                    messaging::SimpleAccessor, messaging::SimpleAccessor>>::create_sender();
                 let handle = scope.spawn(move || {
                     let mut scheduler = Scheduler::new(
                         dispatcher::StandardDispatcher::new(&db,
@@ -287,7 +288,8 @@ macro_rules! bench_eval {
                 let publisher_clone = messaging_accessor.clone();
                 let subscriber_clone = messaging_accessor.clone();
                 let timestamp_clone = timestamp.clone();
-                let (sender, receiver) = Scheduler::<dispatcher::StandardDispatcher>::create_sender();
+                let (sender, receiver) = Scheduler::<dispatcher::StandardDispatcher<
+                    messaging::SimpleAccessor, messaging::SimpleAccessor>>::create_sender();
                 let handle = scope.spawn(move || {
                     let mut scheduler = Scheduler::new(
                         dispatcher::StandardDispatcher::new(&db,

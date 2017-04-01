@@ -44,6 +44,7 @@ use clap::{App, Arg};
 
 use pumpkindb_engine::{script, storage, timestamp};
 use pumpkindb_engine::script::dispatcher;
+use pumpkindb_engine::messaging;
 
 lazy_static! {
  static ref ENVIRONMENT: lmdb::Environment = {
@@ -163,7 +164,8 @@ fn main() {
 
     for i in 0..num_cpus::get() {
         info!("Starting scheduler on core {}.", i);
-        let (sender, receiver) = script::Scheduler::<dispatcher::StandardDispatcher>::create_sender();
+        let (sender, receiver) = script::Scheduler::<dispatcher::StandardDispatcher<
+            messaging::SimpleAccessor, messaging::SimpleAccessor>>::create_sender();
         let storage_clone = storage.clone();
         let timestamp_clone = timestamp.clone();
 

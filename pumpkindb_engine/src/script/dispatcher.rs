@@ -16,16 +16,25 @@ pub trait Dispatcher<'a> {
 
 include!("macros.rs");
 
-#[cfg(not(feature = "static_module_dispatch"))]
-macro_rules! for_each_dispatcher {
-    ($module: ident, $dispatcher : expr, $expr: expr) => {
-        for mut $module in $dispatcher.dispatchers.iter_mut() {
-            $expr
+impl<'a> Dispatcher<'a> for Vec<Box<Dispatcher<'a>>> {
+    fn init(&mut self, env: &mut Env<'a>, pid: EnvId) {
+        for mut disp in self.into_iter() {
+            disp.init(env, pid);
         }
-    };
+    }
+    fn done(&mut self, env: &mut Env<'a>, pid: EnvId) {
+        for mut disp in self.into_iter() {
+            disp.done(env, pid);
+        }
+    }
+    fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        for mut disp in self.into_iter() {
+            try_instruction!(env, disp.handle(env, instruction, pid));
+        }
+        Err(Error::UnknownInstruction)
+    }
 }
 
-#[cfg(feature = "static_module_dispatch")]
 macro_rules! for_each_dispatcher {
     ($module: ident, $dispatcher : expr, $expr: expr) => {{
         #[cfg(feature="mod_core")]
@@ -77,63 +86,37 @@ macro_rules! for_each_dispatcher {
     }};
 }
 
-pub struct StandardDispatcher<'a> {
-    #[cfg(not(feature = "static_module_dispatch"))]
-    dispatchers: Vec<Box<Dispatcher<'a> + 'a>>,
-    #[cfg(all(feature = "static_module_dispatch", feature = "mod_core"))]
+pub struct StandardDispatcher<'a, P: 'a, S: 'a>
+    where P : messaging::Publisher, S : messaging::Subscriber
+{
+    #[cfg(feature = "mod_core")]
     core: mod_core::Handler<'a>,
-    #[cfg(all(feature = "static_module_dispatch", feature = "mod_stack"))]
+    #[cfg(feature = "mod_stack")]
     stack: mod_stack::Handler<'a>,
-    #[cfg(all(feature = "static_module_dispatch", feature = "mod_binaries"))]
+    #[cfg(feature = "mod_binaries")]
     binaries: mod_binaries::Handler<'a>,
-    #[cfg(all(feature = "static_module_dispatch", feature = "mod_numbers"))]
+    #[cfg(feature = "mod_numbers")]
     numbers: mod_numbers::Handler<'a>,
-    #[cfg(all(feature = "static_module_dispatch", feature = "mod_storage"))]
+    #[cfg(feature = "mod_storage")]
     storage: mod_storage::Handler<'a>,
-    #[cfg(all(feature = "static_module_dispatch", feature = "mod_hash"))]
+    #[cfg(feature = "mod_hash")]
     hash: mod_hash::Handler<'a>,
-    #[cfg(all(feature = "static_module_dispatch", feature = "mod_hlc"))]
+    #[cfg(feature = "mod_hlc")]
     hlc: mod_hlc::Handler<'a>,
-    #[cfg(all(feature = "static_module_dispatch", feature = "mod_json"))]
+    #[cfg(feature = "mod_json")]
     json: mod_json::Handler<'a>,
-    #[cfg(all(feature = "static_module_dispatch", feature = "mod_msg"))]
-    msg: mod_msg::Handler<'a>,
+    #[cfg(feature = "mod_msg")]
+    msg: mod_msg::Handler<'a, P, S>,
 }
 
-impl<'a> StandardDispatcher<'a> {
+impl<'a, P: 'a, S: 'a> StandardDispatcher<'a, P, S>
+    where P : messaging::Publisher, S : messaging::Subscriber {
 
-    pub fn new<P: 'a, S: 'a>(db: &'a storage::Storage<'a>,
+    pub fn new(db: &'a storage::Storage<'a>,
                publisher: P, subscriber: S,
                timestamp_state: Arc<timestamp::Timestamp>)
-               -> Self where P : messaging::Publisher, S : messaging::Subscriber {
-        #[cfg(not(feature="static_module_dispatch"))]
-        {
-            let mut mods : Vec<Box<Dispatcher<'a> + 'a>> = Vec::new();
-            #[cfg(feature="mod_core")]
-            mods.push(Box::new(mod_core::Handler::new()));
-            #[cfg(feature="mod_stack")]
-            mods.push(Box::new(mod_stack::Handler::new()));
-            #[cfg(feature="mod_binaries")]
-            mods.push(Box::new(mod_binaries::Handler::new()));
-            #[cfg(feature="mod_numbers")]
-            mods.push(Box::new(mod_numbers::Handler::new()));
-            #[cfg(feature="mod_storage")]
-            mods.push(Box::new(mod_storage::Handler::new(db)));
-            #[cfg(feature="mod_hash")]
-            mods.push(Box::new(mod_hash::Handler::new()));
-            #[cfg(feature="mod_hlc")]
-            mods.push(Box::new(mod_hlc::Handler::new(timestamp_state)));
-            #[cfg(feature="mod_json")]
-            mods.push(Box::new(mod_json::Handler::new()));
-            #[cfg(feature="mod_msg")]
-            mods.push(Box::new(mod_msg::Handler::new(publisher, subscriber)));
-            return StandardDispatcher {
-                dispatchers: mods,
-            }
-        }
-        #[cfg(feature = "static_module_dispatch")]
-        {
-                return StandardDispatcher {
+               -> Self {
+        StandardDispatcher {
                 #[cfg(feature = "mod_core")]
                     core: mod_core::Handler::new(),
                 #[cfg(feature = "mod_stack")]
@@ -152,12 +135,12 @@ impl<'a> StandardDispatcher<'a> {
                     json: mod_json::Handler::new(),
                 #[cfg(feature = "mod_msg")]
                     msg: mod_msg::Handler::new(publisher, subscriber),
-            }
         }
     }
 }
 
-impl<'a> Dispatcher<'a> for StandardDispatcher<'a> {
+impl<'a, P: 'a, S: 'a> Dispatcher<'a> for StandardDispatcher<'a, P, S>
+    where P : messaging::Publisher, S : messaging::Subscriber {
     fn init(&mut self, env: &mut Env<'a>, pid: EnvId) {
         for_each_dispatcher!(disp, self, disp.init(env, pid));
     }
@@ -168,4 +151,85 @@ impl<'a> Dispatcher<'a> for StandardDispatcher<'a> {
         for_each_dispatcher!(disp, self, try_instruction!(env, disp.handle(env, instruction, pid)));
         Err(Error::UnknownInstruction)
     }
+}
+
+#[cfg(test)]
+#[allow(unused_variables, unused_must_use, unused_mut)]
+mod tests {
+
+  use pumpkinscript::parse;
+  use script::{Env, EnvId, PassResult,
+               Scheduler, Error, RequestMessage, ResponseMessage,
+               Dispatcher};
+  use std::sync::mpsc;
+  use crossbeam;
+
+  use std::marker::PhantomData;
+
+  struct MyDispatcher<'a> {
+      phantom: PhantomData<&'a ()>,
+  }
+
+  impl<'a> MyDispatcher<'a> {
+
+      pub fn new() -> Self {
+          MyDispatcher{ phantom: PhantomData }
+      }
+
+      pub fn handle_test(&mut self, env: &mut Env<'a>,
+                          instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+          instruction_is!(env, instruction, b"\x84TEST");
+          env.push(b"TEST");
+          Ok(())
+      }
+
+  }
+
+  impl<'a> Dispatcher<'a> for MyDispatcher<'a> {
+     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+         try_instruction!(env, self.handle_test(env, instruction, pid));
+         Err(Error::UnknownInstruction)
+     }
+  }
+
+  #[test]
+  pub fn dynamic_dispatch() {
+      crossbeam::scope(|scope| {
+          let (sender, receiver) = Scheduler::<Vec<Box<Dispatcher>>>::create_sender();
+          let handle = scope.spawn(move || {
+              let dispatchers: Vec<Box<Dispatcher>> = vec![Box::new(MyDispatcher::new())];
+              let mut scheduler = Scheduler::new(dispatchers, receiver);
+              scheduler.run()
+          });
+          let sender_ = sender.clone();
+          let script = parse("TEST").unwrap();
+          let (callback, receiver) = mpsc::channel::<ResponseMessage>();
+          let (sender0, _) = mpsc::channel();
+          let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(), script.clone(),
+                                                          callback, Box::new(sender0)));
+          match receiver.recv() {
+              Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
+                  // terminated without an error
+                  let mut stack_ = Vec::with_capacity(stack.len());
+                  for i in 0..(&stack).len() {
+                      stack_.push((&stack[i]).as_slice());
+                  }
+                  let mut script_env = Env::new_with_stack(stack_, stack_size).unwrap();
+                  let val = script_env.pop().unwrap();
+                  assert_eq!(val, b"TEST");
+              },
+              Ok(ResponseMessage::EnvFailed(_, err, stack, stack_size)) => {
+                  let _ = sender.send(RequestMessage::Shutdown);
+                  panic!("error: {:?}", err);
+              }
+              Err(err) => {
+                  let _ = sender.send(RequestMessage::Shutdown);
+                  panic!("recv error: {:?}", err);
+             }
+         }
+         let _ = sender_.send(RequestMessage::Shutdown);
+         let _ = handle.join();
+    });
+  }
+
 }

@@ -45,7 +45,6 @@ default = ["scoped_dictionary", "standard_mods"]
 
 experimental = []
 scoped_dictionary = []
-static_module_dispatch = []
 
 # Modules
 
