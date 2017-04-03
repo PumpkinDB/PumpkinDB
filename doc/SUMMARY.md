@@ -117,6 +117,7 @@
  * Sequencing
    * [HLC](script/HLC.md)
    * [HLC/LC](script/HLC/LC.md)
+   * [HLC/OBSERVE](script/HLC/OBSERVE.md)
    * [HLC/TICK](script/HLC/TICK.md)
  * Miscellaneous
    * [FEATURE?](script/FEATUREQ.md)

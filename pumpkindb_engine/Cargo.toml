@@ -18,7 +18,7 @@ num-bigint = "0.1.35"
 num-iter = "0.1.32"
 num-traits = "0.1.36"
 libc = "0.2.20"
-hybrid-clocks = "0.3.2"
+hybrid-clocks = "0.3.3"
 byteorder = "1.0.0"
 uuid = { version = "0.4.0", features = ["v4"] }
 glob = "0.2.11"

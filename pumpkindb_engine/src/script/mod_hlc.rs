@@ -13,6 +13,7 @@
 instruction!(HLC, b"\x83HLC");
 instruction!(HLC_LC, b"\x86HLC/LC");
 instruction!(HLC_TICK, b"\x88HLC/TICK");
+instruction!(HLC_OBSERVE, b"\x8BHLC/OBSERVE");
 
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
             offset_by_size};
@@ -33,6 +34,8 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
         try_instruction!(env, self.handle_hlc(env, instruction, pid));
         try_instruction!(env, self.handle_hlc_lc(env, instruction, pid));
         try_instruction!(env, self.handle_hlc_tick(env, instruction, pid));
+        try_instruction!(env, self.handle_hlc_observe(env, instruction, pid));
+
         Err(Error::UnknownInstruction)
     }
 }
@@ -121,6 +124,36 @@ impl<'a> Handler<'a> {
             env.push(slice);
 
             Ok(())
+        } else {
+            Err(Error::UnknownInstruction)
+        }
+    }
+
+    #[inline]
+    pub fn handle_hlc_observe(&mut self,
+                              env: &mut Env<'a>,
+                              instruction: &'a [u8],
+                              _: EnvId)
+                              -> PassResult<'a> {
+        if instruction == HLC_OBSERVE {
+            if let Some(mut observed_bytes) = env.pop() {
+                if let Ok(observed_time) = hlc::Timestamp::read_bytes(&mut observed_bytes) {
+                    if self.timestamp.observe(&observed_time).is_err() {
+                        return Err(error_invalid_value!(observed_bytes));
+                    }
+
+                    let slice = alloc_slice!(16, env);
+                    let _ = self.timestamp.hlc().write_bytes(&mut slice[0..]).unwrap();
+
+                    env.push(slice);
+
+                    Ok(())
+                } else {
+                    Err(error_invalid_value!(observed_bytes))
+                }
+            } else {
+                Err(error_empty_stack!())
+            }
         } else {
             Err(Error::UnknownInstruction)
         }
