@@ -189,10 +189,11 @@ macro_rules! eval {
         ($script: expr, $env: ident, $expr: expr) => {
            eval!($script, $env, _result, $expr);
         };
-        ($script: expr, $env: ident, $result: ident, $expr: expr) => {
-           eval!($script, $env, $result, publisher_accessor, {}, $expr);
-        };
-        ($script: expr, $env: ident, $result: ident, $publisher_accessor: ident, {$($init: tt)*}, $expr: expr) => {
+        ($script: expr, $env: ident, $result: ident, $expr: expr) => {{
+           let (sender, receiver) = mpsc::channel();
+           eval!($script, $env, $result, sender, receiver, $expr);
+        }};
+        ($script: expr, $env: ident, $result: ident, $sender: expr, $receiver: ident, $expr: expr) => {
           {
             let dir = TempDir::new("pumpkindb").unwrap();
             let path = dir.path().to_str().unwrap();
@@ -207,17 +208,18 @@ macro_rules! eval {
             let db = storage::Storage::new(&env);
             crossbeam::scope(|scope| {
                 let timestamp = Arc::new(timestamp::Timestamp::new(None));
-                let mut publisher = pubsub::Publisher::new();
-                let $publisher_accessor = publisher.accessor();
-                let publisher_thread = scope.spawn(move || publisher.run());
-                $($init)*
-                let publisher_clone = $publisher_accessor.clone();
+                let mut simple = messaging::Simple::new();
+                let messaging_accessor = simple.accessor();
+                let publisher_thread = scope.spawn(move || simple.run());
+                let publisher_clone = messaging_accessor.clone();
+                let subscriber_clone = messaging_accessor.clone();
                 let timestamp_clone = timestamp.clone();
                 let (sender, receiver) = Scheduler::create_sender();
                 let handle = scope.spawn(move || {
                     let mut scheduler = Scheduler::new(
                         &db,
-                        publisher_clone,
+                        publisher_clone.clone(),
+                        subscriber_clone.clone(),
                         timestamp_clone,
                         receiver);
                     scheduler.run()
@@ -225,11 +227,11 @@ macro_rules! eval {
                 let script = parse($script).unwrap();
                 let (callback, receiver) = mpsc::channel::<ResponseMessage>();
                 let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(),
-                                    script.clone(), callback));
+                                    script.clone(), callback, Box::new($sender)));
                 match receiver.recv() {
                    Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
                       let _ = sender.send(RequestMessage::Shutdown);
-                      $publisher_accessor.shutdown();
+                      messaging_accessor.shutdown();
                       let $result = Ok::<(), Error>(());
                       let mut stack_ = Vec::with_capacity(stack.len());
                       for i in 0..(&stack).len() {
@@ -240,7 +242,7 @@ macro_rules! eval {
                    }
                    Ok(ResponseMessage::EnvFailed(_, err, stack, stack_size)) => {
                       let _ = sender.send(RequestMessage::Shutdown);
-                      $publisher_accessor.shutdown();
+                      messaging_accessor.shutdown();
                       let $result = Err::<(), Error>(err);
                       let stack = stack.unwrap();
                       let mut stack_ = Vec::with_capacity(stack.len());
@@ -252,7 +254,7 @@ macro_rules! eval {
                    }
                    Err(err) => {
                       let _ = sender.send(RequestMessage::Shutdown);
-                      $publisher_accessor.shutdown();
+                      messaging_accessor.shutdown();
                       panic!("recv error: {:?}", err);
                    }
                 }
@@ -278,18 +280,20 @@ macro_rules! bench_eval {
 
             let db = storage::Storage::new(&env);
             crossbeam::scope(|scope| {
-                let mut publisher = pubsub::Publisher::new();
+                let mut simple = messaging::Simple::new();
                 let timestamp = Arc::new(timestamp::Timestamp::new(None));
-                let publisher_accessor = publisher.accessor();
-                let publisher_accessor_ = publisher.accessor();
-                let publisher_thread = scope.spawn(move || publisher.run());
-                let publisher_clone = publisher_accessor.clone();
+                let messaging_accessor = simple.accessor();
+                let messaging_accessor_ = simple.accessor();
+                let simple_thread = scope.spawn(move || simple.run());
+                let publisher_clone = messaging_accessor.clone();
+                let subscriber_clone = messaging_accessor.clone();
                 let timestamp_clone = timestamp.clone();
                 let (sender, receiver) = Scheduler::create_sender();
                 let handle = scope.spawn(move || {
                     let mut scheduler = Scheduler::new(
                         &db,
                         publisher_clone,
+                        subscriber_clone,
                         timestamp_clone,
                         receiver,
                     );
@@ -299,26 +303,27 @@ macro_rules! bench_eval {
                 let script = parse($script).unwrap();
                 $b.iter(move || {
                     let (callback, receiver) = mpsc::channel::<ResponseMessage>();
+                    let (sender0, _) = mpsc::channel();
                     let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(),
-                                        script.clone(), callback));
+                                        script.clone(), callback, Box::new(sender0)));
                     match receiver.recv() {
                        Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => (),
                        Ok(ResponseMessage::EnvFailed(_, err, stack, stack_size)) => {
                           let _ = sender.send(RequestMessage::Shutdown);
-                          publisher_accessor.shutdown();
+                          messaging_accessor.shutdown();
                           panic!("error: {:?}", err);
                        }
                        Err(err) => {
                           let _ = sender.send(RequestMessage::Shutdown);
-                          publisher_accessor.shutdown();
+                          messaging_accessor.shutdown();
                           panic!("recv error: {:?}", err);
                        }
                     }
                 });
                 let _ = sender_.send(RequestMessage::Shutdown);
-                publisher_accessor_.shutdown();
+                messaging_accessor_.shutdown();
                 let _ = handle.join();
-                let _ = publisher_thread.join();
+                let _ = simple_thread.join();
           });
         };
       }

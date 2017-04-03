@@ -1,8 +1,8 @@
-# SEND
+# PUBLISH
 
 {% method -%}
 
-Sends data to a topic
+Publishes data to a topic
 
 Input stack: `data topic`
 
@@ -16,7 +16,7 @@ receive it.
 {% common -%}
 
 ```
-PumpkinDB> "Hi" "MAIN" SEND
+PumpkinDB> "Hi" "MAIN" PUBLISH
 ```
 
 {% endmethod %}
@@ -32,6 +32,6 @@ Allocates for sending data copies.
 ## Tests
 
 ```test
-empty_stack : [SEND] TRY UNWRAP 0x04 EQUAL?.
-empty_stack_1 : [1 SEND] TRY UNWRAP 0x04 EQUAL?.
+empty_stack : [PUBLISH] TRY UNWRAP 0x04 EQUAL?.
+empty_stack_1 : [1 PUBLISH] TRY UNWRAP 0x04 EQUAL?.
 ```
