@@ -664,17 +664,14 @@ impl<'a> Scheduler<'a> {
                          instruction: &'a [u8],
                          _: EnvId)
                          -> PassResult<'a> {
-        let dict = env.dictionary.pop().unwrap();
-        if dict.contains_key(instruction) {
-            {
-                let def = dict.get(instruction).unwrap();
+        let len = env.dictionary.len();
+        let ref dict = env.dictionary[len - 1];
+        match dict.get(instruction) {
+            Some(def) => {
                 env.program.push(def);
-            }
-            env.dictionary.push(dict);
-            Ok(())
-        } else {
-            env.dictionary.push(dict);
-            Err(Error::UnknownInstruction)
+                Ok(())
+            },
+            None => Err(Error::UnknownInstruction)
         }
     }
 
