@@ -197,8 +197,8 @@ impl<'a> Env<'a> {
 
     /// Returns a copy of the entire stack
     #[inline]
-    pub fn stack_copy(&self) -> Vec<Vec<u8>> {
-        self.stack.clone().into_iter().map(|v| Vec::from(v)).collect()
+    pub fn stack_copy(self) -> Vec<Vec<u8>> {
+        self.stack[0..self.stack_size as usize].into_iter().map(|v| Vec::from(*v)).collect()
     }
 
     /// Returns top of the stack without removing it
@@ -537,18 +537,20 @@ impl<'a> Scheduler<'a> {
                         }
                         Err(err) => {
                             for_each_module!(module, self, module.done(&mut env, pid));
+                            let stack_size = env.stack_size;
                             let _ = chan.send(ResponseMessage::EnvFailed(pid,
                                                                          err,
                                                                          Some(env.stack_copy()),
-                                                                         Some(env.stack_size)));
+                                                                         Some(stack_size)));
                         }
                         Ok(()) => {
                             if env.program.is_empty() ||
                                 (env.program.len() == 1 && env.program[0].len() == 0) {
                                 for_each_module!(module, self, module.done(&mut env, pid));
+                                let stack_size = env.stack_size;
                                 let _ = chan.send(ResponseMessage::EnvTerminated(pid,
                                                                                  env.stack_copy(),
-                                                                                 env.stack_size));
+                                                                                 stack_size));
                             } else {
                                 envs.push_back((pid, env, chan));
                             }
