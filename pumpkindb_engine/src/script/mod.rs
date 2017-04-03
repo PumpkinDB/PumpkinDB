@@ -323,7 +323,7 @@ pub type TrySendError<T> = std::sync::mpsc::TrySendError<T>;
 use storage;
 use timestamp;
 
-pub mod queue;
+pub mod txn_stack;
 pub mod mod_core;
 pub mod mod_msg;
 pub mod mod_stack;

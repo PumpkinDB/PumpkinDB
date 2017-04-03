@@ -11,7 +11,6 @@
 //!
 
 use lmdb;
-use lmdb::traits::{LmdbResultExt, AsLmdbBytes, FromLmdbBytes};
 use storage;
 use storage::GlobalWriteLock;
 use std::mem;
@@ -23,7 +22,7 @@ use super::{Env, EnvId, Module, PassResult, Error, STACK_TRUE, STACK_FALSE, offs
 use byteorder::{BigEndian, WriteBytesExt};
 use snowflake::ProcessUniqueId;
 use std::collections::BTreeMap;
-use script::queue::Queue;
+use script::txn_stack::{TxnStack, TxType, Accessor, Txn, TxnT};
 
 pub type CursorId = ProcessUniqueId;
 
@@ -56,68 +55,16 @@ instruction!(CURSOR_CURQ, b"\x8BCURSOR/CUR?");
 
 instruction!(COMMIT, b"\x86COMMIT");
 
-#[derive(PartialEq, Debug)]
-enum TxType {
-    Read,
-    Write,
-}
-
-enum Accessor<'a> {
-    Const(lmdb::ConstAccessor<'a>),
-    Write(lmdb::WriteAccessor<'a>),
-}
-
-impl<'a> Accessor<'a> {
-    fn get<K: AsLmdbBytes + ?Sized, V: FromLmdbBytes + ?Sized>(&self, db: &lmdb::Database, key: &K)
-        -> Result<Option<&V>, lmdb::Error> {
-        match self {
-            &Accessor::Write(ref access) => {
-                access.get::<K, V>(db, key)
-            },
-            &Accessor::Const(ref access) => {
-                access.get::<K, V>(db, key)
-            }
-        }.to_opt()
-    }
-}
-
-#[derive(Debug)]
-enum Txn<'a> {
-    Read(lmdb::ReadTransaction<'a>),
-    Write(lmdb::WriteTransaction<'a>),
-}
-
-impl<'a> Txn<'a> {
-    fn access(&self) -> Accessor {
-        match self {
-            &Txn::Read(ref txn) => Accessor::Const(txn.access()),
-            &Txn::Write(ref txn) => Accessor::Write(txn.access()),
-        }
-    }
-    fn cursor(&self, db: &'a lmdb::Database) -> Result<lmdb::Cursor, lmdb::Error> {
-        match self {
-            &Txn::Read(ref txn) => txn.cursor(db),
-            &Txn::Write(ref txn) => txn.cursor(db),
-        }
-    }
-    fn tx_type(&self) -> TxType {
-        match self {
-            &Txn::Read(_) => TxType::Read,
-            &Txn::Write(_) => TxType::Write,
-        }
-    }
-}
-
 pub struct Handler<'a> {
     db: &'a storage::Storage<'a>,
-    txns: HashMap<EnvId, Queue<Txn<'a>>>,
+    txns: HashMap<EnvId, TxnStack<Txn<'a>>>,
     cursors: BTreeMap<(EnvId, Vec<u8>), (TxType, lmdb::Cursor<'a, 'a>)>
 }
 
 macro_rules! read_or_write_transaction {
     ($me: expr, $env_id: expr) => {
         match $me.txns.get(&$env_id)
-            .and_then(|queue| queue.peek()) {
+            .and_then(|txn_stack| txn_stack.peek()) {
             None => return Err(error_no_transaction!()),
             Some(txn) => txn
         }
@@ -127,7 +74,7 @@ macro_rules! read_or_write_transaction {
 macro_rules! tx_type {
     ($me: expr, $env_id: expr) => {{
         let txn_type = $me.txns.get(&$env_id)
-            .and_then(|queue| queue.peek())
+            .and_then(|txn_stack| txn_stack.peek())
             .and_then(|txn| Some(txn.tx_type()));
         if txn_type.is_none() {
             return Err(error_no_transaction!())
@@ -194,9 +141,9 @@ macro_rules! cursorq_op {
 impl<'a> Module<'a> for Handler<'a> {
     fn done(&mut self, _: &mut Env, pid: EnvId) {
         self.txns.get_mut(&pid)
-            .and_then(|queue| {
-                while queue.len() > 0 {
-                    let txn = queue.pop();
+            .and_then(|txn_stack| {
+                while txn_stack.len() > 0 {
+                    let txn = txn_stack.pop();
                     drop(txn)
                 }
                 Some(())
@@ -240,16 +187,18 @@ impl<'a> Handler<'a> {
         match instruction {
             WRITE => {
                 let v = stack_pop!(env);
-                if self.db.try_lock() == false {
-                    return Err(Error::Reschedule);
+                if !self.txns.contains_key(&pid) {
+                    self.txns.insert(pid, TxnStack::new(MAX_TXNS_PER_ENV));
+                }
+                if !self.txns.get(&pid).unwrap().has_write_txn() {
+                    if self.db.try_lock() == false {
+                        return Err(Error::Reschedule);
+                    }
                 }
                 // prepare transaction
                 match lmdb::WriteTransaction::new(self.db.env) {
                     Err(e) => Err(error_database!(e)),
                     Ok(txn) => {
-                        if !self.txns.contains_key(&pid) {
-                            self.txns.insert(pid, Queue::new(MAX_TXNS_PER_ENV));
-                        }
                         let _ = self.txns.get_mut(&pid).unwrap().push(Txn::Write(txn));
                         env.program.push(WRITE_END);
                         env.program.push(v);
@@ -258,14 +207,11 @@ impl<'a> Handler<'a> {
                 }
             }
             WRITE_END => {
-                match self.txns.get_mut(&pid).unwrap().pop() {
-                    Some(_) => {
-                        self.cursors = mem::replace(&mut self.cursors,
-                                                    BTreeMap::new()).into_iter()
-                            .filter(|t| ((*t).1).0 != TxType::Read).collect();
-                    },
-                    _ => {}
-                };
+                if let Some(_) = self.txns.get_mut(&pid).unwrap().pop() {
+                    self.cursors = mem::replace(&mut self.cursors,
+                                                BTreeMap::new()).into_iter()
+                        .filter(|t| ((*t).1).0 != TxType::Read).collect();
+                }
                 Ok(())
             }
             _ => Err(Error::UnknownInstruction),
@@ -287,7 +233,7 @@ impl<'a> Handler<'a> {
                     Err(e) => Err(error_database!(e)),
                     Ok(txn) => {
                         if !self.txns.contains_key(&pid) {
-                            self.txns.insert(pid, Queue::new(MAX_TXNS_PER_ENV));
+                            self.txns.insert(pid, TxnStack::new(MAX_TXNS_PER_ENV));
                         }
                         let _ = self.txns.get_mut(&pid).unwrap().push(Txn::Read(txn));
                         env.program.push(READ_END);
@@ -319,7 +265,7 @@ impl<'a> Handler<'a> {
 						-> PassResult<'a> {
         if instruction == ASSOC {
             match self.txns.get(&pid)
-                .and_then(|queue| queue.peek())
+                .and_then(|txn_stack| txn_stack.peek())
                 .and_then(|txn| match txn.tx_type() {
                     TxType::Write => Some(txn),
                     _ => None
@@ -351,18 +297,14 @@ impl<'a> Handler<'a> {
 						 -> PassResult<'a> {
         if instruction == COMMIT {
             match self.txns.get_mut(&pid)
-                .and_then(|queue| queue.pop()) {
+                .and_then(|txn_stack| txn_stack.pop_tx_type(TxType::Write)) {
                 Some(Txn::Write(txn)) => {
                     match txn.commit() {
                         Ok(_) => Ok(()),
                         Err(reason) => Err(error_database!(reason))
                     }
                 },
-                Some(txn) => {
-                    let _ = self.txns.get_mut(&pid).unwrap().push(txn);
-                    Err(error_no_transaction!())
-                },
-                None => Err(error_no_transaction!())
+                _ => Err(error_no_transaction!())
             }
         } else {
             Err(Error::UnknownInstruction)
@@ -379,7 +321,7 @@ impl<'a> Handler<'a> {
         if instruction == RETR {
             let key = stack_pop!(env);
             self.txns.get(&pid)
-                .and_then(|queue| queue.peek())
+                .and_then(|txn_stack| txn_stack.peek())
                 .and_then(|txn| Some(txn.access()))
                 .map_or_else(|| Err(error_no_transaction!()), |acc| {
                     match acc.get::<[u8], [u8]>(&self.db.db, key) {
@@ -406,7 +348,7 @@ impl<'a> Handler<'a> {
         if instruction == ASSOCQ {
             let key = stack_pop!(env);
             self.txns.get(&pid)
-                .and_then(|queue| queue.peek())
+                .and_then(|txn_stack| txn_stack.peek())
                 .and_then(|txn| Some(txn.access()))
                 .map_or_else(|| Err(error_no_transaction!()),  |acc| {
                     match acc.get::<[u8], [u8]>(&self.db.db, key) {
@@ -438,7 +380,7 @@ impl<'a> Handler<'a> {
 						 -> PassResult<'a> {
         if instruction == CURSOR {
             let cursor = self.txns.get(&pid)
-                .and_then(|queue| queue.peek())
+                .and_then(|txn_stack| txn_stack.peek())
                 .map(|txn| txn.cursor(&self.db.db));
             match cursor {
                 Some(cursor) => {
