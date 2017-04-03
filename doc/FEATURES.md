@@ -20,8 +20,6 @@ in`default`), the feature gate can be dropped.
 
 ## Current experimental features
 
-* `static_module_dispatch` (opt-in required, not in `experimental`, [issue #152](https://github.com/PumpkinDB/PumpkinDB/issues/152))
-
 ## Graduated features
 
 Graduated features are enabled by default, but in the source code,

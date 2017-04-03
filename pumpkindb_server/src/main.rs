@@ -43,6 +43,8 @@ use mio::tcp::*;
 use clap::{App, Arg};
 
 use pumpkindb_engine::{script, storage, timestamp};
+use pumpkindb_engine::script::dispatcher;
+use pumpkindb_engine::messaging;
 
 lazy_static! {
  static ref ENVIRONMENT: lmdb::Environment = {
@@ -162,7 +164,8 @@ fn main() {
 
     for i in 0..num_cpus::get() {
         info!("Starting scheduler on core {}.", i);
-        let (sender, receiver) = script::Scheduler::create_sender();
+        let (sender, receiver) = script::Scheduler::<dispatcher::StandardDispatcher<
+            messaging::SimpleAccessor, messaging::SimpleAccessor>>::create_sender();
         let storage_clone = storage.clone();
         let timestamp_clone = timestamp.clone();
 
@@ -171,8 +174,11 @@ fn main() {
 
         thread::spawn(move || {
             let mut scheduler =
-                script::Scheduler::new(&storage_clone, publisher_accessor1, subscriber_accessor1,
-                                       timestamp_clone, receiver);
+                script::Scheduler::new(
+                    dispatcher::StandardDispatcher::new(&storage_clone,
+                                                        publisher_accessor1, subscriber_accessor1,
+                                                        timestamp_clone),
+                    receiver);
             scheduler.run()
         });
         senders.push(sender)

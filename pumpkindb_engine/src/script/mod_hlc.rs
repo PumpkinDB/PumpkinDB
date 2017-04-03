@@ -14,7 +14,7 @@ instruction!(HLC, b"\x83HLC");
 instruction!(HLC_LC, b"\x86HLC/LC");
 instruction!(HLC_TICK, b"\x88HLC/TICK");
 
-use super::{Env, EnvId, Module, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
+use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
             offset_by_size};
 use timestamp;
 
@@ -28,7 +28,7 @@ pub struct Handler<'a> {
     timestamp: Arc<timestamp::Timestamp>,
 }
 
-impl<'a> Module<'a> for Handler<'a> {
+impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
         try_instruction!(env, self.handle_hlc(env, instruction, pid));
         try_instruction!(env, self.handle_hlc_lc(env, instruction, pid));

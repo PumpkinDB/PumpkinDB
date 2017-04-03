@@ -24,7 +24,7 @@ instruction!(JSON_HASQ, b"\x89JSON/HAS?");
 instruction!(JSON_STRING_TO, b"\x8dJSON/STRING->");
 instruction!(JSON_TO_STRING, b"\x8dJSON/->STRING");
 
-use super::{Env, EnvId, Module, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
+use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
             offset_by_size, STACK_TRUE, STACK_FALSE};
 use serde_json as json;
 
@@ -59,7 +59,7 @@ macro_rules! json_is_a {
     }};
 }
 
-impl<'a> Module<'a> for Handler<'a> {
+impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
         try_instruction!(env, self.handle_jsonq(env, instruction, pid));
         try_instruction!(env, self.handle_json_objectq(env, instruction, pid));
