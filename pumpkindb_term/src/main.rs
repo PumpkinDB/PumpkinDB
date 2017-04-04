@@ -94,9 +94,10 @@ fn main() {
                 let mut program = String::new();
                 let text_str = text.as_str();
                 let text_bytes = text_str.as_bytes();
-                if text_bytes.len() >= 2 && text_bytes[0] == 92u8 {
-                    if text_bytes[1] == 104u8 {
+                if text_bytes.len() >= 2 && text_bytes[0] == b'\\' {
+                    if text_bytes[1] == b'h' {
                         println!("\nTo send an expression, end it with `.`");
+                        println!("To trace a value in the script use TRACE instruction");
                         println!("To quit, hit ^D");
                         println!("Further help online at http://pumpkindb.org/doc/");
                         println!("Missing a feature? Let us know at \
