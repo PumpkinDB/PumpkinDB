@@ -119,6 +119,8 @@
    * [HLC/LC](script/HLC/LC.md)
    * [HLC/OBSERVE](script/HLC/OBSERVE.md)
    * [HLC/TICK](script/HLC/TICK.md)
+ * Debugging
+   * [TRACE](script/TRACE.md)
  * Miscellaneous
    * [FEATURE?](script/FEATUREQ.md)
    * [$SYSTEM/VERSION](script/_SYSTEM/VERSION.md)
