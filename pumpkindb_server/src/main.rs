@@ -162,8 +162,10 @@ fn main() {
     let storage = Arc::new(storage::Storage::new(&ENVIRONMENT));
     let timestamp = Arc::new(timestamp::Timestamp::new(Some(hlc_state)));
 
-    for i in 0..num_cpus::get() {
-        info!("Starting scheduler on core {}.", i);
+    let cpus = num_cpus::get();
+    info!("Starting {} schedulers", cpus);
+    for i in 0..cpus {
+        debug!("Starting scheduler on core {}.", i);
         let (sender, receiver) = script::Scheduler::<dispatcher::StandardDispatcher<
             messaging::SimpleAccessor, messaging::SimpleAccessor>>::create_sender();
         let storage_clone = storage.clone();

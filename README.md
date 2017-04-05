@@ -76,13 +76,11 @@ After that, you can run PumpkinDB server this way:
 ```shell
 $ cargo build --all
 $ ./target/debug/pumpkindb
-2017-03-18T09:55:24.510400-07:00 WARN pumpkindb - No logging configuration specified, switching to console logging
-2017-03-18T09:55:24.511821-07:00 INFO pumpkindb - Starting up
-2017-03-18T09:55:24.512955-07:00 INFO pumpkindb::storage - Available disk space is approx. 26Gb, setting database map size to it
-2017-03-18T09:55:24.514145-07:00 INFO pumpkindb - Starting scheduler on core 0.
-# ...
-2017-03-18T09:55:24.515344-07:00 INFO pumpkindb - Starting scheduler on core 7.
-2017-03-18T09:55:24.515468-07:00 INFO pumpkindb::server - Listening on 0.0.0.0:9981
+2017-04-03T10:43:49.667667-07:00 WARN pumpkindb - No logging configuration specified, switching to console logging
+2017-04-03T10:43:49.668660-07:00 INFO pumpkindb - Starting up
+2017-04-03T10:43:49.674139-07:00 INFO pumpkindb_engine::storage - Available disk space is approx. 7Gb, setting database map size to it
+2017-04-03T10:43:49.675759-07:00 INFO pumpkindb - Starting 8 schedulers
+2017-04-03T10:43:49.676113-07:00 INFO pumpkindb - Listening on 0.0.0.0:9981
 ```
 
 You can connect to it using `pumpkindb-term`:
