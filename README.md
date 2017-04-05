@@ -13,7 +13,7 @@
 | Project status | Usable, between alpha and beta |
 | Production-readiness | Depends on your risk tolerance |
 
-PumpkinDB is a compact event sourcing database, featuring:
+PumpkinDB is a compact event sourcing database engine, featuring:
 
 * Immutable key/value storage
 * ACID transactions
