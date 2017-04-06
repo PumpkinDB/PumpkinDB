@@ -12,7 +12,7 @@ This instruction is one of two ways one can read from the database.
 Instructions like [RETR](RETR.md) are only possible in the context of
 a READ or a [WRITE](WRITE.md).
 
-The total number of transaction per environment is 64.
+The total number of simultaneous read transactions is limited to 126.
 
 {% common -%}
 

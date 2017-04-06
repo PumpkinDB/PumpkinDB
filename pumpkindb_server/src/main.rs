@@ -52,7 +52,14 @@ lazy_static! {
     let storage_path = config::get_str("storage.path").unwrap().into_owned();
     fs::create_dir_all(storage_path.as_str()).expect("can't create directory");
     let map_size = config::get_int("storage.mapsize");
-    storage::create_environment(storage_path, map_size)
+    let maxreaders = config::get_int("storage.maxreaders").and_then(|v| Some(v as u32));
+    if let Some(max) = maxreaders {
+       if max < 1 {
+          error!("storage.maxreaders can't be less than 1");
+          ::std::process::exit(1);
+       }
+    }
+    storage::create_environment(storage_path, map_size, maxreaders)
  };
 }
 

@@ -50,3 +50,5 @@ extern crate memmap;
 extern crate pumpkinscript;
 
 extern crate uuid;
+
+extern crate num_cpus;

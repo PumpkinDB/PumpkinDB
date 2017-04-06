@@ -325,7 +325,6 @@ pub type TrySendError<T> = std::sync::mpsc::TrySendError<T>;
 use storage;
 use timestamp;
 
-pub mod queue;
 #[cfg(feature="mod_core")]
 pub mod mod_core;
 #[cfg(feature="mod_stack")]
@@ -641,6 +640,7 @@ mod tests {
     use crossbeam;
     use super::binparser;
     use storage;
+    use rand::Rng;
 
     const _EMPTY: &'static [u8] = b"";
 
