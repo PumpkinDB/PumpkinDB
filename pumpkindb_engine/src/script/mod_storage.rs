@@ -13,7 +13,6 @@
 use lmdb;
 use lmdb::traits::{LmdbResultExt, AsLmdbBytes, FromLmdbBytes};
 use storage;
-use storage::GlobalWriteLock;
 use std::mem;
 use std::error::Error as StdError;
 use std::collections::HashMap;
@@ -23,12 +22,11 @@ use super::{Env, EnvId, Dispatcher, PassResult, Error, STACK_TRUE, STACK_FALSE, 
 use byteorder::{BigEndian, WriteBytesExt};
 use snowflake::ProcessUniqueId;
 use std::collections::BTreeMap;
-use script::queue::Queue;
+use storage::WriteTransactionContainer;
 
 pub type CursorId = ProcessUniqueId;
 
 const STACK_EMPTY_CLOSURE: &'static [u8] = b"";
-const MAX_TXNS_PER_ENV: usize = 64;
 
 instruction!(WRITE, b"\x85WRITE");
 instruction!(WRITE_END, b"\x80\x85WRITE"); // internal instruction
@@ -84,7 +82,7 @@ impl<'a> Accessor<'a> {
 #[derive(Debug)]
 enum Txn<'a> {
     Read(lmdb::ReadTransaction<'a>),
-    Write(lmdb::WriteTransaction<'a>),
+    Write(WriteTransactionContainer<'a>),
 }
 
 impl<'a> Txn<'a> {
@@ -110,14 +108,14 @@ impl<'a> Txn<'a> {
 
 pub struct Handler<'a> {
     db: &'a storage::Storage<'a>,
-    txns: HashMap<EnvId, Queue<Txn<'a>>>,
+    txns: HashMap<EnvId, Vec<Txn<'a>>>,
     cursors: BTreeMap<(EnvId, Vec<u8>), (TxType, lmdb::Cursor<'a, 'a>)>
 }
 
 macro_rules! read_or_write_transaction {
     ($me: expr, $env_id: expr) => {
         match $me.txns.get(&$env_id)
-            .and_then(|queue| queue.peek()) {
+            .and_then(|v| Some(&v[v.len() - 1])) {
             None => return Err(error_no_transaction!()),
             Some(txn) => txn
         }
@@ -127,7 +125,7 @@ macro_rules! read_or_write_transaction {
 macro_rules! tx_type {
     ($me: expr, $env_id: expr) => {{
         let txn_type = $me.txns.get(&$env_id)
-            .and_then(|queue| queue.peek())
+            .and_then(|v| Some(&v[v.len() - 1]))
             .and_then(|txn| Some(txn.tx_type()));
         if txn_type.is_none() {
             return Err(error_no_transaction!())
@@ -194,9 +192,9 @@ macro_rules! cursorq_op {
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn done(&mut self, _: &mut Env, pid: EnvId) {
         self.txns.get_mut(&pid)
-            .and_then(|queue| {
-                while queue.len() > 0 {
-                    let txn = queue.pop();
+            .and_then(|vec| {
+                while vec.len() > 0 {
+                    let txn = vec.pop();
                     drop(txn)
                 }
                 Some(())
@@ -240,21 +238,21 @@ impl<'a> Handler<'a> {
         match instruction {
             WRITE => {
                 let v = stack_pop!(env);
-                if self.db.try_lock() == false {
-                    return Err(Error::Reschedule);
-                }
-                // prepare transaction
-                match lmdb::WriteTransaction::new(self.db.env) {
-                    Err(e) => Err(error_database!(e)),
-                    Ok(txn) => {
-                        if !self.txns.contains_key(&pid) {
-                            self.txns.insert(pid, Queue::new(MAX_TXNS_PER_ENV));
+                match self.db.write() {
+                    None => Err(Error::Reschedule),
+                    Some(result) =>
+                        match result {
+                            Err(e) => Err(error_database!(e)),
+                            Ok(txn) => {
+                                if !self.txns.contains_key(&pid) {
+                                    self.txns.insert(pid, Vec::new());
+                                }
+                                let _ = self.txns.get_mut(&pid).unwrap().push(Txn::Write(txn));
+                                env.program.push(WRITE_END);
+                                env.program.push(v);
+                                Ok(())
+                            }
                         }
-                        let _ = self.txns.get_mut(&pid).unwrap().push(Txn::Write(txn));
-                        env.program.push(WRITE_END);
-                        env.program.push(v);
-                        Ok(())
-                    }
                 }
             }
             WRITE_END => {
@@ -281,18 +279,20 @@ impl<'a> Handler<'a> {
         match instruction {
             READ => {
                 let v = stack_pop!(env);
-
-                // prepare transaction
-                match lmdb::ReadTransaction::new(self.db.env) {
-                    Err(e) => Err(error_database!(e)),
-                    Ok(txn) => {
-                        if !self.txns.contains_key(&pid) {
-                            self.txns.insert(pid, Queue::new(MAX_TXNS_PER_ENV));
-                        }
-                        let _ = self.txns.get_mut(&pid).unwrap().push(Txn::Read(txn));
-                        env.program.push(READ_END);
-                        env.program.push(v);
-                        Ok(())
+                match self.db.read() {
+                    None => Err(Error::Reschedule),
+                    Some(result) =>
+                        match result {
+                            Err(e) => Err(error_database!(e)),
+                            Ok(txn) => {
+                                if !self.txns.contains_key(&pid) {
+                                    self.txns.insert(pid, Vec::new());
+                                }
+                                let _ = self.txns.get_mut(&pid).unwrap().push(Txn::Read(txn));
+                                env.program.push(READ_END);
+                                env.program.push(v);
+                                Ok(())
+                            }
                     }
                 }
             }
@@ -319,7 +319,7 @@ impl<'a> Handler<'a> {
 						-> PassResult<'a> {
         if instruction == ASSOC {
             match self.txns.get(&pid)
-                .and_then(|queue| queue.peek())
+                .and_then(|v| Some(&v[v.len() - 1]))
                 .and_then(|txn| match txn.tx_type() {
                     TxType::Write => Some(txn),
                     _ => None
@@ -351,7 +351,7 @@ impl<'a> Handler<'a> {
 						 -> PassResult<'a> {
         if instruction == COMMIT {
             match self.txns.get_mut(&pid)
-                .and_then(|queue| queue.pop()) {
+                .and_then(|vec| vec.pop()) {
                 Some(Txn::Write(txn)) => {
                     match txn.commit() {
                         Ok(_) => Ok(()),
@@ -379,7 +379,7 @@ impl<'a> Handler<'a> {
         if instruction == RETR {
             let key = stack_pop!(env);
             self.txns.get(&pid)
-                .and_then(|queue| queue.peek())
+                .and_then(|v| Some(&v[v.len() - 1]))
                 .and_then(|txn| Some(txn.access()))
                 .map_or_else(|| Err(error_no_transaction!()), |acc| {
                     match acc.get::<[u8], [u8]>(&self.db.db, key) {
@@ -406,7 +406,7 @@ impl<'a> Handler<'a> {
         if instruction == ASSOCQ {
             let key = stack_pop!(env);
             self.txns.get(&pid)
-                .and_then(|queue| queue.peek())
+                .and_then(|v| Some(&v[v.len() - 1]))
                 .and_then(|txn| Some(txn.access()))
                 .map_or_else(|| Err(error_no_transaction!()),  |acc| {
                     match acc.get::<[u8], [u8]>(&self.db.db, key) {
@@ -438,7 +438,7 @@ impl<'a> Handler<'a> {
 						 -> PassResult<'a> {
         if instruction == CURSOR {
             let cursor = self.txns.get(&pid)
-                .and_then(|queue| queue.peek())
+                .and_then(|v| Some(&v[v.len() - 1]))
                 .map(|txn| txn.cursor(&self.db.db));
             match cursor {
                 Some(cursor) => {
@@ -596,6 +596,7 @@ mod tests {
     use script::binparser;
     use storage;
     use timestamp;
+    use rand::Rng;
 
     const _EMPTY: &'static [u8] = b"";
 

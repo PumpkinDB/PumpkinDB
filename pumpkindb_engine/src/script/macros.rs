@@ -278,29 +278,43 @@ macro_rules! bench_eval {
                 builder.open(path, lmdb::open::NOTLS, 0o600).expect("can't open env")
             };
 
-            let db = storage::Storage::new(&env);
+            let db = Arc::new(storage::Storage::new(&env));
+            let cpus = ::num_cpus::get();
             crossbeam::scope(|scope| {
                 let mut simple = messaging::Simple::new();
-                let timestamp = Arc::new(timestamp::Timestamp::new(None));
                 let messaging_accessor = simple.accessor();
                 let messaging_accessor_ = simple.accessor();
                 let simple_thread = scope.spawn(move || simple.run());
-                let publisher_clone = messaging_accessor.clone();
-                let subscriber_clone = messaging_accessor.clone();
-                let timestamp_clone = timestamp.clone();
-                let (sender, receiver) = Scheduler::<dispatcher::StandardDispatcher<
-                    messaging::SimpleAccessor, messaging::SimpleAccessor>>::create_sender();
-                let handle = scope.spawn(move || {
-                    let mut scheduler = Scheduler::new(
-                        dispatcher::StandardDispatcher::new(&db,
-                           publisher_clone, subscriber_clone, timestamp_clone),
-                        receiver,
-                    );
-                    scheduler.run()
-                });
-                let sender_ = sender.clone();
+                let timestamp = Arc::new(timestamp::Timestamp::new(None));
+
+                let mut handles = vec![];
+                let mut senders = vec![];
+                for i in 0..cpus {
+                    let publisher_clone = messaging_accessor.clone();
+                    let subscriber_clone = messaging_accessor.clone();
+                    let timestamp_clone = timestamp.clone();
+                    let (sender, receiver) = Scheduler::<dispatcher::StandardDispatcher<
+                        messaging::SimpleAccessor, messaging::SimpleAccessor>>::create_sender();
+                    let storage = db.clone();
+                    let handle = scope.spawn(move || {
+                        let mut scheduler = Scheduler::new(
+                            dispatcher::StandardDispatcher::new(&storage,
+                               publisher_clone, subscriber_clone, timestamp_clone),
+                            receiver,
+                        );
+                        scheduler.run()
+                    });
+                    handles.push(handle);
+                    senders.push(sender.clone());
+                }
+                let original_senders = senders.clone();
                 let script = parse($script).unwrap();
                 $b.iter(move || {
+                    let mut rng = ::rand::thread_rng();
+                    let s = senders.clone();
+                    let index: usize = rng.gen_range(0, s.len() - 1);
+                    let sender = s.get(index).unwrap();
+
                     let (callback, receiver) = mpsc::channel::<ResponseMessage>();
                     let (sender0, _) = mpsc::channel();
                     let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(),
@@ -319,10 +333,14 @@ macro_rules! bench_eval {
                        }
                     }
                 });
-                let _ = sender_.send(RequestMessage::Shutdown);
+                for s in original_senders {
+                   let _ = s.send(RequestMessage::Shutdown);
+                }
                 messaging_accessor_.shutdown();
-                let _ = handle.join();
-                let _ = simple_thread.join();
+                for handle in handles {
+                   handle.join();
+                }
+                simple_thread.join();
           });
         };
       }

@@ -397,6 +397,7 @@ mod tests {
     use crossbeam;
     use storage;
     use timestamp;
+    use rand::Rng;
 
     const _EMPTY: &'static [u8] = b"";
 

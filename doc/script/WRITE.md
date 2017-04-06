@@ -14,7 +14,7 @@ a WRITE. If changes are to be saved, [COMMIT](COMMIT.md) has to be
 used as well. Read-transaction related instructions (such as [RETR](RETR.md))
 can also be used.
 
-The total number of transaction per environment is 64.
+The total number of simultaneous write transactions is limited to one.
 
 {% common -%}
 
