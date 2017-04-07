@@ -43,4 +43,6 @@ marker instruction.
 evals : [1] WRITE.
 invalid_code : [1 WRITE] TRY UNWRAP 0x05 EQUAL?.
 empty_stack : [WRITE] TRY UNWRAP 0x04 EQUAL?.
+nested_writes_shouldnt_work_for_now : [[[] WRITE] TRY] WRITE UNWRAP 0x09 EQUAL?.
+read_nested_writes_shouldnt_work_for_now : [[[] WRITE] TRY] READ UNWRAP 0x09 EQUAL?.
 ```

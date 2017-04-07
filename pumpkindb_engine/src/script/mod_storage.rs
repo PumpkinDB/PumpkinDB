@@ -238,6 +238,12 @@ impl<'a> Handler<'a> {
         match instruction {
             WRITE => {
                 let v = stack_pop!(env);
+                if self.txns.get(&pid).is_some() && self.txns.get(&pid).unwrap().len() > 0 {
+                    return Err(error_program!(
+                               "Nested WRITEs are not currently allowed".as_bytes(),
+                               "".as_bytes(),
+                               ERROR_DATABASE));
+                }
                 match self.db.write() {
                     None => Err(Error::Reschedule),
                     Some(result) =>
