@@ -4,6 +4,48 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+macro_rules! builtins {
+    ($file: expr) => {
+    lazy_static! {
+      static ref BUILTIN_FILE: &'static [u8] = include_bytes!($file);
+
+      static ref BUILTIN_DEFS: Vec<Vec<u8>> = ::pumpkinscript::textparser::programs(*BUILTIN_FILE).unwrap().1;
+
+      static ref BUILTINS: ::std::collections::BTreeMap<&'static [u8], Vec<u8>> = {
+          let mut map = ::std::collections::BTreeMap::new();
+          let ref defs : Vec<Vec<u8>> = *BUILTIN_DEFS;
+          for definition in defs {
+              match ::pumpkinscript::binparser::instruction(definition.as_slice()) {
+                  ::pumpkinscript::ParseResult::Done(&[0x81, b':', ref rest..], _) => {
+                      let instruction = &definition[0..definition.len() - rest.len() - 2];
+                      map.insert(instruction, Vec::from(rest));
+                  },
+                  other => panic!("builtin definition parse error {:?}", other)
+              }
+          }
+          map
+      };
+    }};
+}
+
+macro_rules! handle_builtins {
+    () => {
+        #[inline]
+        fn handle_builtins(&mut self,
+                           env: &mut Env<'a>,
+                           instruction: &'a [u8],
+                           _: EnvId)
+                           -> PassResult<'a> {
+            if BUILTINS.contains_key(instruction) {
+                let vec = BUILTINS.get(instruction).unwrap();
+                env.program.push(vec.as_slice());
+                Ok(())
+            } else {
+                Err(Error::UnknownInstruction)
+            }
+        }
+    };
+}
 
 macro_rules! handle_error {
     ($env: expr, $err: expr) => {

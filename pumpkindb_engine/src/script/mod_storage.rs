@@ -189,6 +189,8 @@ macro_rules! cursorq_op {
     }};
 }
 
+builtins!("mod_storage.builtins");
+
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn done(&mut self, _: &mut Env, pid: EnvId) {
         self.txns.get_mut(&pid)
@@ -202,6 +204,7 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
     }
 
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        try_instruction!(env, self.handle_builtins(env, instruction, pid));
         try_instruction!(env, self.handle_write(env, instruction, pid));
         try_instruction!(env, self.handle_read(env, instruction, pid));
         try_instruction!(env, self.handle_assoc(env, instruction, pid));
@@ -228,6 +231,7 @@ impl<'a> Handler<'a> {
         }
     }
 
+    handle_builtins!();
 
     #[inline]
     pub fn handle_write(&mut self,

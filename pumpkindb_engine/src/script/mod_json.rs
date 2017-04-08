@@ -59,8 +59,11 @@ macro_rules! json_is_a {
     }};
 }
 
+builtins!("mod_json.builtins");
+
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        try_instruction!(env, self.handle_builtins(env, instruction, pid));
         try_instruction!(env, self.handle_jsonq(env, instruction, pid));
         try_instruction!(env, self.handle_json_objectq(env, instruction, pid));
         try_instruction!(env, self.handle_json_stringq(env, instruction, pid));
@@ -81,6 +84,8 @@ impl<'a> Handler<'a> {
     pub fn new() -> Self {
         Handler { phantom: PhantomData }
     }
+
+    handle_builtins!();
 
     #[inline]
     pub fn handle_jsonq(&mut self,
