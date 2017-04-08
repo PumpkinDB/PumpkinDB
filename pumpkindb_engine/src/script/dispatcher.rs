@@ -82,7 +82,11 @@ macro_rules! for_each_dispatcher {
            let ref mut $module = $dispatcher.msg;
            $expr
         }
-
+        #[cfg(feature="mod_uuid")]
+        {
+            let ref mut $module = $dispatcher.uuid;
+            $expr
+        }
     }};
 }
 
@@ -107,6 +111,8 @@ pub struct StandardDispatcher<'a, P: 'a, S: 'a>
     json: mod_json::Handler<'a>,
     #[cfg(feature = "mod_msg")]
     msg: mod_msg::Handler<'a, P, S>,
+    #[cfg(feature = "mod_uuid")]
+    uuid: mod_uuid::Handler<'a>,
 }
 
 impl<'a, P: 'a, S: 'a> StandardDispatcher<'a, P, S>
@@ -135,6 +141,8 @@ impl<'a, P: 'a, S: 'a> StandardDispatcher<'a, P, S>
                     json: mod_json::Handler::new(),
                 #[cfg(feature = "mod_msg")]
                     msg: mod_msg::Handler::new(publisher, subscriber),
+                #[cfg(feature = "mod_uuid")]
+                    uuid: mod_uuid::Handler::new(),
         }
     }
 }
