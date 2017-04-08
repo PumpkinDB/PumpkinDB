@@ -32,7 +32,7 @@ great auditing and transactional capabilities, as well as opportunities for loss
 PumpkinDB is essentially a database programming environment, largely inspired by core ideas behind [MUMPS](https://en.wikipedia.org/wiki/MUMPS). Instead of M,
 it has a Forth-inspired stack-based language, PumpkinScript. Instead of hierarchical keys, it has a flat key namespace and doesn't allow overriding values once they are set.  Core motivation for immutability was that with the cost of storage declining, erasing data is effectively a strategical mistake.
 
-While not intended for general purpose programming, it's main objective is to facilitate building specialized application-specific and generic databases with a particular focus on immutability and processing data as close to storage as possible, incurring as little communication penalty as possible.
+While not intended for general purpose programming, its main objective is to facilitate building specialized application-specific and generic databases with a particular focus on immutability and processing data as close to storage as possible, incurring as little communication penalty as possible.
 
 Applications communicate with PumpkinDB by sending small PumpkinScript programs
 over a network interface (or API when using PumpkinDB as an embedded solution).
