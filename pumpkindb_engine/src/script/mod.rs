@@ -343,6 +343,8 @@ pub mod mod_hash;
 pub mod mod_json;
 #[cfg(feature="mod_msg")]
 pub mod mod_msg;
+#[cfg(feature="mod_uuid")]
+pub mod mod_uuid;
 
 /// Scheduler is a PumpkinScript scheduler and interpreter. This is the
 /// most central part of this module.
