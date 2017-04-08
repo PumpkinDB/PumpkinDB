@@ -1,20 +1,3 @@
-( Constants )
-$SYSTEM/VERSION : "0.2-wip".
-TRUE : 0x01.
-FALSE : 0x00.
-( Basic built-ins )
-2DUP : OVER OVER.
-2DROP : DROP DROP.
-IF : [] IFELSE.
-NONE? : LENGTH 0 EQUAL?.
-SOME? : NONE? NOT.
-STACK : DEPTH WRAP.
-NIP : SWAP DROP.
-TUCK : SWAP OVER.
-2NIP : 2SWAP 2DROP.
-2TUCK : 2SWAP 2OVER.
--ROT : ROT ROT.
-STARTSWITH? : 2DUP LENGTH SWAP LENGTH SWAP UINT/LT? [2DROP 0] [DUP LENGTH 0 SWAP 2SWAP SWAP 2SWAP SLICE EQUAL?] IFELSE.
 ( Cursor-related functionality )
 ?CURSOR/SEEKLAST : ['key SET 'c SET
                    key [] 511 key LENGTH UINT/SUB 0xff PAD CONCAT 'padded SET
@@ -34,4 +17,3 @@ CURSOR/DOWHILE-PREFIXED : ['closure SET
                             CURSOR 'c SET
                             c prefix CURSOR/SEEK?
                             [`c `closure1 'CURSOR/NEXT? ?CURSOR/DOWHILE] IF] EVAL/SCOPED.
-JSON/EMPTY : "{}" .

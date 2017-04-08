@@ -29,8 +29,11 @@ pub struct Handler<'a> {
     phantom: PhantomData<&'a ()>,
 }
 
+builtins!("mod_stack.builtins");
+
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
+        try_instruction!(env, self.handle_builtins(env, instruction, pid));
         try_instruction!(env, self.handle_drop(env, instruction, pid));
         try_instruction!(env, self.handle_dup(env, instruction, pid));
         try_instruction!(env, self.handle_swap(env, instruction, pid));
@@ -50,6 +53,8 @@ impl<'a> Handler<'a> {
     pub fn new() -> Self {
         Handler { phantom: PhantomData }
     }
+
+    handle_builtins!();
 
     #[inline]
     fn handle_dup(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {

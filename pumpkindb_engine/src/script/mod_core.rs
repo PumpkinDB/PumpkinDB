@@ -4,14 +4,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use pumpkinscript::{parse_bin, binparser, textparser};
+use pumpkinscript::{parse_bin, binparser};
 
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
             offset_by_size, STACK_TRUE, STACK_FALSE};
 
 use std::marker::PhantomData;
-
-use std::collections::BTreeMap;
 
 use pumpkinscript;
 use num_bigint::BigUint;
@@ -39,27 +37,7 @@ instruction!(OR, (a, b => c), b"\x82OR");
 // Category: experimental features
 instruction!(FEATUREQ, (a => b), b"\x88FEATURE?");
 
-// Builtin instructions that are implemented in PumpkinScript
-lazy_static! {
-  static ref BUILTIN_FILE: &'static [u8] = include_bytes!("builtins");
-
-  static ref BUILTIN_DEFS: Vec<Vec<u8>> = textparser::programs(*BUILTIN_FILE).unwrap().1;
-
-  static ref BUILTINS: BTreeMap<&'static [u8], Vec<u8>> = {
-      let mut map = BTreeMap::new();
-      let ref defs : Vec<Vec<u8>> = *BUILTIN_DEFS;
-      for definition in defs {
-          match binparser::instruction(definition.as_slice()) {
-              pumpkinscript::ParseResult::Done(&[0x81, b':', ref rest..], _) => {
-                  let instruction = &definition[0..definition.len() - rest.len() - 2];
-                  map.insert(instruction, Vec::from(rest));
-              },
-              other => panic!("builtin definition parse error {:?}", other)
-          }
-      }
-      map
-  };
-}
+builtins!("mod_core.builtins");
 
 pub struct Handler<'a> {
     phantom: PhantomData<&'a ()>,
@@ -92,20 +70,7 @@ impl<'a> Handler<'a> {
         }
     }
 
-    #[inline]
-    fn handle_builtins(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        if BUILTINS.contains_key(instruction) {
-            let vec = BUILTINS.get(instruction).unwrap();
-            env.program.push(vec.as_slice());
-            Ok(())
-        } else {
-            Err(Error::UnknownInstruction)
-        }
-    }
+    handle_builtins!();
 
     #[inline]
     fn handle_not(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
