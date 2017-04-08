@@ -43,7 +43,7 @@ defined.
 ## Tests
 
 ```test
-works : 1 'val SET 1 val.
+works : 1 'val SET 1 val EQUAL?.
 empty_stack : [SET] TRY UNWRAP 0x04 EQUAL?.
 empty_stack_1 : ['a SET] TRY UNWRAP 0x04 EQUAL?.
 ```
