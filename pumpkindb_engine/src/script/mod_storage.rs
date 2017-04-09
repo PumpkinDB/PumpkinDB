@@ -327,29 +327,26 @@ impl<'a> Handler<'a> {
 						instruction: &'a [u8],
 						pid: EnvId)
 						-> PassResult<'a> {
-        if instruction == ASSOC {
-            match self.txns.get(&pid)
-                .and_then(|v| Some(&v[v.len() - 1]))
-                .and_then(|txn| match txn.tx_type() {
-                    TxType::Write => Some(txn),
-                    _ => None
-                }) {
-                Some(&Txn::Write(ref txn)) => {
-                    let value = stack_pop!(env);
-                    let key = stack_pop!(env);
+        instruction_is!(env, instruction, ASSOC);
+        match self.txns.get(&pid)
+            .and_then(|v| Some(&v[v.len() - 1]))
+            .and_then(|txn| match txn.tx_type() {
+                TxType::Write => Some(txn),
+                _ => None
+            }) {
+            Some(&Txn::Write(ref txn)) => {
+                let value = stack_pop!(env);
+                let key = stack_pop!(env);
 
-                    let mut access = txn.access();
+                let mut access = txn.access();
 
-                    match access.put(&self.db.db, key, value, lmdb::put::NOOVERWRITE) {
-                        Ok(_) => Ok(()),
-                        Err(lmdb::Error::Code(code)) if lmdb::error::KEYEXIST == code => Err(error_duplicate_key!(key)),
-                        Err(err) => Err(error_database!(err)),
-                    }
-                },
-                _ => Err(error_no_transaction!())
-            }
-        } else {
-            Err(Error::UnknownInstruction)
+                match access.put(&self.db.db, key, value, lmdb::put::NOOVERWRITE) {
+                    Ok(_) => Ok(()),
+                    Err(lmdb::Error::Code(code)) if lmdb::error::KEYEXIST == code => Err(error_duplicate_key!(key)),
+                    Err(err) => Err(error_database!(err)),
+                }
+            },
+            _ => Err(error_no_transaction!())
         }
     }
 
@@ -359,23 +356,20 @@ impl<'a> Handler<'a> {
 						 instruction: &'a [u8],
 						 pid: EnvId)
 						 -> PassResult<'a> {
-        if instruction == COMMIT {
-            match self.txns.get_mut(&pid)
-                .and_then(|vec| vec.pop()) {
-                Some(Txn::Write(txn)) => {
-                    match txn.commit() {
-                        Ok(_) => Ok(()),
-                        Err(reason) => Err(error_database!(reason))
-                    }
-                },
-                Some(txn) => {
-                    let _ = self.txns.get_mut(&pid).unwrap().push(txn);
-                    Err(error_no_transaction!())
-                },
-                None => Err(error_no_transaction!())
-            }
-        } else {
-            Err(Error::UnknownInstruction)
+        instruction_is!(env, instruction, COMMIT);
+        match self.txns.get_mut(&pid)
+            .and_then(|vec| vec.pop()) {
+            Some(Txn::Write(txn)) => {
+                match txn.commit() {
+                    Ok(_) => Ok(()),
+                    Err(reason) => Err(error_database!(reason))
+                }
+            },
+            Some(txn) => {
+                let _ = self.txns.get_mut(&pid).unwrap().push(txn);
+                Err(error_no_transaction!())
+            },
+            None => Err(error_no_transaction!())
         }
     }
 
@@ -386,25 +380,22 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        pid: EnvId)
                        -> PassResult<'a> {
-        if instruction == RETR {
-            let key = stack_pop!(env);
-            self.txns.get(&pid)
-                .and_then(|v| Some(&v[v.len() - 1]))
-                .and_then(|txn| Some(txn.access()))
-                .map_or_else(|| Err(error_no_transaction!()), |acc| {
-                    match acc.get::<[u8], [u8]>(&self.db.db, key) {
-                        Ok(Some(val)) => {
-                            let slice = alloc_and_write!(val, env);
-                            env.push(slice);
-                            Ok(())
-                        },
-                        Ok(None) => Err(error_unknown_key!(key)),
-                        Err(err) => Err(error_database!(err)),
-                    }
-                })
-        } else {
-            Err(Error::UnknownInstruction)
-        }
+        instruction_is!(env, instruction, RETR);
+        let key = stack_pop!(env);
+        self.txns.get(&pid)
+            .and_then(|v| Some(&v[v.len() - 1]))
+            .and_then(|txn| Some(txn.access()))
+            .map_or_else(|| Err(error_no_transaction!()), |acc| {
+                match acc.get::<[u8], [u8]>(&self.db.db, key) {
+                    Ok(Some(val)) => {
+                        let slice = alloc_and_write!(val, env);
+                        env.push(slice);
+                        Ok(())
+                    },
+                    Ok(None) => Err(error_unknown_key!(key)),
+                    Err(err) => Err(error_database!(err)),
+                }
+            })
     }
 
     #[inline]
@@ -413,27 +404,24 @@ impl<'a> Handler<'a> {
                          instruction: &'a [u8],
                          pid: EnvId)
                          -> PassResult<'a> {
-        if instruction == ASSOCQ {
-            let key = stack_pop!(env);
-            self.txns.get(&pid)
-                .and_then(|v| Some(&v[v.len() - 1]))
-                .and_then(|txn| Some(txn.access()))
-                .map_or_else(|| Err(error_no_transaction!()),  |acc| {
-                    match acc.get::<[u8], [u8]>(&self.db.db, key) {
-                        Ok(Some(_)) => {
-                            env.push(STACK_TRUE);
-                            Ok(())
-                        },
-                        Ok(None) => {
-                            env.push(STACK_FALSE);
-                            Ok(())
-                        }
-                        Err(err) => Err(error_database!(err)),
+        instruction_is!(env, instruction, ASSOCQ);
+        let key = stack_pop!(env);
+        self.txns.get(&pid)
+            .and_then(|v| Some(&v[v.len() - 1]))
+            .and_then(|txn| Some(txn.access()))
+            .map_or_else(|| Err(error_no_transaction!()),  |acc| {
+                match acc.get::<[u8], [u8]>(&self.db.db, key) {
+                    Ok(Some(_)) => {
+                        env.push(STACK_TRUE);
+                        Ok(())
+                    },
+                    Ok(None) => {
+                        env.push(STACK_FALSE);
+                        Ok(())
                     }
-                })
-        } else {
-            Err(Error::UnknownInstruction)
-        }
+                    Err(err) => Err(error_database!(err)),
+                }
+            })
     }
 
     fn cast_away(cursor: lmdb::Cursor) -> lmdb::Cursor<'a, 'a> {
@@ -446,35 +434,32 @@ impl<'a> Handler<'a> {
 						 instruction: &'a [u8],
 						 pid: EnvId)
 						 -> PassResult<'a> {
-        if instruction == CURSOR {
-            let cursor = self.txns.get(&pid)
-                .and_then(|v| Some(&v[v.len() - 1]))
-                .map(|txn| txn.cursor(&self.db.db));
-            match cursor {
-                Some(cursor) => {
-                    match cursor {
-                        Ok(cursor) => {
-                            let id = CursorId::new();
-                            let mut bytes = Vec::new();
-                            if cfg!(target_pointer_width = "64") {
-                                let _ = bytes.write_u64::<BigEndian>(id.prefix as u64);
-                            }
-                            if cfg!(target_pointer_width = "32") {
-                                let _ = bytes.write_u32::<BigEndian>(id.prefix as u32);
-                            }
-                            let _ = bytes.write_u64::<BigEndian>(id.offset);
-                            self.cursors.insert((pid.clone(), bytes.clone()), (tx_type!(self, pid), Handler::cast_away(cursor)));
-                            let slice = alloc_and_write!(bytes.as_slice(), env);
-                            env.push(slice);
-                            Ok(())
-                        },
-                        Err(err) => Err(error_database!(err))
-                    }
-                },
-                None => Err(error_no_transaction!()),
-            }
-        } else {
-            Err(Error::UnknownInstruction)
+        instruction_is!(env, instruction, CURSOR);
+        let cursor = self.txns.get(&pid)
+            .and_then(|v| Some(&v[v.len() - 1]))
+            .map(|txn| txn.cursor(&self.db.db));
+        match cursor {
+            Some(cursor) => {
+                match cursor {
+                    Ok(cursor) => {
+                        let id = CursorId::new();
+                        let mut bytes = Vec::new();
+                        if cfg!(target_pointer_width = "64") {
+                            let _ = bytes.write_u64::<BigEndian>(id.prefix as u64);
+                        }
+                        if cfg!(target_pointer_width = "32") {
+                            let _ = bytes.write_u32::<BigEndian>(id.prefix as u32);
+                        }
+                        let _ = bytes.write_u64::<BigEndian>(id.offset);
+                        self.cursors.insert((pid.clone(), bytes.clone()), (tx_type!(self, pid), Handler::cast_away(cursor)));
+                        let slice = alloc_and_write!(bytes.as_slice(), env);
+                        env.push(slice);
+                        Ok(())
+                    },
+                    Err(err) => Err(error_database!(err))
+                }
+            },
+            None => Err(error_no_transaction!()),
         }
     }
 
