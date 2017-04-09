@@ -50,7 +50,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     pub fn handle_hlc(&self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(env, instruction, HLC);
+        instruction_is!(instruction, HLC);
         let now = self.timestamp.hlc();
         let slice = alloc_slice!(16, env);
         let _ = now.write_bytes(&mut slice[0..]).unwrap();
@@ -64,7 +64,7 @@ impl<'a> Handler<'a> {
                            instruction: &'a [u8],
                            _: EnvId)
                            -> PassResult<'a> {
-        instruction_is!(env, instruction, HLC_TICK);
+        instruction_is!(instruction, HLC_TICK);
 
         let a = env.pop();
 
@@ -96,7 +96,7 @@ impl<'a> Handler<'a> {
                          instruction: &'a [u8],
                          _: EnvId)
                          -> PassResult<'a> {
-        instruction_is!(env, instruction, HLC_LC);
+        instruction_is!(instruction, HLC_LC);
         let a = env.pop();
 
         if a.is_none() {
@@ -127,7 +127,7 @@ impl<'a> Handler<'a> {
                               instruction: &'a [u8],
                               _: EnvId)
                               -> PassResult<'a> {
-        instruction_is!(env, instruction, HLC_OBSERVE);
+        instruction_is!(instruction, HLC_OBSERVE);
         if let Some(mut observed_bytes) = env.pop() {
             if let Ok(observed_time) = hlc::Timestamp::read_bytes(&mut observed_bytes) {
                 if self.timestamp.observe(&observed_time).is_err() {

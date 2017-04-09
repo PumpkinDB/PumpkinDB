@@ -40,7 +40,7 @@ impl<'a> Handler<'a> {
                           instruction: &'a [u8],
                           _: EnvId)
                           -> PassResult<'a> {
-        instruction_is!(env, instruction, UUID_V4);
+        instruction_is!(instruction, UUID_V4);
         let uuid = Uuid::new_v4();
         let mut slice = alloc_slice!(16, env);
         slice.copy_from_slice(uuid.as_bytes());
@@ -54,7 +54,7 @@ impl<'a> Handler<'a> {
                                  instruction: &'a [u8],
                                  _: EnvId)
                                  -> PassResult<'a> {
-        instruction_is!(env, instruction, UUID_TO_STRING);
+        instruction_is!(instruction, UUID_TO_STRING);
 
         let top = stack_pop!(env);
 
@@ -75,7 +75,7 @@ impl<'a> Handler<'a> {
                                  instruction: &'a [u8],
                                  _: EnvId)
                                  -> PassResult<'a> {
-        instruction_is!(env, instruction, UUID_STRING_TO);
+        instruction_is!(instruction, UUID_STRING_TO);
 
         let top = stack_pop!(env);
 

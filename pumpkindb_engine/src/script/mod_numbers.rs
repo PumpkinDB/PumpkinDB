@@ -56,7 +56,7 @@ macro_rules! bytes_to_bigint {
 
 macro_rules! uint_comparison {
     ($env: expr, $instruction: expr, $instruction_const: expr, $cmp: ident) => {{
-        instruction_is!($env, $instruction, $instruction_const);
+        instruction_is!($instruction, $instruction_const);
         let b = stack_pop!($env);
         let a = stack_pop!($env);
 
@@ -74,7 +74,7 @@ macro_rules! uint_comparison {
 
 macro_rules! int_comparison {
     ($env: expr, $instruction: expr, $instruction_const: expr, $cmp: ident) => {{
-        instruction_is!($env, $instruction, $instruction_const);
+        instruction_is!($instruction, $instruction_const);
         let b = stack_pop!($env);
         let a = stack_pop!($env);
 
@@ -132,7 +132,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(env, instruction, UINT_ADD);
+        instruction_is!(instruction, UINT_ADD);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -153,7 +153,7 @@ impl<'a> Handler<'a> {
                       instruction: &'a [u8],
                       _: EnvId)
                       -> PassResult<'a> {
-        instruction_is!(env, instruction, INT_ADD);
+        instruction_is!(instruction, INT_ADD);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -186,7 +186,7 @@ impl<'a> Handler<'a> {
                       instruction: &'a [u8],
                       _: EnvId)
                       -> PassResult<'a> {
-        instruction_is!(env, instruction, INT_SUB);
+        instruction_is!(instruction, INT_SUB);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -219,7 +219,7 @@ impl<'a> Handler<'a> {
                           instruction: &'a [u8],
                           _: EnvId)
                           -> PassResult<'a> {
-        instruction_is!(env, instruction, INT_TO_UINT);
+        instruction_is!(instruction, INT_TO_UINT);
         let a = stack_pop!(env);
         let a_int = bytes_to_bigint(a);
 
@@ -243,7 +243,7 @@ impl<'a> Handler<'a> {
                           instruction: &'a [u8],
                           _: EnvId)
                           -> PassResult<'a> {
-        instruction_is!(env, instruction, UINT_TO_INT);
+        instruction_is!(instruction, UINT_TO_INT);
         let a = stack_pop!(env);
         let a_uint = BigUint::from_bytes_be(a);
 
@@ -262,7 +262,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(env, instruction, UINT_SUB);
+        instruction_is!(instruction, UINT_SUB);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 

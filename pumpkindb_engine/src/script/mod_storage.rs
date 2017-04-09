@@ -327,7 +327,7 @@ impl<'a> Handler<'a> {
 						instruction: &'a [u8],
 						pid: EnvId)
 						-> PassResult<'a> {
-        instruction_is!(env, instruction, ASSOC);
+        instruction_is!(instruction, ASSOC);
         match self.txns.get(&pid)
             .and_then(|v| Some(&v[v.len() - 1]))
             .and_then(|txn| match txn.tx_type() {
@@ -356,7 +356,7 @@ impl<'a> Handler<'a> {
 						 instruction: &'a [u8],
 						 pid: EnvId)
 						 -> PassResult<'a> {
-        instruction_is!(env, instruction, COMMIT);
+        instruction_is!(instruction, COMMIT);
         match self.txns.get_mut(&pid)
             .and_then(|vec| vec.pop()) {
             Some(Txn::Write(txn)) => {
@@ -380,7 +380,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        pid: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(env, instruction, RETR);
+        instruction_is!(instruction, RETR);
         let key = stack_pop!(env);
         self.txns.get(&pid)
             .and_then(|v| Some(&v[v.len() - 1]))
@@ -404,7 +404,7 @@ impl<'a> Handler<'a> {
                          instruction: &'a [u8],
                          pid: EnvId)
                          -> PassResult<'a> {
-        instruction_is!(env, instruction, ASSOCQ);
+        instruction_is!(instruction, ASSOCQ);
         let key = stack_pop!(env);
         self.txns.get(&pid)
             .and_then(|v| Some(&v[v.len() - 1]))
@@ -434,7 +434,7 @@ impl<'a> Handler<'a> {
 						 instruction: &'a [u8],
 						 pid: EnvId)
 						 -> PassResult<'a> {
-        instruction_is!(env, instruction, CURSOR);
+        instruction_is!(instruction, CURSOR);
         let cursor = self.txns.get(&pid)
             .and_then(|v| Some(&v[v.len() - 1]))
             .map(|txn| txn.cursor(&self.db.db));

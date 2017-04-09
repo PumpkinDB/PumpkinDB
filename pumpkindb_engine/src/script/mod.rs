@@ -581,7 +581,7 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
 
     #[inline]
     fn handle_try(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(env, instruction, TRY);
+        instruction_is!(instruction, TRY);
         let v = stack_pop!(env);
         env.tracking_errors += 1;
         env.program.push(TRY_END);
@@ -595,7 +595,7 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
                       instruction: &'a [u8],
                       pid: EnvId)
                       -> PassResult<'a> {
-        instruction_is!(env, instruction, TRY_END);
+        instruction_is!(instruction, TRY_END);
         env.tracking_errors -= 1;
         if env.aborting_try.is_empty() {
             env.push(_EMPTY);

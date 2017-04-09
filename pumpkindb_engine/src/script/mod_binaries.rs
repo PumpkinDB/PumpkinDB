@@ -54,7 +54,7 @@ impl<'a> Handler<'a> {
                     instruction: &'a [u8],
                     _: EnvId)
                     -> PassResult<'a> {
-        instruction_is!(env, instruction, EQUALQ);
+        instruction_is!(instruction, EQUALQ);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -69,7 +69,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_ltp(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(env, instruction, LTQ);
+        instruction_is!(instruction, LTQ);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -84,7 +84,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_gtp(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(env, instruction, GTQ);
+        instruction_is!(instruction, GTQ);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -103,7 +103,7 @@ impl<'a> Handler<'a> {
                      instruction: &'a [u8],
                      _: EnvId)
                      -> PassResult<'a> {
-        instruction_is!(env, instruction, CONCAT);
+        instruction_is!(instruction, CONCAT);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -123,7 +123,7 @@ impl<'a> Handler<'a> {
                     instruction: &'a [u8],
                     _: EnvId)
                     -> PassResult<'a> {
-        instruction_is!(env, instruction, SLICE);
+        instruction_is!(instruction, SLICE);
         let end = stack_pop!(env);
         let start = stack_pop!(env);
         let slice = stack_pop!(env);
@@ -151,7 +151,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_pad(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(env, instruction, PAD);
+        instruction_is!(instruction, PAD);
         let byte = stack_pop!(env);
         let size = stack_pop!(env);
         let value = stack_pop!(env);
@@ -188,7 +188,7 @@ impl<'a> Handler<'a> {
                      instruction: &'a [u8],
                      _: EnvId)
                      -> PassResult<'a> {
-        instruction_is!(env, instruction, LENGTH);
+        instruction_is!(instruction, LENGTH);
         let a = stack_pop!(env);
 
         let len = BigUint::from(a.len() as u64);

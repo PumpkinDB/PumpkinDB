@@ -40,7 +40,7 @@ macro_rules! hash_instruction {
     ($name : ident, $constant: ident, $i: ident, $size: expr) => {
     #[inline]
     pub fn $name(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(env, instruction, $constant);
+        instruction_is!(instruction, $constant);
         let a = stack_pop!(env);
         let mut hasher = $i::new();
         hasher.input(a);

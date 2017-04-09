@@ -43,7 +43,7 @@ impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Handler<'a, P, S> {
                       instruction: &'a [u8],
                       _: EnvId)
                       -> PassResult<'a> {
-        instruction_is!(env, instruction, PUBLISH);
+        instruction_is!(instruction, PUBLISH);
         let topic = stack_pop!(env);
         let data = stack_pop!(env);
 
@@ -58,7 +58,7 @@ impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Handler<'a, P, S> {
                       instruction: &'a [u8],
                       _: EnvId)
                       -> PassResult<'a> {
-        instruction_is!(env, instruction, SUBSCRIBE);
+        instruction_is!(instruction, SUBSCRIBE);
 
         let topic = stack_pop!(env);
 
@@ -80,7 +80,7 @@ impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Handler<'a, P, S> {
                         instruction: &'a [u8],
                         _: EnvId)
                         -> PassResult<'a> {
-        instruction_is!(env, instruction, UNSUBSCRIBE);
+        instruction_is!(instruction, UNSUBSCRIBE);
 
         let identifier = stack_pop!(env);
 
