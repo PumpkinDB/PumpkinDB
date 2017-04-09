@@ -50,15 +50,12 @@ impl<'a> Handler<'a> {
 
     #[inline]
     pub fn handle_hlc(&self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        if instruction == HLC {
-            let now = self.timestamp.hlc();
-            let slice = alloc_slice!(16, env);
-            let _ = now.write_bytes(&mut slice[0..]).unwrap();
-            env.push(slice);
-            Ok(())
-        } else {
-            Err(Error::UnknownInstruction)
-        }
+        instruction_is!(env, instruction, HLC);
+        let now = self.timestamp.hlc();
+        let slice = alloc_slice!(16, env);
+        let _ = now.write_bytes(&mut slice[0..]).unwrap();
+        env.push(slice);
+        Ok(())
     }
 
     #[inline]
@@ -67,32 +64,30 @@ impl<'a> Handler<'a> {
                            instruction: &'a [u8],
                            _: EnvId)
                            -> PassResult<'a> {
-        if instruction == HLC_TICK {
-            let a = env.pop();
+        instruction_is!(env, instruction, HLC_TICK);
 
-            if a.is_none() {
-                return Err(error_empty_stack!());
-            }
+        let a = env.pop();
 
-            let mut a1 = a.unwrap();
-
-            let t1_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut a1);
-
-            if t1_.is_err() {
-                return Err(error_invalid_value!(a1));
-            }
-
-            let mut t1 = t1_.unwrap();
-            t1.count += 1;
-
-            let slice = alloc_slice!(16, env);
-            let _ = t1.write_bytes(&mut slice[0..]).unwrap();
-            env.push(slice);
-
-            Ok(())
-        } else {
-            Err(Error::UnknownInstruction)
+        if a.is_none() {
+            return Err(error_empty_stack!());
         }
+
+        let mut a1 = a.unwrap();
+
+        let t1_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut a1);
+
+        if t1_.is_err() {
+            return Err(error_invalid_value!(a1));
+        }
+
+        let mut t1 = t1_.unwrap();
+        t1.count += 1;
+
+        let slice = alloc_slice!(16, env);
+        let _ = t1.write_bytes(&mut slice[0..]).unwrap();
+        env.push(slice);
+
+        Ok(())
     }
 
     #[inline]
@@ -101,32 +96,29 @@ impl<'a> Handler<'a> {
                          instruction: &'a [u8],
                          _: EnvId)
                          -> PassResult<'a> {
-        if instruction == HLC_LC {
-            let a = env.pop();
+        instruction_is!(env, instruction, HLC_LC);
+        let a = env.pop();
 
-            if a.is_none() {
-                return Err(error_empty_stack!());
-            }
-
-            let mut a1 = a.unwrap();
-
-            let t1_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut a1);
-
-            if t1_.is_err() {
-                return Err(error_invalid_value!(a1));
-            }
-
-            let t1 = t1_.unwrap();
-
-            let slice = alloc_slice!(4, env);
-            let _ = (&mut slice[0..]).write_u32::<BigEndian>(t1.count);
-
-            env.push(slice);
-
-            Ok(())
-        } else {
-            Err(Error::UnknownInstruction)
+        if a.is_none() {
+            return Err(error_empty_stack!());
         }
+
+        let mut a1 = a.unwrap();
+
+        let t1_ = hlc::Timestamp::<hlc::WallT>::read_bytes(&mut a1);
+
+        if t1_.is_err() {
+            return Err(error_invalid_value!(a1));
+        }
+
+        let t1 = t1_.unwrap();
+
+        let slice = alloc_slice!(4, env);
+        let _ = (&mut slice[0..]).write_u32::<BigEndian>(t1.count);
+
+        env.push(slice);
+
+        Ok(())
     }
 
     #[inline]
@@ -135,27 +127,24 @@ impl<'a> Handler<'a> {
                               instruction: &'a [u8],
                               _: EnvId)
                               -> PassResult<'a> {
-        if instruction == HLC_OBSERVE {
-            if let Some(mut observed_bytes) = env.pop() {
-                if let Ok(observed_time) = hlc::Timestamp::read_bytes(&mut observed_bytes) {
-                    if self.timestamp.observe(&observed_time).is_err() {
-                        return Err(error_invalid_value!(observed_bytes));
-                    }
-
-                    let slice = alloc_slice!(16, env);
-                    let _ = self.timestamp.hlc().write_bytes(&mut slice[0..]).unwrap();
-
-                    env.push(slice);
-
-                    Ok(())
-                } else {
-                    Err(error_invalid_value!(observed_bytes))
+        instruction_is!(env, instruction, HLC_OBSERVE);
+        if let Some(mut observed_bytes) = env.pop() {
+            if let Ok(observed_time) = hlc::Timestamp::read_bytes(&mut observed_bytes) {
+                if self.timestamp.observe(&observed_time).is_err() {
+                    return Err(error_invalid_value!(observed_bytes));
                 }
+
+                let slice = alloc_slice!(16, env);
+                let _ = self.timestamp.hlc().write_bytes(&mut slice[0..]).unwrap();
+
+                env.push(slice);
+
+                Ok(())
             } else {
-                Err(error_empty_stack!())
+                Err(error_invalid_value!(observed_bytes))
             }
         } else {
-            Err(Error::UnknownInstruction)
+            Err(error_empty_stack!())
         }
     }
 }
