@@ -186,7 +186,7 @@ mod tests {
 
       pub fn handle_test(&mut self, env: &mut Env<'a>,
                           instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-          instruction_is!(env, instruction, b"\x84TEST");
+          instruction_is!(instruction, b"\x84TEST");
           env.push(b"TEST");
           Ok(())
       }

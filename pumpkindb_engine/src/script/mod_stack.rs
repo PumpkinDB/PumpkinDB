@@ -58,7 +58,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_dup(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(env, instruction, DUP);
+        instruction_is!(instruction, DUP);
         let v = stack_pop!(env);
 
         env.push(v);
@@ -72,7 +72,7 @@ impl<'a> Handler<'a> {
                    instruction: &'a [u8],
                    _: EnvId)
                    -> PassResult<'a> {
-        instruction_is!(env, instruction, SWAP);
+        instruction_is!(instruction, SWAP);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -88,7 +88,7 @@ impl<'a> Handler<'a> {
                     instruction: &'a [u8],
                     _: EnvId)
                     -> PassResult<'a> {
-        instruction_is!(env, instruction, TWOSWAP);
+        instruction_is!(instruction, TWOSWAP);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
         let c = stack_pop!(env);
@@ -109,7 +109,7 @@ impl<'a> Handler<'a> {
                    instruction: &'a [u8],
                    _: EnvId)
                    -> PassResult<'a> {
-        instruction_is!(env, instruction, OVER);
+        instruction_is!(instruction, OVER);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -126,7 +126,7 @@ impl<'a> Handler<'a> {
                     instruction: &'a [u8],
                     _: EnvId)
                     -> PassResult<'a> {
-        instruction_is!(env, instruction, TWOOVER);
+        instruction_is!(instruction, TWOOVER);
         let d = stack_pop!(env);
         let c = stack_pop!(env);
         let b = stack_pop!(env);
@@ -144,7 +144,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_rot(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(env, instruction, ROT);
+        instruction_is!(instruction, ROT);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
         let c = stack_pop!(env);
@@ -162,7 +162,7 @@ impl<'a> Handler<'a> {
                    instruction: &'a [u8],
                    _: EnvId)
                    -> PassResult<'a> {
-        instruction_is!(env, instruction, TWOROT);
+        instruction_is!(instruction, TWOROT);
         let f = stack_pop!(env);
         let e = stack_pop!(env);
         let d = stack_pop!(env);
@@ -186,7 +186,7 @@ impl<'a> Handler<'a> {
                    instruction: &'a [u8],
                    _: EnvId)
                    -> PassResult<'a> {
-        instruction_is!(env, instruction, DROP);
+        instruction_is!(instruction, DROP);
         let _ = stack_pop!(env);
 
         Ok(())
@@ -198,7 +198,7 @@ impl<'a> Handler<'a> {
                     instruction: &'a [u8],
                     _: EnvId)
                     -> PassResult<'a> {
-        instruction_is!(env, instruction, DEPTH);
+        instruction_is!(instruction, DEPTH);
         let bytes = BigUint::from(env.stack_size).to_bytes_be();
         let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
@@ -211,7 +211,7 @@ impl<'a> Handler<'a> {
                    instruction: &'a [u8],
                    _: EnvId)
                    -> PassResult<'a> {
-        instruction_is!(env, instruction, WRAP);
+        instruction_is!(instruction, WRAP);
         let n = stack_pop!(env);
 
         let mut n_int = BigUint::from_bytes_be(n).to_u64().unwrap() as usize;
@@ -247,7 +247,7 @@ impl<'a> Handler<'a> {
                      instruction: &'a [u8],
                      _: EnvId)
                      -> PassResult<'a> {
-        instruction_is!(env, instruction, UNWRAP);
+        instruction_is!(instruction, UNWRAP);
         let mut current = stack_pop!(env);
         while current.len() > 0 {
             match binparser::data(current) {

@@ -36,7 +36,7 @@ pub struct Handler<'a> {
 
 macro_rules! json_is_a {
     ($env: expr, $instruction: expr, $c: expr, { $t: ident }) => {{
-        instruction_is!($env, $instruction, $c);
+        instruction_is!($instruction, $c);
         let a = stack_pop!($env);
 
         match json::from_slice::<json::Value>(a) {
@@ -47,7 +47,7 @@ macro_rules! json_is_a {
         Ok(())
     }};
     ($env: expr, $instruction: expr, $c: expr, $t: ident) => {{
-        instruction_is!($env, $instruction, $c);
+        instruction_is!($instruction, $c);
         let a = stack_pop!($env);
 
         match json::from_slice::<json::Value>(a) {
@@ -93,7 +93,7 @@ impl<'a> Handler<'a> {
                         instruction: &'a [u8],
                         _: EnvId)
                         -> PassResult<'a> {
-        instruction_is!(env, instruction, JSONQ);
+        instruction_is!(instruction, JSONQ);
         let a = stack_pop!(env);
 
         match json::from_slice::<json::Value>(a) {
@@ -165,7 +165,7 @@ impl<'a> Handler<'a> {
                            instruction: &'a [u8],
                            _: EnvId)
                            -> PassResult<'a> {
-        instruction_is!(env, instruction, JSON_GET);
+        instruction_is!(instruction, JSON_GET);
 
         let field = stack_pop!(env);
         let a = stack_pop!(env);
@@ -199,7 +199,7 @@ impl<'a> Handler<'a> {
                             instruction: &'a [u8],
                             _: EnvId)
                             -> PassResult<'a> {
-        instruction_is!(env, instruction, JSON_HASQ);
+        instruction_is!(instruction, JSON_HASQ);
 
         let field = stack_pop!(env);
         let a = stack_pop!(env);
@@ -230,7 +230,7 @@ impl<'a> Handler<'a> {
                            instruction: &'a [u8],
                            _: EnvId)
                            -> PassResult<'a> {
-        instruction_is!(env, instruction, JSON_SET);
+        instruction_is!(instruction, JSON_SET);
 
         let value = stack_pop!(env);
         let field = stack_pop!(env);
@@ -266,7 +266,7 @@ impl<'a> Handler<'a> {
                                  instruction: &'a [u8],
                                  _: EnvId)
                                  -> PassResult<'a> {
-        instruction_is!(env, instruction, JSON_STRING_TO);
+        instruction_is!(instruction, JSON_STRING_TO);
 
         let a = stack_pop!(env);
 
@@ -288,7 +288,7 @@ impl<'a> Handler<'a> {
                                  instruction: &'a [u8],
                                  _: EnvId)
                                  -> PassResult<'a> {
-        instruction_is!(env, instruction, JSON_TO_STRING);
+        instruction_is!(instruction, JSON_TO_STRING);
 
         let a = stack_pop!(env);
 

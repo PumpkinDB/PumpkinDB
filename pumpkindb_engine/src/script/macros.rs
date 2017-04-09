@@ -86,7 +86,7 @@ macro_rules! stack_pop {
 }
 
 macro_rules! instruction_is {
-    ($env: expr, $instruction: expr, $exp: expr) => {
+    ($instruction: expr, $exp: expr) => {
         if $instruction != $exp {
             return Err(Error::UnknownInstruction)
         }
