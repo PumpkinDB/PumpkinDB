@@ -417,14 +417,21 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
                          instruction: &'a [u8],
                          _: EnvId)
                          -> PassResult<'a> {
-        let len = env.dictionary.len();
-        let ref dict = env.dictionary[len - 1];
-        match dict.get(instruction) {
-            Some(def) => {
+        let mut found = false;
+
+        for i in (0..env.dictionary.len()).rev() {
+            let ref dict = env.dictionary[i];
+            if let Some(def) = dict.get(instruction) {
                 env.program.push(def);
-                Ok(())
-            },
-            None => Err(Error::UnknownInstruction)
+                found = true;
+                break;
+            }
+        }
+
+        if found {
+            Ok(())
+        } else {
+            Err(Error::UnknownInstruction)
         }
     }
 
