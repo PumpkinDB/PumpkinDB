@@ -135,10 +135,7 @@ impl<'a> Env<'a> {
 
     #[cfg(feature = "scoped_dictionary")]
     pub fn push_dictionary(&mut self) {
-        let dict = self.dictionary.pop().unwrap();
-        let new_dict = dict.clone();
-        self.dictionary.push(dict);
-        self.dictionary.push(new_dict);
+        self.dictionary.push(BTreeMap::new());
     }
 
     #[cfg(feature = "scoped_dictionary")]
