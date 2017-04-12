@@ -62,6 +62,33 @@ To name a few:
 
 You can download PumpkinDB releases [from GitHub](https://github.com/PumpkinDB/PumpkinDB/releases).
 
+### Docker
+
+You can try out latest PumpkinDB HEAD revision by building a docker image:
+
+```shell
+$ docker build . -t pumpkindb
+```
+
+And then running a server:
+ 
+```shell
+$ docker run -p 9981:9981 -ti pumpkindb
+2017-04-12T02:52:47.440873517+00:00 WARN pumpkindb - No logging configuration specified, switching to console logging
+2017-04-12T02:52:47.440983318+00:00 INFO pumpkindb - Starting up
+2017-04-12T02:52:47.441122740+00:00 INFO pumpkindb_engine::storage - Available disk space is approx. 56Gb, setting database map size to it
+2017-04-12T02:52:47.441460231+00:00 INFO pumpkindb - Starting 4 schedulers
+2017-04-12T02:52:47.442375937+00:00 INFO pumpkindb - Listening on 0.0.0.0:9981
+```
+
+And finally, connecting to it using `pumpkindb-term`:
+
+```
+$ docker run -ti pumpkindb pumpkindb-term 172.17.0.1:9981 # replace IP with the docker host IP
+```
+
+### Building from the source code
+
 You are also welcome to clone the repository and build
 it yourself. You will need Rust Nightly to do this. The easiest way to get it is to use
 [rustup](https://www.rust-lang.org/en-US/install.html)
