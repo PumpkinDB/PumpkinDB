@@ -1,6 +1,6 @@
 ( Cursor-related functionality )
 ?CURSOR/SEEKLAST : ['key SET 'c SET
-                   key [] 511 key LENGTH UINT/SUB 0xff PAD CONCAT 'padded SET
+                   key [] $SYSTEM/MAXKEYSIZE key LENGTH UINT/SUB 0xff PAD CONCAT 'padded SET
                    c padded CURSOR/SEEK?
                    [`c ?CURSOR/CUR UNWRAP DROP `key STARTSWITH?
                                       [``c ?CURSOR/CUR] [``c ?CURSOR/PREV] IFELSE] 'positioning SET
