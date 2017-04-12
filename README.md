@@ -64,16 +64,22 @@ You can download PumpkinDB releases [from GitHub](https://github.com/PumpkinDB/P
 
 ### Docker
 
-You can try out latest PumpkinDB HEAD revision by building a docker image:
+You can try out latest PumpkinDB HEAD revision by using a docker image:
 
 ```shell
-$ docker build . -t pumpkindb
+$ docker pull pumpkindb/pumpkindb
 ```
 
-And then running a server:
+Alternatively, you can build the image yourself:
+
+```shell
+$ docker build . -t pumpkindb/pumpkindb
+```
+
+Run the server:
  
 ```shell
-$ docker run -p 9981:9981 -ti pumpkindb
+$ docker run -p 9981:9981 -ti pumpkindb/pumpkindb
 2017-04-12T02:52:47.440873517+00:00 WARN pumpkindb - No logging configuration specified, switching to console logging
 2017-04-12T02:52:47.440983318+00:00 INFO pumpkindb - Starting up
 2017-04-12T02:52:47.441122740+00:00 INFO pumpkindb_engine::storage - Available disk space is approx. 56Gb, setting database map size to it
@@ -81,10 +87,10 @@ $ docker run -p 9981:9981 -ti pumpkindb
 2017-04-12T02:52:47.442375937+00:00 INFO pumpkindb - Listening on 0.0.0.0:9981
 ```
 
-And finally, connecting to it using `pumpkindb-term`:
+Finally, connect to it using `pumpkindb-term`:
 
 ```
-$ docker run -ti pumpkindb pumpkindb-term 172.17.0.1:9981 # replace IP with the docker host IP
+$ docker run -ti pumpkindb/pumpkindb pumpkindb-term 172.17.0.1:9981 # replace IP with the docker host IP
 ```
 
 ### Building from the source code
