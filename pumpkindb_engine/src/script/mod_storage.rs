@@ -23,6 +23,8 @@ use byteorder::{BigEndian, WriteBytesExt};
 use snowflake::ProcessUniqueId;
 use std::collections::BTreeMap;
 use storage::WriteTransactionContainer;
+use num_bigint::BigUint;
+use num_traits::FromPrimitive;
 
 pub type CursorId = ProcessUniqueId;
 
@@ -53,6 +55,8 @@ instruction!(QCURSOR_CUR, b"\x8B?CURSOR/CUR");
 instruction!(CURSOR_CURQ, b"\x8BCURSOR/CUR?");
 
 instruction!(COMMIT, b"\x86COMMIT");
+
+instruction!(MAXKEYSIZE, b"\x92$SYSTEM/MAXKEYSIZE");
 
 #[derive(PartialEq, Debug)]
 enum TxType {
@@ -109,7 +113,8 @@ impl<'a> Txn<'a> {
 pub struct Handler<'a> {
     db: &'a storage::Storage<'a>,
     txns: HashMap<EnvId, Vec<Txn<'a>>>,
-    cursors: BTreeMap<(EnvId, Vec<u8>), (TxType, lmdb::Cursor<'a, 'a>)>
+    cursors: BTreeMap<(EnvId, Vec<u8>), (TxType, lmdb::Cursor<'a, 'a>)>,
+    maxkeysize: Vec<u8>,
 }
 
 macro_rules! read_or_write_transaction {
@@ -218,16 +223,19 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
         try_instruction!(env, self.handle_cursor_last(env, instruction, pid));
         try_instruction!(env, self.handle_cursor_seek(env, instruction, pid));
         try_instruction!(env, self.handle_cursor_cur(env, instruction, pid));
+        try_instruction!(env, self.handle_maxkeysize(env, instruction, pid));
         Err(Error::UnknownInstruction)
     }
 }
 
 impl<'a> Handler<'a> {
     pub fn new(db: &'a storage::Storage<'a>) -> Self {
+        let maxkeysize = BigUint::from_u32(db.env.maxkeysize()).unwrap().to_bytes_be();
         Handler {
             db: db,
             txns: HashMap::new(),
-            cursors: BTreeMap::new()
+            cursors: BTreeMap::new(),
+            maxkeysize: maxkeysize
         }
     }
 
@@ -556,6 +564,18 @@ impl<'a> Handler<'a> {
         } else {
             Err(Error::UnknownInstruction)
         }
+    }
+
+    #[inline]
+    pub fn handle_maxkeysize(&mut self,
+                             env: &mut Env<'a>,
+                             instruction: &'a [u8],
+                             _: EnvId)
+                             -> PassResult<'a> {
+        instruction_is!(instruction, MAXKEYSIZE);
+        let slice = alloc_and_write!(self.maxkeysize.as_slice(), env);
+        env.push(slice);
+        Ok(())
     }
 }
 
