@@ -252,6 +252,7 @@ const ERROR_DUPLICATE_KEY: &'static [u8] = b"\x01\x06";
 const ERROR_UNKNOWN_KEY: &'static [u8] = b"\x01\x07";
 const ERROR_NO_TX: &'static [u8] = b"\x01\x08";
 const ERROR_DATABASE: &'static [u8] = b"\x01\x09";
+const ERROR_NO_VALUE: &'static [u8] = b"\x01\x0A";
 
 use std::sync::Arc;
 

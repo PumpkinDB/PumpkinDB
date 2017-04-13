@@ -188,6 +188,17 @@ macro_rules! error_invalid_value {
     }}
 }
 
+macro_rules! error_no_value {
+    () => {{
+        let vec = Vec::new();
+        error_program!(
+            "No value".as_bytes(),
+            &vec,
+            ERROR_NO_VALUE
+        )
+    }}
+}
+
 macro_rules! error_unknown_instruction {
     ($instruction: expr) => { {
         let (_, w) = binparser::instruction_or_internal_instruction($instruction).unwrap();

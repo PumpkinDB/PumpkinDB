@@ -18,7 +18,7 @@ use std::error::Error as StdError;
 use std::collections::HashMap;
 use super::{Env, EnvId, Dispatcher, PassResult, Error, STACK_TRUE, STACK_FALSE, offset_by_size,
             ERROR_EMPTY_STACK, ERROR_INVALID_VALUE, ERROR_DUPLICATE_KEY, ERROR_NO_TX,
-            ERROR_UNKNOWN_KEY, ERROR_DATABASE};
+            ERROR_UNKNOWN_KEY, ERROR_DATABASE, ERROR_NO_VALUE};
 use byteorder::{BigEndian, WriteBytesExt};
 use snowflake::ProcessUniqueId;
 use std::collections::BTreeMap;
@@ -27,8 +27,6 @@ use num_bigint::BigUint;
 use num_traits::FromPrimitive;
 
 pub type CursorId = ProcessUniqueId;
-
-const STACK_EMPTY_CLOSURE: &'static [u8] = b"";
 
 instruction!(WRITE, b"\x85WRITE");
 instruction!(WRITE_END, b"\x80\x85WRITE"); // internal instruction
@@ -41,18 +39,14 @@ instruction!(ASSOCQ, b"\x86ASSOC?");
 instruction!(RETR, b"\x84RETR");
 
 instruction!(CURSOR, b"\x86CURSOR");
-instruction!(QCURSOR_FIRST, b"\x8D?CURSOR/FIRST");
-instruction!(CURSOR_FIRSTQ, b"\x8DCURSOR/FIRST?");
-instruction!(QCURSOR_LAST, b"\x8C?CURSOR/LAST");
-instruction!(CURSOR_LASTQ, b"\x8CCURSOR/LAST?");
-instruction!(QCURSOR_NEXT, b"\x8C?CURSOR/NEXT");
-instruction!(CURSOR_NEXTQ, b"\x8CCURSOR/NEXT?");
-instruction!(QCURSOR_PREV, b"\x8C?CURSOR/PREV");
-instruction!(CURSOR_PREVQ, b"\x8CCURSOR/PREV?");
-instruction!(QCURSOR_SEEK, b"\x8C?CURSOR/SEEK");
-instruction!(CURSOR_SEEKQ, b"\x8CCURSOR/SEEK?");
-instruction!(QCURSOR_CUR, b"\x8B?CURSOR/CUR");
-instruction!(CURSOR_CURQ, b"\x8BCURSOR/CUR?");
+instruction!(CURSOR_FIRST, b"\x8CCURSOR/FIRST");
+instruction!(CURSOR_LAST, b"\x8BCURSOR/LAST");
+instruction!(CURSOR_NEXT, b"\x8BCURSOR/NEXT");
+instruction!(CURSOR_PREV, b"\x8BCURSOR/PREV");
+instruction!(CURSOR_SEEK, b"\x8BCURSOR/SEEK");
+instruction!(CURSOR_POSITIONEDQ, b"\x92CURSOR/POSITIONED?");
+instruction!(CURSOR_KEY, b"\x8ACURSOR/KEY");
+instruction!(CURSOR_VAL, b"\x8ACURSOR/VAL");
 
 instruction!(COMMIT, b"\x86COMMIT");
 
@@ -139,7 +133,7 @@ macro_rules! tx_type {
     }};
 }
 
-macro_rules! qcursor_op {
+macro_rules! cursor_op {
     ($me: expr, $env: expr, $env_id: expr, $op: ident, ($($arg: expr),*)) => {{
         let txn = read_or_write_transaction!($me, &$env_id);
         let c = stack_pop!($env);
@@ -149,17 +143,21 @@ macro_rules! qcursor_op {
             Some((_, cursor)) => cursor,
             None => return Err(error_invalid_value!(c))
         };
-        let _ = match txn.access() {
-            Accessor::Const(acc) => cursor.$op::<[u8], [u8]>(&acc, $($arg)*).map(|item| copy_to_stack($env, item)),
-            Accessor::Write(acc) => cursor.$op::<[u8], [u8]>(&acc, $($arg)*).map(|item| copy_to_stack($env, item))
-        }.map_err(|_| $env.push(STACK_EMPTY_CLOSURE));
+        let result = match txn.access() {
+            Accessor::Const(acc) => cursor.$op::<[u8], [u8]>(&acc, $($arg)*).is_ok(),
+            Accessor::Write(acc) => cursor.$op::<[u8], [u8]>(&acc, $($arg)*).is_ok()
+        };
         $me.cursors.insert(tuple, (tx_type!($me, &$env_id), cursor));
-        Ok(())
+        if result {
+          $env.push(STACK_TRUE);
+        } else {
+          $env.push(STACK_FALSE);
+        }
     }};
 }
 
-macro_rules! cursorq_op {
-    ($me: expr, $env: expr, $env_id: expr, $op: ident, ($($arg: expr),*)) => {{
+macro_rules! cursor_map_op {
+    ($me: expr, $env: expr, $env_id: expr, $op: ident, ($($arg: expr),*), $map: expr, $orelse: expr) => {{
         let txn = read_or_write_transaction!($me, &$env_id);
         let c = stack_pop!($env);
 
@@ -168,29 +166,12 @@ macro_rules! cursorq_op {
             Some((_, cursor)) => cursor,
             None => return Err(error_invalid_value!(c))
         };
-        let contains = match txn.access() {
-            Accessor::Const(acc) => {
-                let item = cursor.$op::<[u8], [u8]>(&acc, $($arg)*);
-                match item {
-                    Ok((_, _)) => true,
-                    Err(_) => false,
-                }
-            }
-            Accessor::Write(acc) => {
-                let item = cursor.$op::<[u8], [u8]>(&acc, $($arg)*);
-                match item {
-                    Ok((_, _)) => true,
-                    Err(_) => false,
-                }
-            }
+        let result = match txn.access() {
+            Accessor::Const(acc) => cursor.$op::<[u8], [u8]>(&acc, $($arg)*).map_err($orelse).and_then($map),
+            Accessor::Write(acc) => cursor.$op::<[u8], [u8]>(&acc, $($arg)*).map_err($orelse).and_then($map)
         };
-        if contains {
-            $env.push(STACK_TRUE)
-        } else {
-            $env.push(STACK_FALSE)
-        }
         $me.cursors.insert(tuple, (tx_type!($me, &$env_id), cursor));
-        Ok(())
+        result
     }};
 }
 
@@ -222,7 +203,9 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
         try_instruction!(env, self.handle_cursor_prev(env, instruction, pid));
         try_instruction!(env, self.handle_cursor_last(env, instruction, pid));
         try_instruction!(env, self.handle_cursor_seek(env, instruction, pid));
-        try_instruction!(env, self.handle_cursor_cur(env, instruction, pid));
+        try_instruction!(env, self.handle_cursor_positionedq(env, instruction, pid));
+        try_instruction!(env, self.handle_cursor_key(env, instruction, pid));
+        try_instruction!(env, self.handle_cursor_val(env, instruction, pid));
         try_instruction!(env, self.handle_maxkeysize(env, instruction, pid));
         Err(Error::UnknownInstruction)
     }
@@ -477,13 +460,9 @@ impl<'a> Handler<'a> {
                                instruction: &'a [u8],
                                pid: EnvId)
                                -> PassResult<'a> {
-        if instruction == QCURSOR_FIRST {
-            qcursor_op!(self, env, pid, first, ())
-        } else if instruction == CURSOR_FIRSTQ {
-            cursorq_op!(self, env, pid, first, ())
-        } else {
-            Err(Error::UnknownInstruction)
-        }
+        instruction_is!(instruction, CURSOR_FIRST);
+        cursor_op!(self, env, pid, first, ());
+        Ok(())
     }
 
 
@@ -493,13 +472,9 @@ impl<'a> Handler<'a> {
                               instruction: &'a [u8],
                               pid: EnvId)
                               -> PassResult<'a> {
-        if instruction == QCURSOR_NEXT {
-            qcursor_op!(self, env, pid, next, ())
-        } else if instruction == CURSOR_NEXTQ {
-            cursorq_op!(self, env, pid, next, ())
-        } else {
-            Err(Error::UnknownInstruction)
-        }
+        instruction_is!(instruction, CURSOR_NEXT);
+        cursor_op!(self, env, pid, next, ());
+        Ok(())
     }
 
     #[inline]
@@ -508,13 +483,9 @@ impl<'a> Handler<'a> {
                               instruction: &'a [u8],
                               pid: EnvId)
                               -> PassResult<'a> {
-        if instruction == QCURSOR_PREV {
-            qcursor_op!(self, env, pid, prev, ())
-        } else if instruction == CURSOR_PREVQ {
-            cursorq_op!(self, env, pid, prev, ())
-        } else {
-            Err(Error::UnknownInstruction)
-        }
+        instruction_is!(instruction, CURSOR_PREV);
+        cursor_op!(self, env, pid, prev, ());
+        Ok(())
     }
 
     #[inline]
@@ -523,13 +494,9 @@ impl<'a> Handler<'a> {
                               instruction: &'a [u8],
                               pid: EnvId)
                               -> PassResult<'a> {
-        if instruction == QCURSOR_LAST {
-            qcursor_op!(self, env, pid, last, ())
-        } else if instruction == CURSOR_LASTQ {
-            cursorq_op!(self, env, pid, last, ())
-        } else {
-            Err(Error::UnknownInstruction)
-        }
+        instruction_is!(instruction, CURSOR_LAST);
+        cursor_op!(self, env, pid, last, ());
+        Ok(())
     }
 
     #[inline]
@@ -538,32 +505,58 @@ impl<'a> Handler<'a> {
                               instruction: &'a [u8],
                               pid: EnvId)
                               -> PassResult<'a> {
-        if instruction == QCURSOR_SEEK {
-            let key = stack_pop!(env);
-
-            qcursor_op!(self, env, pid, seek_range_k, (key))
-        } else if instruction == CURSOR_SEEKQ {
-            let key = stack_pop!(env);
-
-            cursorq_op!(self, env, pid, seek_range_k, (key))
-        } else {
-            Err(Error::UnknownInstruction)
-        }
+        instruction_is!(instruction, CURSOR_SEEK);
+        let key = stack_pop!(env);
+        cursor_op!(self, env, pid, seek_range_k, (key));
+        Ok(())
     }
 
     #[inline]
-    pub fn handle_cursor_cur(&mut self,
+    pub fn handle_cursor_positionedq(&mut self,
+                              env: &mut Env<'a>,
+                              instruction: &'a [u8],
+                              pid: EnvId)
+                              -> PassResult<'a> {
+        instruction_is!(instruction, CURSOR_POSITIONEDQ);
+        let result = match cursor_map_op!(self, env, pid, get_current, (), |_| Ok(true), |_| false) {
+            Ok(true) => STACK_TRUE,
+            Err(false) => STACK_FALSE,
+            Err(true) | Ok(false) => unreachable!(),
+        };
+        env.push(result);
+        Ok(())
+    }
+
+    #[inline]
+    pub fn handle_cursor_key(&mut self,
                              env: &mut Env<'a>,
                              instruction: &'a [u8],
                              pid: EnvId)
                              -> PassResult<'a> {
-        if instruction == QCURSOR_CUR {
-            qcursor_op!(self, env, pid, get_current, ())
-        } else if instruction == CURSOR_CURQ {
-            cursorq_op!(self, env, pid, get_current, ())
-        } else {
-            Err(Error::UnknownInstruction)
-        }
+        instruction_is!(instruction, CURSOR_KEY);
+        cursor_map_op!(self, env, pid, get_current, (),
+           |(key, _) | {
+              let slice = alloc_slice!(key.len(), env);
+              slice.copy_from_slice(key);
+              env.push(slice);
+              Ok(())
+        }, |_| error_no_value!())
+    }
+
+    #[inline]
+    pub fn handle_cursor_val(&mut self,
+                             env: &mut Env<'a>,
+                             instruction: &'a [u8],
+                             pid: EnvId)
+                             -> PassResult<'a> {
+        instruction_is!(instruction, CURSOR_VAL);
+        cursor_map_op!(self, env, pid, get_current, (),
+           |(_, val) | {
+              let slice = alloc_slice!(val.len(), env);
+              slice.copy_from_slice(val);
+              env.push(slice);
+              Ok(())
+        }, |_| error_no_value!())
     }
 
     #[inline]
@@ -577,21 +570,6 @@ impl<'a> Handler<'a> {
         env.push(slice);
         Ok(())
     }
-}
-
-fn copy_to_stack(env: &mut Env, (key, val): (&[u8], &[u8])) -> Result<(), Error> {
-    let mut offset = 0;
-    let sz = key.len() + val.len() + offset_by_size(key.len()) + offset_by_size(val.len());
-    let slice = alloc_slice!(sz, env);
-    write_size_into_slice!(key.len(), &mut slice[offset..]);
-    offset += offset_by_size(key.len());
-    slice[offset..offset + key.len()].copy_from_slice(key);
-    offset += key.len();
-    write_size_into_slice!(val.len(), &mut slice[offset..]);
-    offset += offset_by_size(val.len());
-    slice[offset..offset + val.len()].copy_from_slice(val);
-    env.push(slice);
-    Ok(())
 }
 
 #[cfg(test)]
