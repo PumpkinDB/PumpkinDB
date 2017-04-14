@@ -26,6 +26,7 @@ PumpkinDB> ["testkey" HLC CONCAT 1 ASSOC
 ```
 
 {% endmethod %}
+
 ## Allocation
 
 Allocates for closure composition
