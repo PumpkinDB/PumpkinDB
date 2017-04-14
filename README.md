@@ -77,7 +77,7 @@ $ docker build . -t pumpkindb/pumpkindb
 ```
 
 Run the server:
- 
+
 ```shell
 $ docker run -p 9981:9981 -ti pumpkindb/pumpkindb
 2017-04-12T02:52:47.440873517+00:00 WARN pumpkindb - No logging configuration specified, switching to console logging
@@ -127,9 +127,9 @@ PumpkinDB> ["Name" HLC CONCAT "Jopn Doe" ASSOC COMMIT] WRITE.
 
 PumpkinDB> ["Name" HLC CONCAT "John Doe" ASSOC COMMIT] WRITE.
 
-PumpkinDB> [CURSOR "Name" ?CURSOR/SEEKLAST] READ UNWRAP NIP (Get last value).
+PumpkinDB> [CURSOR DUP "Name" CURSOR/SEEKLAST DROP CURSOR/VAL] READ (Get last value).
 "John Doe"
-PumpkinDB> [CURSOR DUP "Name" ?CURSOR/SEEKLAST DROP ?CURSOR/PREV] READ UNWRAP NIP  (Get previous value).
+PumpkinDB> [CURSOR DUP "Name" CURSOR/SEEKLAST DROP DUP CURSOR/PREV DROP CURSOR/VAL] READ (Get previous value).
 "Jopn Doe"
 ```
 
