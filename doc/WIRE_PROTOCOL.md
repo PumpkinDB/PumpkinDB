@@ -12,9 +12,6 @@ in the first byte, followed by that size's number of bytes;
 * `<121u8> <len u8> [_; len]` — byte array from 121 to 255 bytes can have their size indicated
 in the second byte, followed by that size's number of bytes, with `121u8` as the first byte;
 * `<122u8> <len u16> [_; len]` — byte array from 256 to 65535 bytes can have their size
-indicated in the second and third bytes (u16), followed by that size's number of bytes
-with `122u8` as the first byte;
-* `<122u8> <len u16> [_; len]` — byte array from 256 to 65535 bytes can have their size
 indicated in the second and third bytes (u16), followed by that size's number of bytes,
 with `122u8` as the first byte;
 * `<123u8> <len u32> [_; len]` — byte array from 65536 to 4294967296 bytes can have their
