@@ -8,7 +8,7 @@ Input stack: `a [b]`
 
 Output stack: maybe `b`
 
-`IF` will push the result `[c]` to the stack if `a` is `0`.
+`IF` will push the result `[b]` to the stack if `a` is `1`.
 
 {% common -%}
 
