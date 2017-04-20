@@ -57,6 +57,11 @@ To name a few:
 * Indexing filters
 * Subscription filters
 
+## Client libraries
+
+| Language | Library | Status |
+|----------|---------|--------|
+| **Java** | [pumpkindb-client](https://github.com/PumpkinDB/pumpkindb-java) | Pre-release |
 
 ## Trying it out
 
