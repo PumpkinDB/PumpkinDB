@@ -35,8 +35,7 @@ use uuid::Uuid;
 use clap::{Arg, App};
 
 use pumpkindb_engine::script;
-use pumpkinscript::compose::*;
-use pumpkinscript::compose::Item::*;
+use pumpkinscript::*;
 
 fn print_item(s: &mut String, data: &[u8]) {
     if data.iter()
@@ -121,33 +120,33 @@ fn main() {
                     match pumpkinscript::parse(&program) {
                         Ok(compiled) => {
                             let uuid = Uuid::new_v4();
-                            let trace: Vec<u8> = Program(vec![
-                                Data(&[1]), Instruction("WRAP"),
-                                Data("TRACE".as_bytes()),
-                                Instruction("SWAP"),
-                                Instruction("CONCAT"),
-                                Data(uuid.as_bytes()),
-                                Instruction("PUBLISH"),
-                               ]).into();
-                            let msg: Vec<u8> = Program(vec![
-                                                            Data(uuid.as_bytes()),
+                            let uuid_slice = &uuid.as_bytes()[..];
+                            let msg: Vec<u8> = (
+                                                            uuid_slice,
                                                             Instruction("SUBSCRIBE"),
                                                             InstructionRef("___subscription___"),
                                                             Instruction("SET"),
-                                                            Data(&trace),
+                                                            Closure((
+                                                                vec![1u8], Instruction("WRAP"),
+                                                                "TRACE",
+                                                                Instruction("SWAP"),
+                                                                Instruction("CONCAT"),
+                                                                uuid_slice,
+                                                                Instruction("PUBLISH"),
+                                                            )),
                                                             InstructionRef("TRACE"),
                                                             Instruction("DEF"),
-                                                            Data(&compiled),
+                                                            compiled,
                                                             Instruction("TRY"),
                                                             Instruction("STACK"),
-                                                            Data("RESULT".as_bytes()),
+                                                            "RESULT",
                                                             Instruction("SWAP"),
                                                             Instruction("CONCAT"),
-                                                            Data(uuid.as_bytes()),
+                                                            uuid_slice,
                                                             Instruction("PUBLISH"),
                                                             Instruction("___subscription___"),
                                                             Instruction("UNSUBSCRIBE")
-                               ]).into();
+                               ).encode();
                             let mut buf = [0u8; 4];
 
                             BigEndian::write_u32(&mut buf, msg.len() as u32);
