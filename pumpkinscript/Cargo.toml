@@ -10,6 +10,7 @@ categories = [ "database", "parsing" ]
 authors = ["Yurii Rashkovskii <yrashk@gmail.com>"]
 
 [dependencies]
+byteorder = "1.0"
 nom = "^2.1"
 num-bigint = "0.1.35"
 num-traits = "0.1.36"

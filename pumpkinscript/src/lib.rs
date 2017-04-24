@@ -58,11 +58,13 @@
 //!   important part, the storage itself as transactional model of LMDB precludes us
 //!   from carrying these references outside of the scope of the transaction)
 //!
-
+#![feature(try_from)]
 extern crate core;
 #[macro_use] extern crate nom;
 extern crate num_bigint;
 extern crate num_traits;
+extern crate byteorder;
+
 
 #[macro_use]
 pub mod macros;
@@ -74,7 +76,9 @@ pub use self::binparser::parse as parse_bin;
 pub mod textparser;
 pub use self::textparser::parse;
 
-pub mod compose;
+pub mod encodables;
+
+pub use self::encodables::{Encodable, Instruction, InstructionRef, Closure, Receivable};
 
 #[inline]
 pub fn offset_by_size(size: usize) -> usize {
