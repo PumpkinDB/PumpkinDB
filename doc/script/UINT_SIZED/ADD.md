@@ -1,4 +1,4 @@
-INT[size]/ADD
+UINT[size]/ADD
 ===
 
 {% method -%}
@@ -34,19 +34,19 @@ for the result.
 ## Tests
 
 ```test
-works_u8 : 2u8 1u8 INT8/ADD 3u8 EQUAL?.
-empty_stack_u8 : [INT8/ADD] TRY UNWRAP 0x04 EQUAL?.
-empty_stack_u8_1 : [1u8 INT8/ADD] TRY UNWRAP 0x04 EQUAL?.
+works_u8 : 2u8 1u8 UINT8/ADD 3u8 EQUAL?.
+empty_stack_u8 : [UINT8/ADD] TRY UNWRAP 0x04 EQUAL?.
+empty_stack_u8_1 : [1u8 UINT8/ADD] TRY UNWRAP 0x04 EQUAL?.
 
-works_u16 : 2u16 1u16 INT16/ADD 3u16 EQUAL?.
-empty_stack_u16 : [INT16/ADD] TRY UNWRAP 0x04 EQUAL?.
-empty_stack_u16_1 : [1u16 INT16/ADD] TRY UNWRAP 0x04 EQUAL?.
+works_u16 : 2u16 1u16 UINT16/ADD 3u16 EQUAL?.
+empty_stack_u16 : [UINT16/ADD] TRY UNWRAP 0x04 EQUAL?.
+empty_stack_u16_1 : [1u16 UINT16/ADD] TRY UNWRAP 0x04 EQUAL?.
 
-works_u32 : 2u32 1u32 INT32/ADD 3u32 EQUAL?.
-empty_stack_u32 : [INT32/ADD] TRY UNWRAP 0x04 EQUAL?.
-empty_stack_u32_1 : [1u32 INT32/ADD] TRY UNWRAP 0x04 EQUAL?.
+works_u32 : 2u32 1u32 UINT32/ADD 3u32 EQUAL?.
+empty_stack_u32 : [UINT32/ADD] TRY UNWRAP 0x04 EQUAL?.
+empty_stack_u32_1 : [1u32 UINT32/ADD] TRY UNWRAP 0x04 EQUAL?.
 
-works_u64 : 2u64 1u64 INT64/ADD 3u64 EQUAL?.
-empty_stack_u64 : [INT64/ADD] TRY UNWRAP 0x04 EQUAL?.
-empty_stack_u64_1 : [1u64 INT64/ADD] TRY UNWRAP 0x04 EQUAL?.
+works_u64 : 2u64 1u64 UINT64/ADD 3u64 EQUAL?.
+empty_stack_u64 : [UINT64/ADD] TRY UNWRAP 0x04 EQUAL?.
+empty_stack_u64_1 : [1u64 UINT64/ADD] TRY UNWRAP 0x04 EQUAL?.
 ```
