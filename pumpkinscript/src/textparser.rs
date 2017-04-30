@@ -4,6 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use byteorder::{BigEndian, WriteBytesExt};
 use nom::{IResult, ErrorKind};
 use nom::{is_hex_digit, multispace, is_digit};
 
@@ -143,6 +144,112 @@ named!(biguint<BigUint>,
         delim_or_end                    >>
         (BigUint::from_str(str::from_utf8(biguint).unwrap()).unwrap())));
 
+named!(u8int<Vec<u8>>,
+    do_parse!(
+        int: take_while1!(is_digit) >>
+        char!('u')                  >>
+        char!('8')                  >>
+        delim_or_end                >>
+        ({
+            let mut u8i = vec![];
+            u8i.write_u8(str::from_utf8(int).unwrap().parse().unwrap()).unwrap();
+            u8i
+        })));
+
+named!(u16int<Vec<u8>>,
+    do_parse!(
+        int: take_while1!(is_digit) >>
+        char!('u')                  >>
+        char!('1')                  >>
+        char!('6')                  >>
+        delim_or_end                >>
+        ({
+            let mut u16i = vec![];
+            u16i.write_u16::<BigEndian>(str::from_utf8(int).unwrap().parse().unwrap()).unwrap();
+            u16i
+        })));
+
+named!(u32int<Vec<u8>>,
+    do_parse!(
+        int: take_while1!(is_digit) >>
+        char!('u')                  >>
+        char!('3')                  >>
+        char!('2')                  >>
+        delim_or_end                >>
+        ({
+            let mut u32i = vec![];
+            u32i.write_u32::<BigEndian>(str::from_utf8(int).unwrap().parse().unwrap()).unwrap();
+            u32i
+        })));
+
+named!(u64int<Vec<u8>>,
+    do_parse!(
+        int: take_while1!(is_digit) >>
+        char!('u')                  >>
+        char!('6')                  >>
+        char!('4')                  >>
+        delim_or_end                >>
+        ({
+            let mut u64i = vec![];
+            u64i.write_u64::<BigEndian>(str::from_utf8(int).unwrap().parse().unwrap()).unwrap();
+            u64i
+        })));
+
+named!(int8<Vec<u8>>,
+    do_parse!(
+        sign: alt!(char!('+') | char!('-')) >>
+        int: take_while1!(is_digit) >>
+        char!('i')                  >>
+        char!('8')                  >>
+        delim_or_end                >>
+        ({
+            let mut i8 = vec![];
+            i8.write_i8((sign.to_string() + str::from_utf8(int).unwrap()).parse::<i8>().unwrap()).unwrap();
+            i8
+        })));
+
+named!(int16<Vec<u8>>,
+    do_parse!(
+        sign: alt!(char!('+') | char!('-')) >>
+        int: take_while1!(is_digit) >>
+        char!('i')                  >>
+        char!('1')                  >>
+        char!('6')                  >>
+        delim_or_end                >>
+        ({
+            let mut i16 = vec![];
+            i16.write_i16::<BigEndian>((sign.to_string() + str::from_utf8(int).unwrap()).parse::<i16>().unwrap()).unwrap();
+            i16
+        })));
+
+named!(int32<Vec<u8>>,
+    do_parse!(
+        sign: alt!(char!('+') | char!('-')) >>
+        int: take_while1!(is_digit) >>
+        char!('i')                  >>
+        char!('3')                  >>
+        char!('2')                  >>
+        delim_or_end                >>
+        ({
+            let mut i32 = vec![];
+            i32.write_i32::<BigEndian>((sign.to_string() + str::from_utf8(int).unwrap()).parse::<i32>().unwrap()).unwrap();
+            i32
+        })));
+
+named!(int64<Vec<u8>>,
+    do_parse!(
+        sign: alt!(char!('+') | char!('-')) >>
+        int: take_while1!(is_digit) >>
+        char!('i')                  >>
+        char!('6')                  >>
+        char!('4')                  >>
+        delim_or_end                >>
+        ({
+            let mut i64 = vec![];
+            i64.write_i64::<BigEndian>((sign.to_string() + str::from_utf8(int).unwrap()).parse::<i64>().unwrap()).unwrap();
+            i64
+        })));
+
 named!(sint<Vec<u8>>,
     do_parse!(
         sign: sign        >>
@@ -162,6 +269,12 @@ named!(uint<Vec<u8>>,
         biguint: biguint >>
         (sized_vec(biguint.to_bytes_be()))));
 
+named!(int_sized<Vec<u8>>,
+    do_parse!(
+        int: alt!(u8int | int8 | u16int | int16 | u32int | int32 | u64int | int64) >>
+        (sized_vec(int))));
+
+
 named!(instruction<Vec<u8>>, do_parse!(
                         instruction: take_while1!(is_instruction_char)  >>
                               (prefix_instruction(instruction))));
@@ -179,7 +292,7 @@ named!(string<Vec<u8>>,  alt!(do_parse!(tag!(b"\"\"") >> (vec![0])) |
                               (string_to_vec(str)))));
 named!(comment<Vec<u8>>, do_parse!(delimited!(char!('('), opt!(is_not!(")")), char!(')')) >>
                                (vec![])));
-named!(item<Vec<u8>>, alt!(comment | binary | string | uint | sint |
+named!(item<Vec<u8>>, alt!(comment | binary | string | uint | sint | int_sized |
                            wrap | instructionref | instruction));
 
 fn unwrap_instruction(mut instruction: Vec<u8>) -> Vec<u8> {
@@ -325,6 +438,7 @@ pub fn parse(script: &str) -> Result<Program, ParseError> {
 
 #[cfg(test)]
 mod tests {
+    use byteorder::WriteBytesExt;
     use textparser::{parse, programs};
     use num_bigint::BigUint;
     use core::str::FromStr;
@@ -390,6 +504,54 @@ mod tests {
         sized.push(4);
         sized.append(&mut bytes);
         assert_eq!(script, sized);
+    }
+
+    #[test]
+    fn test_uint8() {
+        let script = parse("123u8").unwrap();
+        assert_eq!(script, [1, 123u8]);
+    }
+
+    #[test]
+    fn test_uint16() {
+        let script = parse("123u16").unwrap();
+        assert_eq!(script, [2, 0, 123]);
+    }
+
+    #[test]
+    fn test_uint32() {
+        let script = parse("123u32").unwrap();
+        assert_eq!(script, [4, 0, 0, 0, 123]);
+    }
+
+    #[test]
+    fn test_uint64() {
+        let script = parse("123u64").unwrap();
+        assert_eq!(script, [8, 0, 0, 0, 0, 0, 0, 0, 123]);
+    }
+
+    #[test]
+    fn test_int8() {
+        let script = parse("-123i8").unwrap();
+        assert_eq!(script, [1, 133]);
+    }
+
+    #[test]
+    fn test_int16() {
+        let script = parse("-123i16").unwrap();
+        assert_eq!(script, [2, 255, 133]);
+    }
+
+    #[test]
+    fn test_int32() {
+        let script = parse("-123i32").unwrap();
+        assert_eq!(script, [4, 255, 255, 255, 133]);
+    }
+
+    #[test]
+    fn test_int64() {
+        let script = parse("-123i64").unwrap();
+        assert_eq!(script, [8, 255, 255, 255, 255, 255, 255, 255, 133]);
     }
 
     #[test]
