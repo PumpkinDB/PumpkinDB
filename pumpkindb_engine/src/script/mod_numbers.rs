@@ -121,6 +121,71 @@ macro_rules! int_comparison {
     }};
 }
 
+
+macro_rules! no_endianness_sized_int_op {
+    ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
+        let mut a = stack_pop!($env);
+        let mut b = stack_pop!($env);
+
+        let a_int = match a.$read_op() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let b_int = match b.$read_op() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_int = match a_int.$op(b_int) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.$write_op(c_int) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), $env);
+        $env.push(slice);
+        Ok(())
+    }};
+}
+
+macro_rules! sized_int_op {
+    ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
+        let mut a = stack_pop!($env);
+        let mut b = stack_pop!($env);
+
+        let a_int = match a.$read_op::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let b_int = match b.$read_op::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_int = match a_int.$op(b_int) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.$write_op::<BigEndian>(c_int) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), $env);
+        $env.push(slice);
+        Ok(())
+    }};
+}
+
 pub struct Handler<'a> {
     phantom: PhantomData<&'a ()>,
 }
@@ -381,33 +446,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT8_ADD);
-        let mut a = stack_pop!(env);
-        let mut b = stack_pop!(env);
-
-        let a_uint = match a.read_u8() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(a)),
-        };
-
-        let b_uint = match b.read_u8() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(b)),
-        };
-
-        let c_uint = match a_uint.checked_add(b_uint) {
-            Some(v) => v,
-            None => return Err(error_invalid_value!(a)),
-        };
-
-        let mut c_bytes = vec![];
-        match c_bytes.write_u8(c_uint) {
-            Ok(_) => {},
-            Err(_) => return Err(error_invalid_value!(a)),
-        }
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
-        env.push(slice);
-        Ok(())
+        no_endianness_sized_int_op!(env, read_u8, checked_add, write_u8)
     }
 
     #[inline]
@@ -417,33 +456,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT8_SUB);
-        let mut a = stack_pop!(env);
-        let mut b = stack_pop!(env);
-
-        let a_uint = match a.read_u8() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(a)),
-        };
-
-        let b_uint = match b.read_u8() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(b)),
-        };
-
-        let c_uint = match b_uint.checked_sub(a_uint) {
-            Some(v) => v,
-            None => return Err(error_invalid_value!(a)),
-        };
-
-        let mut c_bytes = vec![];
-        match c_bytes.write_u8(c_uint) {
-            Ok(_) => {},
-            Err(_) => return Err(error_invalid_value!(a)),
-        }
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
-        env.push(slice);
-        Ok(())
+        no_endianness_sized_int_op!(env, read_u8, checked_sub, write_u8)
     }
 
     #[inline]
@@ -453,33 +466,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, INT8_ADD);
-        let mut a = stack_pop!(env);
-        let mut b = stack_pop!(env);
-
-        let a_int = match a.read_i8() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(a)),
-        };
-
-        let b_int = match b.read_i8() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(b)),
-        };
-
-        let c_int = match a_int.checked_add(b_int) {
-            Some(v) => v,
-            None => return Err(error_invalid_value!(a)),
-        };
-
-        let mut c_bytes = vec![];
-        match c_bytes.write_i8(c_int) {
-            Ok(_) => {},
-            Err(_) => return Err(error_invalid_value!(a)),
-        }
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
-        env.push(slice);
-        Ok(())
+        no_endianness_sized_int_op!(env, read_i8, checked_add, write_i8)
     }
 
     #[inline]
@@ -489,33 +476,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, INT8_SUB);
-        let mut a = stack_pop!(env);
-        let mut b = stack_pop!(env);
-
-        let a_int = match a.read_i8() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(a)),
-        };
-
-        let b_int = match b.read_i8() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(b)),
-        };
-
-        let c_int = match b_int.checked_sub(a_int) {
-            Some(v) => v,
-            None => return Err(error_invalid_value!(a)),
-        };
-
-        let mut c_bytes = vec![];
-        match c_bytes.write_i8(c_int) {
-            Ok(_) => {},
-            Err(_) => return Err(error_invalid_value!(a)),
-        }
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
-        env.push(slice);
-        Ok(())
+        no_endianness_sized_int_op!(env, read_i8, checked_sub, write_i8)
     }
 
     #[inline]
@@ -525,33 +486,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT16_ADD);
-        let mut a = stack_pop!(env);
-        let mut b = stack_pop!(env);
-
-        let a_uint = match a.read_u16::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(a)),
-        };
-
-        let b_uint = match b.read_u16::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(b)),
-        };
-
-        let c_uint = match a_uint.checked_add(b_uint) {
-            Some(v) => v,
-            None => return Err(error_invalid_value!(a)),
-        };
-
-        let mut c_bytes = vec![];
-        match c_bytes.write_u16::<BigEndian>(c_uint) {
-            Ok(_) => {},
-            Err(_) => return Err(error_invalid_value!(a)),
-        }
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
-        env.push(slice);
-        Ok(())
+        sized_int_op!(env, read_u16, checked_add, write_u16)
     }
 
     #[inline]
@@ -561,33 +496,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT16_SUB);
-        let mut a = stack_pop!(env);
-        let mut b = stack_pop!(env);
-
-        let a_uint = match a.read_u16::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(a)),
-        };
-
-        let b_uint = match b.read_u16::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(b)),
-        };
-
-        let c_uint = match b_uint.checked_sub(a_uint) {
-            Some(v) => v,
-            None => return Err(error_invalid_value!(a)),
-        };
-
-        let mut c_bytes = vec![];
-        match c_bytes.write_u16::<BigEndian>(c_uint) {
-            Ok(_) => {},
-            Err(_) => return Err(error_invalid_value!(a)),
-        }
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
-        env.push(slice);
-        Ok(())
+        sized_int_op!(env, read_u16, checked_sub, write_u16)
     }
 
     #[inline]
@@ -597,33 +506,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, INT16_ADD);
-        let mut a = stack_pop!(env);
-        let mut b = stack_pop!(env);
-
-        let a_uint = match a.read_i16::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(a)),
-        };
-
-        let b_uint = match b.read_i16::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(b)),
-        };
-
-        let c_uint = match a_uint.checked_add(b_uint) {
-            Some(v) => v,
-            None => return Err(error_invalid_value!(a)),
-        };
-
-        let mut c_bytes = vec![];
-        match c_bytes.write_i16::<BigEndian>(c_uint) {
-            Ok(_) => {},
-            Err(_) => return Err(error_invalid_value!(a)),
-        }
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
-        env.push(slice);
-        Ok(())
+        sized_int_op!(env, read_i16, checked_add, write_i16)
     }
 
     #[inline]
@@ -633,33 +516,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, INT16_SUB);
-        let mut a = stack_pop!(env);
-        let mut b = stack_pop!(env);
-
-        let a_uint = match a.read_i16::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(a)),
-        };
-
-        let b_uint = match b.read_i16::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(b)),
-        };
-
-        let c_uint = match b_uint.checked_sub(a_uint) {
-            Some(v) => v,
-            None => return Err(error_invalid_value!(a)),
-        };
-
-        let mut c_bytes = vec![];
-        match c_bytes.write_i16::<BigEndian>(c_uint) {
-            Ok(_) => {},
-            Err(_) => return Err(error_invalid_value!(a)),
-        }
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
-        env.push(slice);
-        Ok(())
+        sized_int_op!(env, read_i16, checked_sub, write_i16)
     }
 
     #[inline]
@@ -669,33 +526,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT32_ADD);
-        let mut a = stack_pop!(env);
-        let mut b = stack_pop!(env);
-
-        let a_uint = match a.read_u32::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(a)),
-        };
-
-        let b_uint = match b.read_u32::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(b)),
-        };
-
-        let c_uint = match a_uint.checked_add(b_uint) {
-            Some(v) => v,
-            None => return Err(error_invalid_value!(a)),
-        };
-
-        let mut c_bytes = vec![];
-        match c_bytes.write_u32::<BigEndian>(c_uint) {
-            Ok(_) => {},
-            Err(_) => return Err(error_invalid_value!(a)),
-        }
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
-        env.push(slice);
-        Ok(())
+        sized_int_op!(env, read_u32, checked_add, write_u32)
     }
 
     #[inline]
@@ -705,33 +536,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT32_SUB);
-        let mut a = stack_pop!(env);
-        let mut b = stack_pop!(env);
-
-        let a_uint = match a.read_u32::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(a)),
-        };
-
-        let b_uint = match b.read_u32::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(b)),
-        };
-
-        let c_uint = match b_uint.checked_sub(a_uint) {
-            Some(v) => v,
-            None => return Err(error_invalid_value!(a)),
-        };
-
-        let mut c_bytes = vec![];
-        match c_bytes.write_u32::<BigEndian>(c_uint) {
-            Ok(_) => {},
-            Err(_) => return Err(error_invalid_value!(a)),
-        }
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
-        env.push(slice);
-        Ok(())
+        sized_int_op!(env, read_u32, checked_sub, write_u32)
     }
 
     #[inline]
@@ -741,33 +546,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, INT32_ADD);
-        let mut a = stack_pop!(env);
-        let mut b = stack_pop!(env);
-
-        let a_uint = match a.read_i32::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(a)),
-        };
-
-        let b_uint = match b.read_i32::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(b)),
-        };
-
-        let c_uint = match a_uint.checked_add(b_uint) {
-            Some(v) => v,
-            None => return Err(error_invalid_value!(a)),
-        };
-
-        let mut c_bytes = vec![];
-        match c_bytes.write_i32::<BigEndian>(c_uint) {
-            Ok(_) => {},
-            Err(_) => return Err(error_invalid_value!(a)),
-        }
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
-        env.push(slice);
-        Ok(())
+        sized_int_op!(env, read_i32, checked_add, write_i32)
     }
 
     #[inline]
@@ -777,33 +556,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, INT32_SUB);
-        let mut a = stack_pop!(env);
-        let mut b = stack_pop!(env);
-
-        let a_uint = match a.read_i32::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(a)),
-        };
-
-        let b_uint = match b.read_i32::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(b)),
-        };
-
-        let c_uint = match b_uint.checked_sub(a_uint) {
-            Some(v) => v,
-            None => return Err(error_invalid_value!(a)),
-        };
-
-        let mut c_bytes = vec![];
-        match c_bytes.write_i32::<BigEndian>(c_uint) {
-            Ok(_) => {},
-            Err(_) => return Err(error_invalid_value!(a)),
-        }
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
-        env.push(slice);
-        Ok(())
+        sized_int_op!(env, read_i32, checked_sub, write_i32)
     }
 
     #[inline]
@@ -813,33 +566,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT64_ADD);
-        let mut a = stack_pop!(env);
-        let mut b = stack_pop!(env);
-
-        let a_uint = match a.read_u64::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(a)),
-        };
-
-        let b_uint = match b.read_u64::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(b)),
-        };
-
-        let c_uint = match a_uint.checked_add(b_uint) {
-            Some(v) => v,
-            None => return Err(error_invalid_value!(a)),
-        };
-
-        let mut c_bytes = vec![];
-        match c_bytes.write_u64::<BigEndian>(c_uint) {
-            Ok(_) => {},
-            Err(_) => return Err(error_invalid_value!(a)),
-        }
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
-        env.push(slice);
-        Ok(())
+        sized_int_op!(env, read_u64, checked_add, write_u64)
     }
 
     #[inline]
@@ -849,33 +576,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT64_SUB);
-        let mut a = stack_pop!(env);
-        let mut b = stack_pop!(env);
-
-        let a_uint = match a.read_u64::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(a)),
-        };
-
-        let b_uint = match b.read_u64::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(b)),
-        };
-
-        let c_uint = match b_uint.checked_sub(a_uint) {
-            Some(v) => v,
-            None => return Err(error_invalid_value!(a)),
-        };
-
-        let mut c_bytes = vec![];
-        match c_bytes.write_u64::<BigEndian>(c_uint) {
-            Ok(_) => {},
-            Err(_) => return Err(error_invalid_value!(a)),
-        }
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
-        env.push(slice);
-        Ok(())
+        sized_int_op!(env, read_u64, checked_sub, write_u64)
     }
 
     #[inline]
@@ -885,33 +586,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, INT64_ADD);
-        let mut a = stack_pop!(env);
-        let mut b = stack_pop!(env);
-
-        let a_uint = match a.read_i64::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(a)),
-        };
-
-        let b_uint = match b.read_i64::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(b)),
-        };
-
-        let c_uint = match a_uint.checked_add(b_uint) {
-            Some(v) => v,
-            None => return Err(error_invalid_value!(a)),
-        };
-
-        let mut c_bytes = vec![];
-        match c_bytes.write_i64::<BigEndian>(c_uint) {
-            Ok(_) => {},
-            Err(_) => return Err(error_invalid_value!(a)),
-        }
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
-        env.push(slice);
-        Ok(())
+        sized_int_op!(env, read_i64, checked_add, write_i64)
     }
 
     #[inline]
@@ -921,32 +596,6 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, INT64_SUB);
-        let mut a = stack_pop!(env);
-        let mut b = stack_pop!(env);
-
-        let a_uint = match a.read_i64::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(a)),
-        };
-
-        let b_uint = match b.read_i64::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(b)),
-        };
-
-        let c_uint = match b_uint.checked_sub(a_uint) {
-            Some(v) => v,
-            None => return Err(error_invalid_value!(a)),
-        };
-
-        let mut c_bytes = vec![];
-        match c_bytes.write_i64::<BigEndian>(c_uint) {
-            Ok(_) => {},
-            Err(_) => return Err(error_invalid_value!(a)),
-        }
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
-        env.push(slice);
-        Ok(())
+        sized_int_op!(env, read_i64, checked_sub, write_i64)
     }
 }
