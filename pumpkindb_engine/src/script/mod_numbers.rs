@@ -9,6 +9,8 @@ use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_
 
 use std::marker::PhantomData;
 
+use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt};
+
 use num_bigint::{BigUint, BigInt, Sign};
 use num_traits::Signed;
 use core::ops::{Add, Sub};
@@ -18,6 +20,26 @@ instruction!(UINT_ADD, (a, b => c), b"\x88UINT/ADD");
 instruction!(UINT_SUB, (a, b => c), b"\x88UINT/SUB");
 instruction!(INT_ADD, (a, b => c), b"\x87INT/ADD");
 instruction!(INT_SUB, (a, b => c), b"\x87INT/SUB");
+
+instruction!(UINT8_ADD, (a, b => c), b"\x89UINT8/ADD");
+instruction!(UINT8_SUB, (a, b => c), b"\x89UINT8/SUB");
+instruction!(INT8_ADD, (a, b => c), b"\x88INT8/ADD");
+instruction!(INT8_SUB, (a, b => c), b"\x88INT8/SUB");
+
+instruction!(UINT16_ADD, (a, b => c), b"\x8aUINT16/ADD");
+instruction!(UINT16_SUB, (a, b => c), b"\x8aUINT16/SUB");
+instruction!(INT16_ADD, (a, b => c), b"\x89INT16/ADD");
+instruction!(INT16_SUB, (a, b => c), b"\x89INT16/SUB");
+
+instruction!(UINT32_ADD, (a, b => c), b"\x8aUINT32/ADD");
+instruction!(UINT32_SUB, (a, b => c), b"\x8aUINT32/SUB");
+instruction!(INT32_ADD, (a, b => c), b"\x89INT32/ADD");
+instruction!(INT32_SUB, (a, b => c), b"\x89INT32/SUB");
+
+instruction!(UINT64_ADD, (a, b => c), b"\x8aUINT64/ADD");
+instruction!(UINT64_SUB, (a, b => c), b"\x8aUINT64/SUB");
+instruction!(INT64_ADD, (a, b => c), b"\x89INT64/ADD");
+instruction!(INT64_SUB, (a, b => c), b"\x89INT64/SUB");
 
 // Casting
 instruction!(INT_TO_UINT, (a => b), b"\x89INT->UINT");
@@ -30,6 +52,7 @@ instruction!(UINT_LTQ, (a, b => c), b"\x88UINT/LT?");
 instruction!(INT_EQUALQ, (a, b => c), b"\x8AINT/EQUAL?");
 instruction!(INT_GTQ, (a, b => c), b"\x87INT/GT?");
 instruction!(INT_LTQ, (a, b => c), b"\x87INT/LT?");
+
 
 pub fn bytes_to_bigint(bytes: &[u8]) -> Option<BigInt> {
     if bytes.len() >= 2 {
@@ -116,6 +139,22 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
         try_instruction!(env, self.handle_int_equalq(env, instruction, pid));
         try_instruction!(env, self.handle_int_gtq(env, instruction, pid));
         try_instruction!(env, self.handle_int_ltq(env, instruction, pid));
+        try_instruction!(env, self.handle_uint8_add(env, instruction, pid));
+        try_instruction!(env, self.handle_uint8_sub(env, instruction, pid));
+        try_instruction!(env, self.handle_int8_add(env, instruction, pid));
+        try_instruction!(env, self.handle_int8_sub(env, instruction, pid));
+        try_instruction!(env, self.handle_uint16_add(env, instruction, pid));
+        try_instruction!(env, self.handle_uint16_sub(env, instruction, pid));
+        try_instruction!(env, self.handle_int16_add(env, instruction, pid));
+        try_instruction!(env, self.handle_int16_sub(env, instruction, pid));
+        try_instruction!(env, self.handle_uint32_add(env, instruction, pid));
+        try_instruction!(env, self.handle_uint32_sub(env, instruction, pid));
+        try_instruction!(env, self.handle_int32_add(env, instruction, pid));
+        try_instruction!(env, self.handle_int32_sub(env, instruction, pid));
+        try_instruction!(env, self.handle_uint64_add(env, instruction, pid));
+        try_instruction!(env, self.handle_uint64_sub(env, instruction, pid));
+        try_instruction!(env, self.handle_int64_add(env, instruction, pid));
+        try_instruction!(env, self.handle_int64_sub(env, instruction, pid));
         Err(Error::UnknownInstruction)
     }
 }
@@ -333,5 +372,581 @@ impl<'a> Handler<'a> {
                       _: EnvId)
                       -> PassResult<'a> {
         int_comparison!(env, instruction, INT_LTQ, lt)
+    }
+
+    #[inline]
+    fn handle_uint8_add(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       _: EnvId)
+                       -> PassResult<'a> {
+        instruction_is!(instruction, UINT8_ADD);
+        let mut a = stack_pop!(env);
+        let mut b = stack_pop!(env);
+
+        let a_uint = match a.read_u8() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let b_uint = match b.read_u8() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_uint = match a_uint.checked_add(b_uint) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.write_u8(c_uint) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_uint8_sub(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       _: EnvId)
+                       -> PassResult<'a> {
+        instruction_is!(instruction, UINT8_SUB);
+        let mut a = stack_pop!(env);
+        let mut b = stack_pop!(env);
+
+        let a_uint = match a.read_u8() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let b_uint = match b.read_u8() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_uint = match b_uint.checked_sub(a_uint) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.write_u8(c_uint) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_int8_add(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       _: EnvId)
+                       -> PassResult<'a> {
+        instruction_is!(instruction, INT8_ADD);
+        let mut a = stack_pop!(env);
+        let mut b = stack_pop!(env);
+
+        let a_int = match a.read_i8() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let b_int = match b.read_i8() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_int = match a_int.checked_add(b_int) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.write_i8(c_int) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_int8_sub(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       _: EnvId)
+                       -> PassResult<'a> {
+        instruction_is!(instruction, INT8_SUB);
+        let mut a = stack_pop!(env);
+        let mut b = stack_pop!(env);
+
+        let a_int = match a.read_i8() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let b_int = match b.read_i8() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_int = match b_int.checked_sub(a_int) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.write_i8(c_int) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_uint16_add(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       _: EnvId)
+                       -> PassResult<'a> {
+        instruction_is!(instruction, UINT16_ADD);
+        let mut a = stack_pop!(env);
+        let mut b = stack_pop!(env);
+
+        let a_uint = match a.read_u16::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let b_uint = match b.read_u16::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_uint = match a_uint.checked_add(b_uint) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.write_u16::<BigEndian>(c_uint) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_uint16_sub(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       _: EnvId)
+                       -> PassResult<'a> {
+        instruction_is!(instruction, UINT16_SUB);
+        let mut a = stack_pop!(env);
+        let mut b = stack_pop!(env);
+
+        let a_uint = match a.read_u16::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let b_uint = match b.read_u16::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_uint = match b_uint.checked_sub(a_uint) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.write_u16::<BigEndian>(c_uint) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_int16_add(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       _: EnvId)
+                       -> PassResult<'a> {
+        instruction_is!(instruction, INT16_ADD);
+        let mut a = stack_pop!(env);
+        let mut b = stack_pop!(env);
+
+        let a_uint = match a.read_i16::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let b_uint = match b.read_i16::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_uint = match a_uint.checked_add(b_uint) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.write_i16::<BigEndian>(c_uint) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_int16_sub(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       _: EnvId)
+                       -> PassResult<'a> {
+        instruction_is!(instruction, INT16_SUB);
+        let mut a = stack_pop!(env);
+        let mut b = stack_pop!(env);
+
+        let a_uint = match a.read_i16::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let b_uint = match b.read_i16::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_uint = match b_uint.checked_sub(a_uint) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.write_i16::<BigEndian>(c_uint) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_uint32_add(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       _: EnvId)
+                       -> PassResult<'a> {
+        instruction_is!(instruction, UINT32_ADD);
+        let mut a = stack_pop!(env);
+        let mut b = stack_pop!(env);
+
+        let a_uint = match a.read_u32::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let b_uint = match b.read_u32::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_uint = match a_uint.checked_add(b_uint) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.write_u32::<BigEndian>(c_uint) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_uint32_sub(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       _: EnvId)
+                       -> PassResult<'a> {
+        instruction_is!(instruction, UINT32_SUB);
+        let mut a = stack_pop!(env);
+        let mut b = stack_pop!(env);
+
+        let a_uint = match a.read_u32::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let b_uint = match b.read_u32::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_uint = match b_uint.checked_sub(a_uint) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.write_u32::<BigEndian>(c_uint) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_int32_add(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       _: EnvId)
+                       -> PassResult<'a> {
+        instruction_is!(instruction, INT32_ADD);
+        let mut a = stack_pop!(env);
+        let mut b = stack_pop!(env);
+
+        let a_uint = match a.read_i32::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let b_uint = match b.read_i32::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_uint = match a_uint.checked_add(b_uint) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.write_i32::<BigEndian>(c_uint) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_int32_sub(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       _: EnvId)
+                       -> PassResult<'a> {
+        instruction_is!(instruction, INT32_SUB);
+        let mut a = stack_pop!(env);
+        let mut b = stack_pop!(env);
+
+        let a_uint = match a.read_i32::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let b_uint = match b.read_i32::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_uint = match b_uint.checked_sub(a_uint) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.write_i32::<BigEndian>(c_uint) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_uint64_add(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       _: EnvId)
+                       -> PassResult<'a> {
+        instruction_is!(instruction, UINT64_ADD);
+        let mut a = stack_pop!(env);
+        let mut b = stack_pop!(env);
+
+        let a_uint = match a.read_u64::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let b_uint = match b.read_u64::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_uint = match a_uint.checked_add(b_uint) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.write_u64::<BigEndian>(c_uint) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_uint64_sub(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       _: EnvId)
+                       -> PassResult<'a> {
+        instruction_is!(instruction, UINT64_SUB);
+        let mut a = stack_pop!(env);
+        let mut b = stack_pop!(env);
+
+        let a_uint = match a.read_u64::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let b_uint = match b.read_u64::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_uint = match b_uint.checked_sub(a_uint) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.write_u64::<BigEndian>(c_uint) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_int64_add(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       _: EnvId)
+                       -> PassResult<'a> {
+        instruction_is!(instruction, INT64_ADD);
+        let mut a = stack_pop!(env);
+        let mut b = stack_pop!(env);
+
+        let a_uint = match a.read_i64::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let b_uint = match b.read_i64::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_uint = match a_uint.checked_add(b_uint) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.write_i64::<BigEndian>(c_uint) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_int64_sub(&mut self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       _: EnvId)
+                       -> PassResult<'a> {
+        instruction_is!(instruction, INT64_SUB);
+        let mut a = stack_pop!(env);
+        let mut b = stack_pop!(env);
+
+        let a_uint = match a.read_i64::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let b_uint = match b.read_i64::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_uint = match b_uint.checked_sub(a_uint) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.write_i64::<BigEndian>(c_uint) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        env.push(slice);
+        Ok(())
     }
 }
