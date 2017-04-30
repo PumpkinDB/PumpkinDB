@@ -438,7 +438,6 @@ pub fn parse(script: &str) -> Result<Program, ParseError> {
 
 #[cfg(test)]
 mod tests {
-    use byteorder::WriteBytesExt;
     use textparser::{parse, programs};
     use num_bigint::BigUint;
     use core::str::FromStr;
