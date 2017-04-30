@@ -208,6 +208,18 @@ named!(int8<Vec<u8>>,
             i8
         })));
 
+named!(int8p<Vec<u8>>,
+    do_parse!(
+        int: take_while1!(is_digit) >>
+        char!('i')                  >>
+        char!('8')                  >>
+        delim_or_end                >>
+        ({
+            let mut i8 = vec![];
+            i8.write_i8((str::from_utf8(int).unwrap()).parse::<i8>().unwrap()).unwrap();
+            i8
+        })));
+
 named!(int16<Vec<u8>>,
     do_parse!(
         sign: alt!(char!('+') | char!('-')) >>
@@ -219,6 +231,19 @@ named!(int16<Vec<u8>>,
         ({
             let mut i16 = vec![];
             i16.write_i16::<BigEndian>((sign.to_string() + str::from_utf8(int).unwrap()).parse::<i16>().unwrap()).unwrap();
+            i16
+        })));
+
+named!(int16p<Vec<u8>>,
+    do_parse!(
+        int: take_while1!(is_digit) >>
+        char!('i')                  >>
+        char!('1')                  >>
+        char!('6')                  >>
+        delim_or_end                >>
+        ({
+            let mut i16 = vec![];
+            i16.write_i16::<BigEndian>((str::from_utf8(int).unwrap()).parse::<i16>().unwrap()).unwrap();
             i16
         })));
 
@@ -236,6 +261,19 @@ named!(int32<Vec<u8>>,
             i32
         })));
 
+named!(int32p<Vec<u8>>,
+    do_parse!(
+        int: take_while1!(is_digit) >>
+        char!('i')                  >>
+        char!('3')                  >>
+        char!('2')                  >>
+        delim_or_end                >>
+        ({
+            let mut i32 = vec![];
+            i32.write_i32::<BigEndian>((str::from_utf8(int).unwrap()).parse::<i32>().unwrap()).unwrap();
+            i32
+        })));
+
 named!(int64<Vec<u8>>,
     do_parse!(
         sign: alt!(char!('+') | char!('-')) >>
@@ -247,6 +285,19 @@ named!(int64<Vec<u8>>,
         ({
             let mut i64 = vec![];
             i64.write_i64::<BigEndian>((sign.to_string() + str::from_utf8(int).unwrap()).parse::<i64>().unwrap()).unwrap();
+            i64
+        })));
+
+named!(int64p<Vec<u8>>,
+    do_parse!(
+        int: take_while1!(is_digit) >>
+        char!('i')                  >>
+        char!('6')                  >>
+        char!('4')                  >>
+        delim_or_end                >>
+        ({
+            let mut i64 = vec![];
+            i64.write_i64::<BigEndian>((str::from_utf8(int).unwrap()).parse::<i64>().unwrap()).unwrap();
             i64
         })));
 
@@ -271,7 +322,8 @@ named!(uint<Vec<u8>>,
 
 named!(int_sized<Vec<u8>>,
     do_parse!(
-        int: alt!(u8int | int8 | u16int | int16 | u32int | int32 | u64int | int64) >>
+        int: alt!(u8int | int8 | int8p | u16int | int16 | int16p | u32int | int32 | int32p |
+                  u64int | int64 | int64p ) >>
         (sized_vec(int))));
 
 
@@ -534,24 +586,40 @@ mod tests {
     fn test_int8() {
         let script = parse("-123i8").unwrap();
         assert_eq!(script, [1, 133]);
+        let script = parse("+123i8").unwrap();
+        assert_eq!(script, [1, 123]);
+        let script = parse("123i8").unwrap();
+        assert_eq!(script, [1, 123]);
     }
 
     #[test]
     fn test_int16() {
         let script = parse("-123i16").unwrap();
         assert_eq!(script, [2, 255, 133]);
+        let script = parse("+123i16").unwrap();
+        assert_eq!(script, [2, 0, 123]);
+        let script = parse("123i16").unwrap();
+        assert_eq!(script, [2, 0, 123]);
     }
 
     #[test]
     fn test_int32() {
         let script = parse("-123i32").unwrap();
         assert_eq!(script, [4, 255, 255, 255, 133]);
+        let script = parse("+123i32").unwrap();
+        assert_eq!(script, [4, 0, 0, 0, 123]);
+        let script = parse("123i32").unwrap();
+        assert_eq!(script, [4, 0, 0, 0, 123]);
     }
 
     #[test]
     fn test_int64() {
         let script = parse("-123i64").unwrap();
         assert_eq!(script, [8, 255, 255, 255, 255, 255, 255, 255, 133]);
+        let script = parse("+123i64").unwrap();
+        assert_eq!(script, [8, 0, 0, 0, 0, 0, 0, 0, 123]);
+        let script = parse("123i64").unwrap();
+        assert_eq!(script, [8, 0, 0, 0, 0, 0, 0, 0, 123]);
     }
 
     #[test]
