@@ -205,6 +205,7 @@ named!(int8<Vec<u8>>,
         ({
             let mut i8 = vec![];
             i8.write_i8((sign.to_string() + str::from_utf8(int).unwrap()).parse::<i8>().unwrap()).unwrap();
+            i8[0] ^= 1u8 << 7;
             i8
         })));
 
@@ -217,6 +218,7 @@ named!(int8p<Vec<u8>>,
         ({
             let mut i8 = vec![];
             i8.write_i8((str::from_utf8(int).unwrap()).parse::<i8>().unwrap()).unwrap();
+            i8[0] ^= 1u8 << 7;
             i8
         })));
 
@@ -231,6 +233,7 @@ named!(int16<Vec<u8>>,
         ({
             let mut i16 = vec![];
             i16.write_i16::<BigEndian>((sign.to_string() + str::from_utf8(int).unwrap()).parse::<i16>().unwrap()).unwrap();
+            i16[0] ^= 1u8 << 7;
             i16
         })));
 
@@ -244,6 +247,7 @@ named!(int16p<Vec<u8>>,
         ({
             let mut i16 = vec![];
             i16.write_i16::<BigEndian>((str::from_utf8(int).unwrap()).parse::<i16>().unwrap()).unwrap();
+            i16[0] ^= 1u8 << 7;
             i16
         })));
 
@@ -258,6 +262,7 @@ named!(int32<Vec<u8>>,
         ({
             let mut i32 = vec![];
             i32.write_i32::<BigEndian>((sign.to_string() + str::from_utf8(int).unwrap()).parse::<i32>().unwrap()).unwrap();
+            i32[0] ^= 1u8 << 7;
             i32
         })));
 
@@ -271,6 +276,7 @@ named!(int32p<Vec<u8>>,
         ({
             let mut i32 = vec![];
             i32.write_i32::<BigEndian>((str::from_utf8(int).unwrap()).parse::<i32>().unwrap()).unwrap();
+            i32[0] ^= 1u8 << 7;
             i32
         })));
 
@@ -285,6 +291,7 @@ named!(int64<Vec<u8>>,
         ({
             let mut i64 = vec![];
             i64.write_i64::<BigEndian>((sign.to_string() + str::from_utf8(int).unwrap()).parse::<i64>().unwrap()).unwrap();
+            i64[0] ^= 1u8 << 7;
             i64
         })));
 
@@ -298,6 +305,7 @@ named!(int64p<Vec<u8>>,
         ({
             let mut i64 = vec![];
             i64.write_i64::<BigEndian>((str::from_utf8(int).unwrap()).parse::<i64>().unwrap()).unwrap();
+            i64[0] ^= 1u8 << 7;
             i64
         })));
 
@@ -306,12 +314,36 @@ named!(sint<Vec<u8>>,
         sign: sign        >>
         biguint: biguint  >>
         ({
-           let mut bytes = if sign == Sign::Minus && !biguint.is_zero() {
+            let mut bytes = if sign == Sign::Minus && !biguint.is_zero() {
                 vec![0x00]
            } else {
                 vec![0x01]
-           };
-           bytes.extend_from_slice(&biguint.to_bytes_be());
+            };
+           let big = biguint.to_bytes_be();
+           let mut compv: Vec<u8> = vec![];
+           //Encode with two's complement.
+           if sign == Sign::Minus && !biguint.is_zero() {
+                for byte in big {
+                    compv.push(!byte);
+                }
+                let mut nextbit = true;
+                for i in (0..compv.len()).rev() {
+                    compv[i] =  match compv[i].checked_add(1) {
+                        Some(v) => {
+                            nextbit = false;
+                            v
+                        },
+                        None => 0,
+                    };
+                    if !nextbit {
+                        break;
+                    }
+                }
+           } else {
+               compv = big;
+           }
+           //compv[0] ^= 1u8 << 7;
+           bytes.extend_from_slice(&compv);
            (sized_vec(bytes))
         })));
 
@@ -584,41 +616,41 @@ mod tests {
     #[test]
     fn test_int8() {
         let script = parse("-123i8").unwrap();
-        assert_eq!(script, [1, 133]);
+        assert_eq!(script, [1, 5]);
         let script = parse("+123i8").unwrap();
-        assert_eq!(script, [1, 123]);
+        assert_eq!(script, [1, 251]);
         let script = parse("123i8").unwrap();
-        assert_eq!(script, [1, 123]);
+        assert_eq!(script, [1, 251]);
     }
 
     #[test]
     fn test_int16() {
         let script = parse("-123i16").unwrap();
-        assert_eq!(script, [2, 255, 133]);
+        assert_eq!(script, [2, 127, 133]);
         let script = parse("+123i16").unwrap();
-        assert_eq!(script, [2, 0, 123]);
+        assert_eq!(script, [2, 128, 123]);
         let script = parse("123i16").unwrap();
-        assert_eq!(script, [2, 0, 123]);
+        assert_eq!(script, [2, 128, 123]);
     }
 
     #[test]
     fn test_int32() {
         let script = parse("-123i32").unwrap();
-        assert_eq!(script, [4, 255, 255, 255, 133]);
+        assert_eq!(script, [4, 127, 255, 255, 133]);
         let script = parse("+123i32").unwrap();
-        assert_eq!(script, [4, 0, 0, 0, 123]);
+        assert_eq!(script, [4, 128, 0, 0, 123]);
         let script = parse("123i32").unwrap();
-        assert_eq!(script, [4, 0, 0, 0, 123]);
+        assert_eq!(script, [4, 128, 0, 0, 123]);
     }
 
     #[test]
     fn test_int64() {
         let script = parse("-123i64").unwrap();
-        assert_eq!(script, [8, 255, 255, 255, 255, 255, 255, 255, 133]);
+        assert_eq!(script, [8, 127, 255, 255, 255, 255, 255, 255, 133]);
         let script = parse("+123i64").unwrap();
-        assert_eq!(script, [8, 0, 0, 0, 0, 0, 0, 0, 123]);
+        assert_eq!(script, [8, 128, 0, 0, 0, 0, 0, 0, 123]);
         let script = parse("123i64").unwrap();
-        assert_eq!(script, [8, 0, 0, 0, 0, 0, 0, 0, 123]);
+        assert_eq!(script, [8, 128, 0, 0, 0, 0, 0, 0, 123]);
     }
 
     #[test]
@@ -732,7 +764,7 @@ mod tests {
         assert_eq!(parse("+0").unwrap(), parse("-0").unwrap());
         assert_eq!(parse("+0").unwrap(), vec![2, 1, 0]);
         assert_eq!(parse("+1").unwrap(), vec![2, 1, 1]);
-        assert_eq!(parse("-1").unwrap(), vec![2, 0, 1]);
+        assert_eq!(parse("-1").unwrap(), vec![2, 0, 255]);
     }
 
 }

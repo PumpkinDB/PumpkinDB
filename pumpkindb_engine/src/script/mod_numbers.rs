@@ -82,17 +82,38 @@ instruction!(INT64_GTQ, (a, b => c), b"\x89INT64/GT?");
 instruction!(INT64_LTQ, (a, b => c), b"\x89INT64/LT?");
 
 pub fn bytes_to_bigint(bytes: &[u8]) -> Option<BigInt> {
-    if bytes.len() >= 2 {
-        match bytes[0] {
-                0x00 => Some(Sign::Minus),
-                0x01 => Some(Sign::Plus),
-                _ => None,
-            }
-            .and_then(|sign| Some(BigInt::from_bytes_be(sign, &bytes[1..])))
-    } else {
-        None
-    }
-
+    match bytes[0] {
+            0x00 => Some(Sign::Minus),
+            0x01 => Some(Sign::Plus),
+            _ => None
+        }
+        .and_then(|sign| Some(
+                {
+                    let mut bytes: Vec<u8> = Vec::from(&bytes[1..]);
+                    if sign == Sign::Plus { 
+                        BigInt::from_bytes_be(sign, bytes.as_slice())
+                    } else {
+                        for i in 0..bytes.len() {
+                            //flip.push(!byte);
+                            bytes[i] = !bytes[i];
+                        }
+                        let mut nextbit = true;
+                        for i in (0..bytes.len()).rev() {
+                            bytes[i] = match bytes[i].checked_add(1) {
+                                Some(v) => {
+                                    nextbit = false;
+                                    v
+                                },
+                                None => 0,
+                            };
+                            if !nextbit {
+                                break;
+                            }
+                        }
+                        BigInt::from_bytes_be(sign, &bytes)
+                    }
+                }
+                ))
 }
 
 macro_rules! bytes_to_bigint {
@@ -149,7 +170,7 @@ macro_rules! int_comparison {
 }
 
 
-macro_rules! no_endianness_sized_int_op {
+macro_rules! no_endianness_sized_uint_op {
     ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
         let mut a = stack_pop!($env);
         let mut b = stack_pop!($env);
@@ -181,7 +202,47 @@ macro_rules! no_endianness_sized_int_op {
     }};
 }
 
-macro_rules! sized_int_op {
+macro_rules! no_endianness_sized_int_op {
+    ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
+        let a = stack_pop!($env);
+        let b = stack_pop!($env);
+       
+        let mut a = Vec::from(a);
+        a[0] ^= 1u8 << 7;
+
+        let a_int = match a.as_slice().$read_op() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let mut b = Vec::from(b);
+        b[0] ^= 1u8 << 7;
+
+        let b_int = match b.as_slice().$read_op() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_int = match a_int.$op(b_int) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.$write_op(c_int) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+        
+        c_bytes[0] ^= 1u8 << 7;
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), $env);
+        $env.push(slice);
+        Ok(())
+    }};
+}
+
+macro_rules! sized_uint_op {
     ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
         let mut a = stack_pop!($env);
         let mut b = stack_pop!($env);
@@ -206,6 +267,46 @@ macro_rules! sized_int_op {
             Ok(_) => {},
             Err(_) => return Err(error_invalid_value!(a)),
         }
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), $env);
+        $env.push(slice);
+        Ok(())
+    }};
+}
+
+macro_rules! sized_int_op {
+    ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
+        let a = stack_pop!($env);
+        let b = stack_pop!($env);
+
+        let mut a = Vec::from(a);
+        a[0] ^= 1u8 << 7;
+
+        let a_int = match a.as_slice().$read_op::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let mut b = Vec::from(b);
+        b[0] ^= 1u8 << 7;
+
+        let b_int = match b.as_slice().$read_op::<BigEndian>() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_int = match a_int.$op(b_int) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.$write_op::<BigEndian>(c_int) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+
+        c_bytes[0] ^= 1u8 << 7;
 
         let slice = alloc_and_write!(c_bytes.as_slice(), $env);
         $env.push(slice);
@@ -378,7 +479,26 @@ impl<'a> Handler<'a> {
         } else {
             vec![0x01]
         };
-        let (_, c_bytes) = c_int.to_bytes_be();
+        let (_, mut c_bytes) = c_int.to_bytes_be();
+        if c_int.is_negative() {
+            for i in 0..c_bytes.len() {
+                    c_bytes[i] = !c_bytes[i];
+                }
+                let mut nextbit = true;
+                for i in (0..c_bytes.len()).rev() {
+                    c_bytes[i] =  match c_bytes[i].checked_add(1) {
+                        Some(v) => {
+                            nextbit = false;
+                            v
+                        },
+                        None => 0,
+                    };
+                    if !nextbit {
+                        break;
+                    }
+                }
+        }
+
         bytes.extend_from_slice(&c_bytes);
         let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
@@ -411,7 +531,26 @@ impl<'a> Handler<'a> {
         } else {
             vec![0x01]
         };
-        let (_, c_bytes) = c_int.to_bytes_be();
+        let (_, mut c_bytes) = c_int.to_bytes_be();
+        if c_int.is_negative() {
+            for i in 0..c_bytes.len() {
+                    c_bytes[i] = !c_bytes[i];
+                }
+                let mut nextbit = true;
+                for i in (0..c_bytes.len()).rev() {
+                    c_bytes[i] =  match c_bytes[i].checked_add(1) {
+                        Some(v) => {
+                            nextbit = false;
+                            v
+                        },
+                        None => 0,
+                    };
+                    if !nextbit {
+                        break;
+                    }
+                }
+        }
+
         bytes.extend_from_slice(&c_bytes);
         let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
@@ -546,7 +685,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT8_ADD);
-        no_endianness_sized_int_op!(env, read_u8, checked_add, write_u8)
+        no_endianness_sized_uint_op!(env, read_u8, checked_add, write_u8)
     }
 
     #[inline]
@@ -556,7 +695,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT8_SUB);
-        no_endianness_sized_int_op!(env, read_u8, checked_sub, write_u8)
+        no_endianness_sized_uint_op!(env, read_u8, checked_sub, write_u8)
     }
 
     #[inline]
@@ -586,7 +725,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT16_ADD);
-        sized_int_op!(env, read_u16, checked_add, write_u16)
+        sized_uint_op!(env, read_u16, checked_add, write_u16)
     }
 
     #[inline]
@@ -596,7 +735,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT16_SUB);
-        sized_int_op!(env, read_u16, checked_sub, write_u16)
+        sized_uint_op!(env, read_u16, checked_sub, write_u16)
     }
 
     #[inline]
@@ -626,7 +765,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT32_ADD);
-        sized_int_op!(env, read_u32, checked_add, write_u32)
+        sized_uint_op!(env, read_u32, checked_add, write_u32)
     }
 
     #[inline]
@@ -636,7 +775,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT32_SUB);
-        sized_int_op!(env, read_u32, checked_sub, write_u32)
+        sized_uint_op!(env, read_u32, checked_sub, write_u32)
     }
 
     #[inline]
@@ -666,7 +805,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT64_ADD);
-        sized_int_op!(env, read_u64, checked_add, write_u64)
+        sized_uint_op!(env, read_u64, checked_add, write_u64)
     }
 
     #[inline]
@@ -676,7 +815,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT64_SUB);
-        sized_int_op!(env, read_u64, checked_sub, write_u64)
+        sized_uint_op!(env, read_u64, checked_sub, write_u64)
     }
 
     #[inline]
