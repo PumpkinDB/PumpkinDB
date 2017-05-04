@@ -53,46 +53,40 @@ instruction!(INT_EQUALQ, (a, b => c), b"\x8AINT/EQUAL?");
 instruction!(INT_GTQ, (a, b => c), b"\x87INT/GT?");
 instruction!(INT_LTQ, (a, b => c), b"\x87INT/LT?");
 
-instruction!(UINT8_EQUALQ, (a, b => c), b"\x8CUINT8/EQUAL?");
-instruction!(UINT8_GTQ, (a, b => c), b"\x89UINT8/GT?");
-instruction!(UINT8_LTQ, (a, b => c), b"\x89UINT8/LT?");
-instruction!(INT8_EQUALQ, (a, b => c), b"\x8BINT8/EQUAL?");
-instruction!(INT8_GTQ, (a, b => c), b"\x88INT8/GT?");
-instruction!(INT8_LTQ, (a, b => c), b"\x88INT8/LT?");
-
-instruction!(UINT16_EQUALQ, (a, b => c), b"\x8DUINT16/EQUAL?");
-instruction!(UINT16_GTQ, (a, b => c), b"\x8aUINT16/GT?");
-instruction!(UINT16_LTQ, (a, b => c), b"\x8aUINT16/LT?");
-instruction!(INT16_EQUALQ, (a, b => c), b"\x8CINT16/EQUAL?");
-instruction!(INT16_GTQ, (a, b => c), b"\x89INT16/GT?");
-instruction!(INT16_LTQ, (a, b => c), b"\x89INT16/LT?");
-
-instruction!(UINT32_EQUALQ, (a, b => c), b"\x8DUINT32/EQUAL?");
-instruction!(UINT32_GTQ, (a, b => c), b"\x8aUINT32/GT?");
-instruction!(UINT32_LTQ, (a, b => c), b"\x8aUINT32/LT?");
-instruction!(INT32_EQUALQ, (a, b => c), b"\x8CINT32/EQUAL?");
-instruction!(INT32_GTQ, (a, b => c), b"\x89INT32/GT?");
-instruction!(INT32_LTQ, (a, b => c), b"\x89INT32/LT?");
-
-instruction!(UINT64_EQUALQ, (a, b => c), b"\x8DUINT64/EQUAL?");
-instruction!(UINT64_GTQ, (a, b => c), b"\x8aUINT64/GT?");
-instruction!(UINT64_LTQ, (a, b => c), b"\x8aUINT64/LT?");
-instruction!(INT64_EQUALQ, (a, b => c), b"\x8CINT64/EQUAL?");
-instruction!(INT64_GTQ, (a, b => c), b"\x89INT64/GT?");
-instruction!(INT64_LTQ, (a, b => c), b"\x89INT64/LT?");
 
 pub fn bytes_to_bigint(bytes: &[u8]) -> Option<BigInt> {
-    if bytes.len() >= 2 {
-        match bytes[0] {
-                0x00 => Some(Sign::Minus),
-                0x01 => Some(Sign::Plus),
-                _ => None,
-            }
-            .and_then(|sign| Some(BigInt::from_bytes_be(sign, &bytes[1..])))
-    } else {
-        None
-    }
-
+    match bytes[0] {
+            0x00 => Some(Sign::Minus),
+            0x01 => Some(Sign::Plus),
+            _ => None
+        }
+        .and_then(|sign| Some(
+                {
+                    let mut bytes: Vec<u8> = Vec::from(&bytes[1..]);
+                    if sign == Sign::Plus { 
+                        BigInt::from_bytes_be(sign, bytes.as_slice())
+                    } else {
+                        for i in 0..bytes.len() {
+                            //flip.push(!byte);
+                            bytes[i] = !bytes[i];
+                        }
+                        let mut nextbit = true;
+                        for i in (0..bytes.len()).rev() {
+                            bytes[i] = match bytes[i].checked_add(1) {
+                                Some(v) => {
+                                    nextbit = false;
+                                    v
+                                },
+                                None => 0,
+                            };
+                            if !nextbit {
+                                break;
+                            }
+                        }
+                        BigInt::from_bytes_be(sign, &bytes)
+                    }
+                }
+                ))
 }
 
 macro_rules! bytes_to_bigint {
@@ -149,7 +143,7 @@ macro_rules! int_comparison {
 }
 
 
-macro_rules! no_endianness_sized_int_op {
+macro_rules! no_endianness_sized_uint_op {
     ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
         let mut a = stack_pop!($env);
         let mut b = stack_pop!($env);
@@ -181,7 +175,47 @@ macro_rules! no_endianness_sized_int_op {
     }};
 }
 
-macro_rules! sized_int_op {
+macro_rules! no_endianness_sized_int_op {
+    ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
+        let a = stack_pop!($env);
+        let b = stack_pop!($env);
+       
+        let mut a = Vec::from(a);
+        a[0] ^= 1u8 << 7;
+
+        let a_int = match a.as_slice().$read_op() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(a)),
+        };
+
+        let mut b = Vec::from(b);
+        b[0] ^= 1u8 << 7;
+
+        let b_int = match b.as_slice().$read_op() {
+            Ok(v) => v,
+            Err(_) => return Err(error_invalid_value!(b)),
+        };
+
+        let c_int = match a_int.$op(b_int) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
+
+        let mut c_bytes = vec![];
+        match c_bytes.$write_op(c_int) {
+            Ok(_) => {},
+            Err(_) => return Err(error_invalid_value!(a)),
+        }
+        
+        c_bytes[0] ^= 1u8 << 7;
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), $env);
+        $env.push(slice);
+        Ok(())
+    }};
+}
+
+macro_rules! sized_uint_op {
     ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
         let mut a = stack_pop!($env);
         let mut b = stack_pop!($env);
@@ -213,51 +247,43 @@ macro_rules! sized_int_op {
     }};
 }
 
-macro_rules! no_endianness_sized_int_cmp {
-    ($env: expr, $read_op: ident, $cmp: ident) => {{
-        let mut a = stack_pop!($env);
-        let mut b = stack_pop!($env);
+macro_rules! sized_int_op {
+    ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
+        let a = stack_pop!($env);
+        let b = stack_pop!($env);
 
-        let a_int = match a.$read_op() {
+        let mut a = Vec::from(a);
+        a[0] ^= 1u8 << 7;
+
+        let a_int = match a.as_slice().$read_op::<BigEndian>() {
             Ok(v) => v,
             Err(_) => return Err(error_invalid_value!(a)),
         };
 
-        let b_int = match b.$read_op() {
+        let mut b = Vec::from(b);
+        b[0] ^= 1u8 << 7;
+
+        let b_int = match b.as_slice().$read_op::<BigEndian>() {
             Ok(v) => v,
             Err(_) => return Err(error_invalid_value!(b)),
         };
-        if b_int.$cmp(&a_int) {
-            $env.push(STACK_TRUE);
-        } else {
-            $env.push(STACK_FALSE);
-        }
-        Ok(())
 
-    }};
-}
+        let c_int = match a_int.$op(b_int) {
+            Some(v) => v,
+            None => return Err(error_invalid_value!(a)),
+        };
 
-macro_rules! sized_int_cmp {
-    ($env: expr, $read_op: ident, $cmp: ident) => {{
-        let mut a = stack_pop!($env);
-        let mut b = stack_pop!($env);
-
-        let a_int = match a.$read_op::<BigEndian>() {
-            Ok(v) => v,
+        let mut c_bytes = vec![];
+        match c_bytes.$write_op::<BigEndian>(c_int) {
+            Ok(_) => {},
             Err(_) => return Err(error_invalid_value!(a)),
-        };
-
-        let b_int = match b.$read_op::<BigEndian>() {
-            Ok(v) => v,
-            Err(_) => return Err(error_invalid_value!(b)),
-        };
-        if b_int.$cmp(&a_int) {
-            $env.push(STACK_TRUE);
-        } else {
-            $env.push(STACK_FALSE);
         }
-        Ok(())
 
+        c_bytes[0] ^= 1u8 << 7;
+
+        let slice = alloc_and_write!(c_bytes.as_slice(), $env);
+        $env.push(slice);
+        Ok(())
     }};
 }
 
@@ -295,31 +321,6 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
         try_instruction!(env, self.handle_uint64_sub(env, instruction, pid));
         try_instruction!(env, self.handle_int64_add(env, instruction, pid));
         try_instruction!(env, self.handle_int64_sub(env, instruction, pid));
-        try_instruction!(env, self.handle_uint8_equalq(env, instruction, pid));
-        try_instruction!(env, self.handle_uint8_gtq(env, instruction, pid));
-        try_instruction!(env, self.handle_uint8_ltq(env, instruction, pid));
-        try_instruction!(env, self.handle_int8_equalq(env, instruction, pid));
-        try_instruction!(env, self.handle_int8_gtq(env, instruction, pid));
-        try_instruction!(env, self.handle_int8_ltq(env, instruction, pid));
-        try_instruction!(env, self.handle_uint16_equalq(env, instruction, pid));
-        try_instruction!(env, self.handle_uint16_gtq(env, instruction, pid));
-        try_instruction!(env, self.handle_uint16_ltq(env, instruction, pid));
-        try_instruction!(env, self.handle_int16_equalq(env, instruction, pid));
-        try_instruction!(env, self.handle_int16_gtq(env, instruction, pid));
-        try_instruction!(env, self.handle_int16_ltq(env, instruction, pid));
-        try_instruction!(env, self.handle_uint32_equalq(env, instruction, pid));
-        try_instruction!(env, self.handle_uint32_gtq(env, instruction, pid));
-        try_instruction!(env, self.handle_uint32_ltq(env, instruction, pid));
-        try_instruction!(env, self.handle_int32_equalq(env, instruction, pid));
-        try_instruction!(env, self.handle_int32_gtq(env, instruction, pid));
-        try_instruction!(env, self.handle_int32_ltq(env, instruction, pid));
-        try_instruction!(env, self.handle_uint64_equalq(env, instruction, pid));
-        try_instruction!(env, self.handle_uint64_gtq(env, instruction, pid));
-        try_instruction!(env, self.handle_uint64_ltq(env, instruction, pid));
-        try_instruction!(env, self.handle_int64_equalq(env, instruction, pid));
-        try_instruction!(env, self.handle_int64_gtq(env, instruction, pid));
-        try_instruction!(env, self.handle_int64_ltq(env, instruction, pid));
-
         Err(Error::UnknownInstruction)
     }
 }
@@ -378,7 +379,26 @@ impl<'a> Handler<'a> {
         } else {
             vec![0x01]
         };
-        let (_, c_bytes) = c_int.to_bytes_be();
+        let (_, mut c_bytes) = c_int.to_bytes_be();
+        if c_int.is_negative() {
+            for i in 0..c_bytes.len() {
+                    c_bytes[i] = !c_bytes[i];
+                }
+                let mut nextbit = true;
+                for i in (0..c_bytes.len()).rev() {
+                    c_bytes[i] =  match c_bytes[i].checked_add(1) {
+                        Some(v) => {
+                            nextbit = false;
+                            v
+                        },
+                        None => 0,
+                    };
+                    if !nextbit {
+                        break;
+                    }
+                }
+        }
+
         bytes.extend_from_slice(&c_bytes);
         let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
@@ -411,7 +431,26 @@ impl<'a> Handler<'a> {
         } else {
             vec![0x01]
         };
-        let (_, c_bytes) = c_int.to_bytes_be();
+        let (_, mut c_bytes) = c_int.to_bytes_be();
+        if c_int.is_negative() {
+            for i in 0..c_bytes.len() {
+                    c_bytes[i] = !c_bytes[i];
+                }
+                let mut nextbit = true;
+                for i in (0..c_bytes.len()).rev() {
+                    c_bytes[i] =  match c_bytes[i].checked_add(1) {
+                        Some(v) => {
+                            nextbit = false;
+                            v
+                        },
+                        None => 0,
+                    };
+                    if !nextbit {
+                        break;
+                    }
+                }
+        }
+
         bytes.extend_from_slice(&c_bytes);
         let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
@@ -546,7 +585,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT8_ADD);
-        no_endianness_sized_int_op!(env, read_u8, checked_add, write_u8)
+        no_endianness_sized_uint_op!(env, read_u8, checked_add, write_u8)
     }
 
     #[inline]
@@ -556,7 +595,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT8_SUB);
-        no_endianness_sized_int_op!(env, read_u8, checked_sub, write_u8)
+        no_endianness_sized_uint_op!(env, read_u8, checked_sub, write_u8)
     }
 
     #[inline]
@@ -586,7 +625,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT16_ADD);
-        sized_int_op!(env, read_u16, checked_add, write_u16)
+        sized_uint_op!(env, read_u16, checked_add, write_u16)
     }
 
     #[inline]
@@ -596,7 +635,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT16_SUB);
-        sized_int_op!(env, read_u16, checked_sub, write_u16)
+        sized_uint_op!(env, read_u16, checked_sub, write_u16)
     }
 
     #[inline]
@@ -626,7 +665,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT32_ADD);
-        sized_int_op!(env, read_u32, checked_add, write_u32)
+        sized_uint_op!(env, read_u32, checked_add, write_u32)
     }
 
     #[inline]
@@ -636,7 +675,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT32_SUB);
-        sized_int_op!(env, read_u32, checked_sub, write_u32)
+        sized_uint_op!(env, read_u32, checked_sub, write_u32)
     }
 
     #[inline]
@@ -666,7 +705,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT64_ADD);
-        sized_int_op!(env, read_u64, checked_add, write_u64)
+        sized_uint_op!(env, read_u64, checked_add, write_u64)
     }
 
     #[inline]
@@ -676,7 +715,7 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         instruction_is!(instruction, UINT64_SUB);
-        sized_int_op!(env, read_u64, checked_sub, write_u64)
+        sized_uint_op!(env, read_u64, checked_sub, write_u64)
     }
 
     #[inline]
@@ -697,245 +736,5 @@ impl<'a> Handler<'a> {
                        -> PassResult<'a> {
         instruction_is!(instruction, INT64_SUB);
         sized_int_op!(env, read_i64, checked_sub, write_i64)
-    }
-
-    #[inline]
-    fn handle_uint8_equalq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, UINT8_EQUALQ);
-        no_endianness_sized_int_cmp!(env, read_u8, eq)
-    }
-
-    #[inline]
-    fn handle_uint8_ltq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, UINT8_LTQ);
-        no_endianness_sized_int_cmp!(env, read_u8, lt)
-    }
-
-    #[inline]
-    fn handle_uint8_gtq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, UINT8_GTQ);
-        no_endianness_sized_int_cmp!(env, read_i8, gt)
-    }
-
-    #[inline]
-    fn handle_int8_equalq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, INT8_EQUALQ);
-        no_endianness_sized_int_cmp!(env, read_i8, eq)
-    }
-
-    #[inline]
-    fn handle_int8_ltq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, INT8_LTQ);
-        no_endianness_sized_int_cmp!(env, read_i8, lt)
-    }
-
-    #[inline]
-    fn handle_int8_gtq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, INT8_GTQ);
-        no_endianness_sized_int_cmp!(env, read_i8, gt)
-    }
-
-    #[inline]
-    fn handle_uint16_equalq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, UINT16_EQUALQ);
-        sized_int_cmp!(env, read_u16, eq)
-    }
-
-    #[inline]
-    fn handle_uint16_ltq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, UINT16_LTQ);
-        sized_int_cmp!(env, read_u16, lt)
-    }
-
-    #[inline]
-    fn handle_uint16_gtq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, UINT16_GTQ);
-        sized_int_cmp!(env, read_i16, gt)
-    }
-
-    #[inline]
-    fn handle_int16_equalq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, INT16_EQUALQ);
-        sized_int_cmp!(env, read_i16, eq)
-    }
-
-    #[inline]
-    fn handle_int16_ltq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, INT16_LTQ);
-        sized_int_cmp!(env, read_i16, lt)
-    }
-
-    #[inline]
-    fn handle_int16_gtq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, INT16_GTQ);
-        sized_int_cmp!(env, read_i16, gt)
-    }
-
-    #[inline]
-    fn handle_uint32_equalq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, UINT32_EQUALQ);
-        sized_int_cmp!(env, read_u32, eq)
-    }
-
-    #[inline]
-    fn handle_uint32_ltq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, UINT32_LTQ);
-        sized_int_cmp!(env, read_u32, lt)
-    }
-
-    #[inline]
-    fn handle_uint32_gtq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, UINT32_GTQ);
-        sized_int_cmp!(env, read_i32, gt)
-    }
-
-    #[inline]
-    fn handle_int32_equalq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, INT32_EQUALQ);
-        sized_int_cmp!(env, read_i32, eq)
-    }
-
-    #[inline]
-    fn handle_int32_ltq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, INT32_LTQ);
-        sized_int_cmp!(env, read_i32, lt)
-    }
-
-    #[inline]
-    fn handle_int32_gtq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, INT32_GTQ);
-        sized_int_cmp!(env, read_i32, gt)
-    }
-
-    #[inline]
-    fn handle_uint64_equalq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, UINT64_EQUALQ);
-        sized_int_cmp!(env, read_u64, eq)
-    }
-
-    #[inline]
-    fn handle_uint64_ltq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, UINT64_LTQ);
-        sized_int_cmp!(env, read_u64, lt)
-    }
-
-    #[inline]
-    fn handle_uint64_gtq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, UINT64_GTQ);
-        sized_int_cmp!(env, read_i64, gt)
-    }
-
-    #[inline]
-    fn handle_int64_equalq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, INT64_EQUALQ);
-        sized_int_cmp!(env, read_i64, eq)
-    }
-
-    #[inline]
-    fn handle_int64_ltq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, INT64_LTQ);
-        sized_int_cmp!(env, read_i64, lt)
-    }
-
-    #[inline]
-    fn handle_int64_gtq(&mut self,
-                       env: &mut Env<'a>,
-                       instruction: &'a [u8],
-                       _: EnvId)
-                       -> PassResult<'a> {
-        instruction_is!(instruction, INT64_GTQ);
-        sized_int_cmp!(env, read_i64, gt)
     }
 }
