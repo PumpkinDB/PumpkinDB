@@ -37,4 +37,19 @@ greater : 0x20 0x10 GT?.
 equal : 0x10 0x10 GT? NOT.
 requires_two_items_0 : [GT?] TRY UNWRAP 0x04 EQUAL?.
 requires_two_items_1 : [1 GT?] TRY UNWRAP 0x04 EQUAL?.
+
+more_different_sign_usized : +1 -1 GT?.
+more_same_sign_unsized : -1 -2 GT?.
+
+more_different_sign_i8 : +1i8 -1i8 GT?.
+more_same_sign_i8 : -1i8 -2i8 GT?.
+
+more_different_sign_i16 : +1i16 -1i16 GT?.
+more_same_sign_i16 : -1i16 -2i16 GT?.
+
+more_different_sign_i32 : +1i32 -1i32 GT?.
+more_same_sign_i32 : -1i32 -2i32 GT?.
+
+more_different_sign_i64 : +1i64 -1i64 GT?.
+more_same_sign_i64 : -1i64 -2i64 GT?.
 ```

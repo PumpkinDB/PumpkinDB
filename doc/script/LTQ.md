@@ -37,4 +37,19 @@ greater : 0x20 0x10 LT? NOT.
 equal : 0x10 0x10 LT? NOT.
 requires_two_items_0 : [LT?] TRY UNWRAP 0x04 EQUAL?.
 requires_two_items_1 : [1 LT?] TRY UNWRAP 0x04 EQUAL?.
+
+more_different_sign_usized : -1 +1 LT?.
+more_same_sign_unsized : -2 -1 LT?.
+
+less_different_sign_i8 : -1i8 1i8 LT?.
+less_same_sign_i8 : -2i8 -1i8 LT?.
+
+less_different_sign_i16 : -1i16 1i16 LT?.
+less_same_sign_i16 : -2i16 -1i16 LT?.
+
+less_different_sign_i32 : -1i32 1i32 LT?.
+less_same_sign_i32 : -2i32 -1i32 LT?.
+
+less_different_sign_i64 : -1i64 1i64 LT?.
+less_same_sign_i64 : -2i64 -1i64 LT?.
 ```
