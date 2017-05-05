@@ -80,6 +80,8 @@ pub mod encodables;
 
 pub use self::encodables::{Encodable, Instruction, InstructionRef, Closure, Receivable};
 
+use std::fmt;
+
 #[inline]
 pub fn offset_by_size(size: usize) -> usize {
     match size {
@@ -104,6 +106,25 @@ pub enum ParseError {
     UnknownErr,
     /// Unparseable remainder
     Superfluous(Vec<u8>),
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &ParseError::Incomplete => {
+                write!(f, "Incomplete input")
+            },
+            &ParseError::Err(u32) => {
+                write!(f, "Error {}", u32)
+            },
+            &ParseError::Superfluous(ref v) => {
+                write!(f, "Superfluous \"{}\"", String::from_utf8(v.clone()).unwrap().trim())
+            },
+            &ParseError::UnknownErr => {
+                write!(f, "Unknown error")
+            }
+        }
+    }
 }
 
 pub use nom::IResult as ParseResult;
