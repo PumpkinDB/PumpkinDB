@@ -232,7 +232,7 @@ fn main() {
                             }
                         }
                         Err(err) => {
-                            println!("Script error: {:?}", err);
+                            println!("Script error: {}", err);
                         }
                     }
                 }
