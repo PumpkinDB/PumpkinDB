@@ -32,18 +32,27 @@ impl EnvHeap {
 
     /// Allocates a new mutable slice
     pub fn alloc(&mut self, size: usize) -> &mut [u8] {
-        let (mut ptr, chunk) = self.chunks.pop().unwrap();
-        let cap = chunk.cap();
-        if ptr + size > cap {
-            self.chunks.push((ptr, chunk));
-            self.chunks.push((0, RawVec::with_capacity(cmp::max(cap, size))));
-            self.alloc(size)
-        } else {
-            let slice_ptr = unsafe { chunk.ptr().offset(ptr as isize) };
-            ptr += size;
-            self.chunks.push((ptr, chunk));
-            unsafe { slice::from_raw_parts_mut(slice_ptr, size) }
+        let nchunks = self.chunks.len();
+        //Look for chunks with enough free space.
+        for i in 0..nchunks {
+            let cap = self.chunks[i].1.cap();
+            let ptr = self.chunks[i].0;
+            if ptr + size > cap {
+                if i == (nchunks - 1) {
+                    self.chunks.push((0, RawVec::with_capacity(cmp::max(cap, size))));
+                    return self.alloc(size)
+                } else {
+                    continue;
+                }
+            } else {
+                let (mut ptr, chunk) = self.chunks.pop().unwrap();
+                let slice_ptr = unsafe { chunk.ptr().offset(ptr as isize) };
+                ptr += size;
+                self.chunks.push((ptr, chunk));
+                return unsafe { slice::from_raw_parts_mut(slice_ptr, size) }
+            }
         }
+        unreachable!();
     }
 }
 
@@ -55,9 +64,15 @@ mod tests {
     #[test]
     fn alloc() {
         let mut heap = EnvHeap::new(32_768);
-        let sz = 20_000;
+        let sz_0 = 20_000;
+        let sz_1 = 10_000;
         for i in 1..100 {
-            heap.alloc(sz);
+            if (i % 2) == 0 {
+                heap.alloc(sz_1);
+            } else {
+                heap.alloc(sz_0);
+            }
         }
+        assert_eq!(50, heap.chunks.len());
     }
 }
