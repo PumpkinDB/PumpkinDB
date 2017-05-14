@@ -5,6 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 instruction!(UUID_V4, b"\x87UUID/V4");
+instruction!(UUID_V5, b"\x87UUID/V5");
 instruction!(UUID_TO_STRING, b"\x8dUUID/->STRING");
 instruction!(UUID_STRING_TO, b"\x8dUUID/STRING->");
 
@@ -23,6 +24,7 @@ pub struct Handler<'a> {
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
         try_instruction!(env, self.handle_uuid_v4(env, instruction, pid));
+        try_instruction!(env, self.handle_uuid_v5(env, instruction, pid));
         try_instruction!(env, self.handle_uuid_to_string(env, instruction, pid));
         try_instruction!(env, self.handle_uuid_string_to(env, instruction, pid));
         Err(Error::UnknownInstruction)
@@ -47,6 +49,31 @@ impl<'a> Handler<'a> {
         env.push(slice);
         Ok(())
     }
+
+    #[inline]
+    pub fn handle_uuid_v5(&mut self,
+                          env: &mut Env<'a>,
+                          instruction: &'a [u8],
+                          _: EnvId)
+                          -> PassResult<'a> {
+        instruction_is!(instruction, UUID_V5);
+        let name_bytes = stack_pop!(env);
+        if let Ok(name) = str::from_utf8(name_bytes) {
+            let ns_uuid_bytes = stack_pop!(env);
+            if let Ok(ns_uuid) = Uuid::from_bytes(ns_uuid_bytes) {
+                let uuid = Uuid::new_v5(&ns_uuid, name);
+                let mut slice = alloc_slice!(16, env);
+                slice.copy_from_slice(uuid.as_bytes());
+                env.push(slice);
+                Ok(())
+            } else {
+                Err(error_invalid_value!(ns_uuid_bytes))
+            }
+        } else {
+            Err(error_invalid_value!(name_bytes))
+        }
+    }
+
 
     #[inline]
     pub fn handle_uuid_to_string(&mut self,
