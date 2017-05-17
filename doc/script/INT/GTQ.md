@@ -34,10 +34,9 @@ Runtime allocation for supporting primitives
 ## Tests
 
 ```test
-invalid : [0xff 0xff INT/GT?] TRY UNWRAP 0x03 EQUAL?.
 less : +1 +2 INT/GT? NOT.
 greater : +2 +1 INT/GT?.
-greater_diff_size : 0x010002 0x0101 INT/GT?.
+greater_diff_size : 0x800002 0x81 INT/GT?.
 equal : +1 +1 INT/GT? NOT.
 requires_two_items_0 : [INT/GT?] TRY UNWRAP 0x04 EQUAL?.
 requires_two_items_1 : [1 INT/GT?] TRY UNWRAP 0x04 EQUAL?.
