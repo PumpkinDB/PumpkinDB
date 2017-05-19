@@ -55,19 +55,19 @@ instruction!(INT_LTQ, (a, b => c), b"\x87INT/LT?");
 
 
 pub fn bytes_to_bigint(bytes: &[u8]) -> Option<BigInt> {
-    match bytes[0] & 1 << 7 {
-            0b00000000 => Some(Sign::Minus),
-            0b10000000 => Some(Sign::Plus),
+    match bytes[0] {
+            0x00 => Some(Sign::Minus),
+            0x01 => Some(Sign::Plus),
             _ => None
         }
         .and_then(|sign| Some(
                 {
-                    let mut bytes: Vec<u8> = Vec::from(bytes);
-                    bytes[0] ^= 1u8 << 7;
-                    if sign == Sign::Plus {
+                    let mut bytes: Vec<u8> = Vec::from(&bytes[1..]);
+                    if sign == Sign::Plus { 
                         BigInt::from_bytes_be(sign, bytes.as_slice())
                     } else {
                         for i in 0..bytes.len() {
+                            //flip.push(!byte);
                             bytes[i] = !bytes[i];
                         }
                         let mut nextbit = true;
@@ -96,32 +96,6 @@ macro_rules! bytes_to_bigint {
          None => return Err(error_invalid_value!($bytes))
        }
    };
-}
-
-macro_rules! bigint_to_bytes {
-    ($bigint: expr, $c_bytes: expr) => {
-        if $bigint.is_negative() {
-            for i in 0..$c_bytes.len() {
-                    $c_bytes[i] = !$c_bytes[i];
-                }
-                let mut nextbit = true;
-                for i in (0..$c_bytes.len()).rev() {
-                    $c_bytes[i] =  match $c_bytes[i].checked_add(1) {
-                        Some(v) => {
-                            nextbit = false;
-                            v
-                        },
-                        None => 0,
-                    };
-                    if !nextbit {
-                        break;
-                    }
-                }
-            $c_bytes[0] ^= 1u8 << 7;
-        } else {
-            $c_bytes[0] |= 1u8 << 7;
-        }
-    }
 }
 
 macro_rules! uint_comparison {
@@ -205,6 +179,7 @@ macro_rules! no_endianness_sized_int_op {
     ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
         let a = stack_pop!($env);
         let b = stack_pop!($env);
+       
         let mut a = Vec::from(a);
         a[0] ^= 1u8 << 7;
 
@@ -231,6 +206,7 @@ macro_rules! no_endianness_sized_int_op {
             Ok(_) => {},
             Err(_) => return Err(error_invalid_value!(a)),
         }
+        
         c_bytes[0] ^= 1u8 << 7;
 
         let slice = alloc_and_write!(c_bytes.as_slice(), $env);
@@ -397,9 +373,34 @@ impl<'a> Handler<'a> {
         }
 
         let c_int = a_int.unwrap().add(b_int.unwrap());
+
+        let mut bytes = if c_int.is_negative() {
+            vec![0x00]
+        } else {
+            vec![0x01]
+        };
         let (_, mut c_bytes) = c_int.to_bytes_be();
-        bigint_to_bytes!(c_int, c_bytes);
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        if c_int.is_negative() {
+            for i in 0..c_bytes.len() {
+                    c_bytes[i] = !c_bytes[i];
+                }
+                let mut nextbit = true;
+                for i in (0..c_bytes.len()).rev() {
+                    c_bytes[i] =  match c_bytes[i].checked_add(1) {
+                        Some(v) => {
+                            nextbit = false;
+                            v
+                        },
+                        None => 0,
+                    };
+                    if !nextbit {
+                        break;
+                    }
+                }
+        }
+
+        bytes.extend_from_slice(&c_bytes);
+        let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
         Ok(())
     }
@@ -425,10 +426,34 @@ impl<'a> Handler<'a> {
 
         let c_int = b_int.unwrap().sub(a_int.unwrap());
 
+        let mut bytes = if c_int.is_negative() {
+            vec![0x00]
+        } else {
+            vec![0x01]
+        };
         let (_, mut c_bytes) = c_int.to_bytes_be();
-        bigint_to_bytes!(c_int, c_bytes);
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
-        env.push(slice);        env.push(slice);
+        if c_int.is_negative() {
+            for i in 0..c_bytes.len() {
+                    c_bytes[i] = !c_bytes[i];
+                }
+                let mut nextbit = true;
+                for i in (0..c_bytes.len()).rev() {
+                    c_bytes[i] =  match c_bytes[i].checked_add(1) {
+                        Some(v) => {
+                            nextbit = false;
+                            v
+                        },
+                        None => 0,
+                    };
+                    if !nextbit {
+                        break;
+                    }
+                }
+        }
+
+        bytes.extend_from_slice(&c_bytes);
+        let slice = alloc_and_write!(bytes.as_slice(), env);
+        env.push(slice);
         Ok(())
     }
 
@@ -465,9 +490,10 @@ impl<'a> Handler<'a> {
         let a = stack_pop!(env);
         let a_uint = BigUint::from_bytes_be(a);
 
-        let mut a_bytes = a_uint.to_bytes_be();
-        a_bytes[0] |= 1u8 << 7;
-        let slice = alloc_and_write!(a_bytes.as_slice(), env);
+        let mut bytes = vec![0x01];
+        let a_bytes = a_uint.to_bytes_be();
+        bytes.extend_from_slice(&a_bytes);
+        let slice = alloc_and_write!(bytes.as_slice(), env);
 
         env.push(slice);
         Ok(())

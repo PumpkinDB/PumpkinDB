@@ -314,6 +314,11 @@ named!(sint<Vec<u8>>,
         sign: sign        >>
         biguint: biguint  >>
         ({
+            let mut bytes = if sign == Sign::Minus && !biguint.is_zero() {
+                vec![0x00]
+           } else {
+                vec![0x01]
+            };
            let big = biguint.to_bytes_be();
            let mut compv: Vec<u8> = vec![];
            //Encode with two's complement.
@@ -334,12 +339,12 @@ named!(sint<Vec<u8>>,
                         break;
                     }
                 }
-               compv[0] ^= 1u8 << 7;
-            } else {
+           } else {
                compv = big;
-               compv[0] |= 1u8 << 7;
            }
-           (sized_vec(compv))
+           //compv[0] ^= 1u8 << 7;
+           bytes.extend_from_slice(&compv);
+           (sized_vec(bytes))
         })));
 
 named!(uint<Vec<u8>>,
@@ -757,8 +762,9 @@ mod tests {
     #[test]
     fn test_signed_ints() {
         assert_eq!(parse("+0").unwrap(), parse("-0").unwrap());
-        assert_eq!(parse("+0").unwrap(), vec![1, 128]);
-        assert_eq!(parse("+1").unwrap(), vec![1, 129]);
-        assert_eq!(parse("-1").unwrap(), vec![1, 127]);
+        assert_eq!(parse("+0").unwrap(), vec![2, 1, 0]);
+        assert_eq!(parse("+1").unwrap(), vec![2, 1, 1]);
+        assert_eq!(parse("-1").unwrap(), vec![2, 0, 255]);
     }
+
 }
