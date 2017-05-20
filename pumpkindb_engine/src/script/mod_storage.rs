@@ -19,7 +19,6 @@ use std::collections::HashMap;
 use super::{Env, EnvId, Dispatcher, PassResult, Error, STACK_TRUE, STACK_FALSE, offset_by_size,
             ERROR_EMPTY_STACK, ERROR_INVALID_VALUE, ERROR_DUPLICATE_KEY, ERROR_NO_TX,
             ERROR_UNKNOWN_KEY, ERROR_DATABASE, ERROR_NO_VALUE};
-use byteorder::{BigEndian, WriteBytesExt};
 use snowflake::ProcessUniqueId;
 use std::collections::BTreeMap;
 use storage::WriteTransactionContainer;
@@ -425,6 +424,7 @@ impl<'a> Handler<'a> {
 						 instruction: &'a [u8],
 						 pid: EnvId)
 						 -> PassResult<'a> {
+        use serde_cbor;
         instruction_is!(instruction, CURSOR);
         let cursor = self.txns.get(&pid)
             .and_then(|v| Some(&v[v.len() - 1]))
@@ -434,14 +434,7 @@ impl<'a> Handler<'a> {
                 match cursor {
                     Ok(cursor) => {
                         let id = CursorId::new();
-                        let mut bytes = Vec::new();
-                        if cfg!(target_pointer_width = "64") {
-                            let _ = bytes.write_u64::<BigEndian>(id.prefix as u64);
-                        }
-                        if cfg!(target_pointer_width = "32") {
-                            let _ = bytes.write_u32::<BigEndian>(id.prefix as u32);
-                        }
-                        let _ = bytes.write_u64::<BigEndian>(id.offset);
+                        let bytes = serde_cbor::to_vec(&id).unwrap();
                         self.cursors.insert((pid.clone(), bytes.clone()), (tx_type!(self, pid), Handler::cast_away(cursor)));
                         let slice = alloc_and_write!(bytes.as_slice(), env);
                         env.push(slice);
