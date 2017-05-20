@@ -13,7 +13,7 @@ use num_traits::Zero;
 use core::str::FromStr;
 use std::str;
 
-use super::{Program, ParseError};
+use super::{Program, Packable, ParseError};
 
 fn prefix_instruction(instruction: &[u8]) -> Vec<u8> {
     let mut vec = Vec::new();
@@ -127,11 +127,19 @@ fn is_multispace(s: u8) -> bool {
     s == b'\n' || s == b'\r' || s == b'\t' || s == b' '
 }
 
+named!(sign_ch<char>,
+       do_parse!(
+           sign_ch: alt!(tag!("+") | tag!("-")) >>
+               ({
+                   sign_ch[0] as char
+               })));
+           
+
 named!(sign<Sign>,
     do_parse!(
-        sign: alt!(tag!("+") | tag!("-")) >>
+        sign: sign_ch >>
         ({
-            if sign[0] == 45 {
+            if sign == '-' {
                 Sign::Minus
             } else {
                 Sign::Plus
@@ -356,9 +364,63 @@ named!(int_sized<Vec<u8>>,
     do_parse!(
         int: alt!(u8int | int8 | int8p | u16int | int16 | int16p | u32int | int32 | int32p |
                   u64int | int64 | int64p ) >>
-        (sized_vec(int))));
+            (sized_vec(int))));
 
+named!(float32<Vec<u8>>,
+       do_parse!(
+           sign: opt!(sign_ch)           >>
+           left: take_while1!(is_digit)  >>
+           char!('.')                    >>
+           right: take_while1!(is_digit) >>
+           char!('f')                    >>
+           char!('3')                    >>
+           char!('2')                    >>
+           delim_or_end                  >>
+               ({
+                   let mut bytes = vec![];
+                   if let Some('-') = sign {
+                       bytes.extend_from_slice(b"-");
+                   }
+                   bytes.extend_from_slice(left);
+                   bytes.extend_from_slice(b".");
+                   bytes.extend_from_slice(right);
+                   let mut val = str::from_utf8(&bytes).unwrap().parse::<f32>().unwrap();
+                   // a little tricky: +0.0f32 == -0.0f32, but they don't serialize
+                   // to the same bytes. negative sign in the comparison left to indicate
+                   // intent, but technically unnecessary  
+                   if val == -0.0f32 {
+                       val = 0.0f32;
+                   }
+                   (sized_vec(val.pack()))
+               })));
 
+named!(float64<Vec<u8>>,
+       do_parse!(
+           sign: opt!(sign_ch)           >>
+               left: take_while1!(is_digit)  >>
+               char!('.')                    >>
+               right: take_while1!(is_digit) >>
+               char!('f')                    >>
+               char!('6')                    >>
+               char!('4')                    >>
+               delim_or_end                  >>
+               ({
+                   let mut bytes = vec![];
+                   if let Some('-') = sign {
+                       bytes.extend_from_slice(b"-");
+                   }
+                   bytes.extend_from_slice(left);
+                   bytes.extend_from_slice(b".");
+                   bytes.extend_from_slice(right);
+                   let mut val = str::from_utf8(&bytes).unwrap().parse::<f64>().unwrap();
+                   // see note on float32
+                   if val == -0.0f64 {
+                       val = 0.0f64;
+                   }
+                   (sized_vec(val.pack()))
+               })));
+
+    
 named!(instruction<Vec<u8>>, do_parse!(
                         instruction: take_while1!(is_instruction_char)  >>
                               (prefix_instruction(instruction))));
@@ -376,8 +438,8 @@ named!(string<Vec<u8>>,  alt!(do_parse!(tag!(b"\"\"") >> (vec![0])) |
                               (string_to_vec(str)))));
 named!(comment<Vec<u8>>, do_parse!(delimited!(char!('('), opt!(is_not!(")")), char!(')')) >>
                                (vec![])));
-named!(item<Vec<u8>>, alt!(comment | binary | string | uint | sint | int_sized |
-                           wrap | instructionref | instruction));
+named!(item<Vec<u8>>, alt!(comment | binary | string | uint | sint | int_sized | float32 |
+                           float64 | wrap | instructionref | instruction));
 
 fn unwrap_instruction(mut instruction: Vec<u8>) -> Vec<u8> {
     let mut vec = Vec::new();
@@ -678,6 +740,20 @@ mod tests {
     fn test_uint_at_the_end_of_code() {
         let script = parse("[1]").unwrap();
         assert_eq!(script, parse("[0x01]").unwrap());
+    }
+
+    #[test]
+    fn test_float32() {
+        assert_eq!(parse("+1.3f32").unwrap(), parse("1.3f32").unwrap());
+        assert_eq!(parse("1.3f32").unwrap(), vec![4, 191, 166, 102, 102]);
+        assert_eq!(parse("-1.3f32").unwrap(), vec![4, 64, 89, 153, 153]);
+    }
+
+    #[test]
+    fn test_float64() {
+        assert_eq!(parse("+1.3f64").unwrap(), parse("1.3f64").unwrap());
+        assert_eq!(parse("1.3f64").unwrap(), vec![8, 191, 244, 204, 204, 204, 204, 204, 205]);
+        assert_eq!(parse("-1.3f64").unwrap(), vec![8, 64, 11, 51, 51, 51, 51, 51, 50]);
     }
 
 
