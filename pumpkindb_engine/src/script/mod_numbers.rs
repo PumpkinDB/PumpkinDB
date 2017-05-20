@@ -756,13 +756,13 @@ impl<'a> Handler<'a> {
                         _: EnvId)
                         -> PassResult<'a> {
         instruction_is!(instruction, F32_ADD);
-        let op1_bytes = stack_pop!(env);
-        let op1: f32 = op1_bytes.unpack().ok_or(error_invalid_value!(op1_bytes))?;
+        let a_bytes = stack_pop!(env);
+        let a: f32 = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
             
-        let op2_bytes = stack_pop!(env);
-        let op2: f32 = op2_bytes.unpack().ok_or(error_invalid_value!(op2_bytes))?;
+        let b_bytes = stack_pop!(env);
+        let b: f32 = b_bytes.unpack().ok_or(error_invalid_value!(b_bytes))?;
 
-        let bytes = (op1 + op2).pack();
+        let bytes = (a + b).pack();
         let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
         
@@ -776,13 +776,13 @@ impl<'a> Handler<'a> {
                       _: EnvId)
                       -> PassResult<'a> {
         instruction_is!(instruction, F32_SUB);
-        let op1_bytes = stack_pop!(env);
-        let op1: f32 = op1_bytes.unpack().ok_or(error_invalid_value!(op1_bytes))?;
+        let a_bytes = stack_pop!(env);
+        let a: f32 = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
         
-        let op2_bytes = stack_pop!(env);
-        let op2: f32 = op2_bytes.unpack().ok_or(error_invalid_value!(op2_bytes))?;
+        let b_bytes = stack_pop!(env);
+        let b: f32 = b_bytes.unpack().ok_or(error_invalid_value!(b_bytes))?;
         
-        let bytes = (op1 - op2).pack();
+        let bytes = (b - a).pack();
         let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
 
@@ -796,13 +796,13 @@ impl<'a> Handler<'a> {
                         _: EnvId)
                         -> PassResult<'a> {
         instruction_is!(instruction, F64_ADD);
-        let op1_bytes = stack_pop!(env);
-        let op1: f64 = op1_bytes.unpack().ok_or(error_invalid_value!(op1_bytes))?;
+        let a_bytes = stack_pop!(env);
+        let a: f64 = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
         
-        let op2_bytes = stack_pop!(env);
-        let op2: f64 = op2_bytes.unpack().ok_or(error_invalid_value!(op2_bytes))?;
+        let b_bytes = stack_pop!(env);
+        let b: f64 = b_bytes.unpack().ok_or(error_invalid_value!(b_bytes))?;
         
-        let bytes = (op1 + op2).pack();
+        let bytes = (a + b).pack();
         let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
         
@@ -816,13 +816,13 @@ impl<'a> Handler<'a> {
                       _: EnvId)
                       -> PassResult<'a> {
         instruction_is!(instruction, F64_SUB);
-        let op1_bytes = stack_pop!(env);
-        let op1: f64 = op1_bytes.unpack().ok_or(error_invalid_value!(op1_bytes))?;
+        let a_bytes = stack_pop!(env);
+        let a: f64 = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
         
-        let op2_bytes = stack_pop!(env);
-        let op2: f64 = op2_bytes.unpack().ok_or(error_invalid_value!(op2_bytes))?;
+        let b_bytes = stack_pop!(env);
+        let b: f64 = b_bytes.unpack().ok_or(error_invalid_value!(b_bytes))?;
         
-        let bytes = (op1 - op2).pack();
+        let bytes = (b - a).pack();
         let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
 
