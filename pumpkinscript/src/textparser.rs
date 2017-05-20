@@ -384,7 +384,13 @@ named!(float32<Vec<u8>>,
                    bytes.extend_from_slice(left);
                    bytes.extend_from_slice(b".");
                    bytes.extend_from_slice(right);
-                   let val = str::from_utf8(&bytes).unwrap().parse::<f32>().unwrap();
+                   let mut val = str::from_utf8(&bytes).unwrap().parse::<f32>().unwrap();
+                   // a little tricky: +0.0f32 == -0.0f32, but they don't serialize
+                   // to the same bytes. negative sign in the comparison left to indicate
+                   // intent, but technically unnecessary  
+                   if val == -0.0f32 {
+                       val = 0.0f32;
+                   }
                    (sized_vec(val.pack()))
                })));
 
@@ -406,7 +412,11 @@ named!(float64<Vec<u8>>,
                    bytes.extend_from_slice(left);
                    bytes.extend_from_slice(b".");
                    bytes.extend_from_slice(right);
-                   let val = str::from_utf8(&bytes).unwrap().parse::<f64>().unwrap();
+                   let mut val = str::from_utf8(&bytes).unwrap().parse::<f64>().unwrap();
+                   // see note on float32
+                   if val == -0.0f64 {
+                       val = 0.0f64;
+                   }
                    (sized_vec(val.pack()))
                })));
 
