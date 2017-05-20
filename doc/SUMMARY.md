@@ -84,6 +84,9 @@
    * [INT[size]](script/INT_SIZED/README.md)
    * [INT[size]/ADD](script/INT_SIZED/ADD.md)
    * [INT[size]/SUB](script/INT_SIZED/SUB.md)
+   * [F[size]](script/F_SIZED/README.md)
+   * [F[size]/ADD](script/F_SIZED/ADD.md)
+   * [F[size]/SUB](script/F_SIZED/SUB.md)
  * Data formats
    * [JSON?](script/JSONQ.md)
    * [JSON/ARRAY?](script/JSON/ARRAYQ.md)
