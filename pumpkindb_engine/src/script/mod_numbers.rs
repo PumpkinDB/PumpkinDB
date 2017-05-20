@@ -7,6 +7,8 @@
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
             offset_by_size, STACK_TRUE, STACK_FALSE};
 
+use ::pumpkinscript::{Packable, Unpackable};
+
 use std::marker::PhantomData;
 
 use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt};
@@ -40,6 +42,11 @@ instruction!(UINT64_ADD, (a, b => c), b"\x8aUINT64/ADD");
 instruction!(UINT64_SUB, (a, b => c), b"\x8aUINT64/SUB");
 instruction!(INT64_ADD, (a, b => c), b"\x89INT64/ADD");
 instruction!(INT64_SUB, (a, b => c), b"\x89INT64/SUB");
+
+instruction!(F32_ADD, b"\x87F32/ADD");
+instruction!(F32_SUB, b"\x87F32/SUB");
+instruction!(F64_ADD, b"\x87F64/ADD");
+instruction!(F64_SUB, b"\x87F64/SUB");
 
 // Casting
 instruction!(INT_TO_UINT, (a => b), b"\x89INT->UINT");
@@ -321,6 +328,10 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
         try_instruction!(env, self.handle_uint64_sub(env, instruction, pid));
         try_instruction!(env, self.handle_int64_add(env, instruction, pid));
         try_instruction!(env, self.handle_int64_sub(env, instruction, pid));
+        try_instruction!(env, self.handle_f32_add(env, instruction, pid));
+        try_instruction!(env, self.handle_f32_sub(env, instruction, pid));
+        try_instruction!(env, self.handle_f64_add(env, instruction, pid));
+        try_instruction!(env, self.handle_f64_sub(env, instruction, pid));
         Err(Error::UnknownInstruction)
     }
 }
@@ -737,4 +748,85 @@ impl<'a> Handler<'a> {
         instruction_is!(instruction, INT64_SUB);
         sized_int_op!(env, read_i64, checked_sub, write_i64)
     }
+    
+    #[inline]
+    fn handle_f32_add(&mut self,
+                        env: &mut Env<'a>,
+                        instruction: &'a [u8],
+                        _: EnvId)
+                        -> PassResult<'a> {
+        instruction_is!(instruction, F32_ADD);
+        let op1_bytes = stack_pop!(env);
+        let op1: f32 = op1_bytes.unpack().ok_or(error_invalid_value!(op1_bytes))?;
+            
+        let op2_bytes = stack_pop!(env);
+        let op2: f32 = op2_bytes.unpack().ok_or(error_invalid_value!(op2_bytes))?;
+
+        let bytes = (op1 + op2).pack();
+        let slice = alloc_and_write!(bytes.as_slice(), env);
+        env.push(slice);
+        
+        Ok(())                  
+    }
+
+    #[inline]
+    fn handle_f32_sub(&mut self,
+                      env: &mut Env<'a>,
+                      instruction: &'a [u8],
+                      _: EnvId)
+                      -> PassResult<'a> {
+        instruction_is!(instruction, F32_SUB);
+        let op1_bytes = stack_pop!(env);
+        let op1: f32 = op1_bytes.unpack().ok_or(error_invalid_value!(op1_bytes))?;
+        
+        let op2_bytes = stack_pop!(env);
+        let op2: f32 = op2_bytes.unpack().ok_or(error_invalid_value!(op2_bytes))?;
+        
+        let bytes = (op1 - op2).pack();
+        let slice = alloc_and_write!(bytes.as_slice(), env);
+        env.push(slice);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_f64_add(&mut self,
+                        env: &mut Env<'a>,
+                        instruction: &'a [u8],
+                        _: EnvId)
+                        -> PassResult<'a> {
+        instruction_is!(instruction, F64_ADD);
+        let op1_bytes = stack_pop!(env);
+        let op1: f64 = op1_bytes.unpack().ok_or(error_invalid_value!(op1_bytes))?;
+        
+        let op2_bytes = stack_pop!(env);
+        let op2: f64 = op2_bytes.unpack().ok_or(error_invalid_value!(op2_bytes))?;
+        
+        let bytes = (op1 + op2).pack();
+        let slice = alloc_and_write!(bytes.as_slice(), env);
+        env.push(slice);
+        
+        Ok(())                  
+    }
+
+    #[inline]
+    fn handle_f64_sub(&mut self,
+                      env: &mut Env<'a>,
+                      instruction: &'a [u8],
+                      _: EnvId)
+                      -> PassResult<'a> {
+        instruction_is!(instruction, F64_SUB);
+        let op1_bytes = stack_pop!(env);
+        let op1: f64 = op1_bytes.unpack().ok_or(error_invalid_value!(op1_bytes))?;
+        
+        let op2_bytes = stack_pop!(env);
+        let op2: f64 = op2_bytes.unpack().ok_or(error_invalid_value!(op2_bytes))?;
+        
+        let bytes = (op1 - op2).pack();
+        let slice = alloc_and_write!(bytes.as_slice(), env);
+        env.push(slice);
+
+        Ok(())
+    }
+
 }

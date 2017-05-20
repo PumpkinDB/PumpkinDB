@@ -76,6 +76,9 @@ pub use self::binparser::parse as parse_bin;
 pub mod textparser;
 pub use self::textparser::parse;
 
+mod packable;
+pub use packable::{Packable, Unpackable};
+
 pub mod encodables;
 
 pub use self::encodables::{Encodable, Instruction, InstructionRef, Closure, Receivable};
