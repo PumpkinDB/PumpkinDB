@@ -152,8 +152,8 @@ macro_rules! int_comparison {
 
 macro_rules! no_endianness_sized_uint_op {
     ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
-        let mut a = stack_pop!($env);
         let mut b = stack_pop!($env);
+        let mut a = stack_pop!($env);
 
         let a_int = match a.$read_op() {
             Ok(v) => v,
@@ -184,9 +184,9 @@ macro_rules! no_endianness_sized_uint_op {
 
 macro_rules! no_endianness_sized_int_op {
     ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
-        let a = stack_pop!($env);
         let b = stack_pop!($env);
-       
+        let a = stack_pop!($env);
+
         let mut a = Vec::from(a);
         a[0] ^= 1u8 << 7;
 
@@ -224,8 +224,8 @@ macro_rules! no_endianness_sized_int_op {
 
 macro_rules! sized_uint_op {
     ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
-        let mut a = stack_pop!($env);
         let mut b = stack_pop!($env);
+        let mut a = stack_pop!($env);
 
         let a_int = match a.$read_op::<BigEndian>() {
             Ok(v) => v,
@@ -256,8 +256,8 @@ macro_rules! sized_uint_op {
 
 macro_rules! sized_int_op {
     ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
-        let a = stack_pop!($env);
         let b = stack_pop!($env);
+        let a = stack_pop!($env);
 
         let mut a = Vec::from(a);
         a[0] ^= 1u8 << 7;
