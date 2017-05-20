@@ -98,16 +98,19 @@ fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp>) {
 
 fn main() {
     let timestamp = Arc::new(timestamp::Timestamp::new(None));
-    let re = Regex::new(r"```test\r?\n((.+\r?\n?)+)```").unwrap();
+    let re = Regex::new(r"```test\r?\n((.+(\r?\n)*)+)```").unwrap();
     for entry in glob("doc/script/**/*.md").expect("Failed to read glob pattern") {
         match entry {
             Ok(path) => {
-                println!("{}:", path.to_str().unwrap());
-                let mut f = File::open(path).expect("can't open file");
+                println!("{}", path.to_str().unwrap());
+                let mut f = File::open(&path).expect("can't open file");
                 let mut s = String::new();
                 f.read_to_string(&mut s).expect("can't read file");
-                for cap in re.captures_iter(s.as_ref()) {
+                for cap in re.captures_iter(&s) {
                     let programs = textparser::programs(cap[1].as_ref()).unwrap().1;
+                    if programs.len() == 0 {
+                        println!(" WARNING: no tests defined in {}", path.to_str().unwrap());
+                    }
                     for program in programs {
                         if program.len() > 0 {
                             match binparser::instruction(program.as_slice()) {
