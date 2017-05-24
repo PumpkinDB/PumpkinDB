@@ -13,7 +13,7 @@ use std::marker::PhantomData;
 
 use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt};
 
-use num_bigint::{BigUint, BigInt, Sign};
+use num_bigint::{BigUint, BigInt};
 use num_traits::Signed;
 use core::ops::{Add, Sub};
 
@@ -60,59 +60,14 @@ instruction!(INT_EQUALQ, (a, b => c), b"\x8AINT/EQUAL?");
 instruction!(INT_GTQ, (a, b => c), b"\x87INT/GT?");
 instruction!(INT_LTQ, (a, b => c), b"\x87INT/LT?");
 
-
-pub fn bytes_to_bigint(bytes: &[u8]) -> Option<BigInt> {
-    match bytes[0] {
-            0x00 => Some(Sign::Minus),
-            0x01 => Some(Sign::Plus),
-            _ => None
-        }
-        .and_then(|sign| Some(
-                {
-                    let mut bytes: Vec<u8> = Vec::from(&bytes[1..]);
-                    if sign == Sign::Plus { 
-                        BigInt::from_bytes_be(sign, bytes.as_slice())
-                    } else {
-                        for i in 0..bytes.len() {
-                            //flip.push(!byte);
-                            bytes[i] = !bytes[i];
-                        }
-                        let mut nextbit = true;
-                        for i in (0..bytes.len()).rev() {
-                            bytes[i] = match bytes[i].checked_add(1) {
-                                Some(v) => {
-                                    nextbit = false;
-                                    v
-                                },
-                                None => 0,
-                            };
-                            if !nextbit {
-                                break;
-                            }
-                        }
-                        BigInt::from_bytes_be(sign, &bytes)
-                    }
-                }
-                ))
-}
-
-macro_rules! bytes_to_bigint {
-   ($bytes: expr) => {
-       match bytes_to_bigint($bytes) {
-         Some(v) => v,
-         None => return Err(error_invalid_value!($bytes))
-       }
-   };
-}
-
 macro_rules! uint_comparison {
     ($env: expr, $instruction: expr, $instruction_const: expr, $cmp: ident) => {{
         instruction_is!($instruction, $instruction_const);
         let b = stack_pop!($env);
         let a = stack_pop!($env);
 
-        let a_ = BigUint::from_bytes_be(a);
-        let b_ = BigUint::from_bytes_be(b);
+        let a_: BigUint = a.unpack().ok_or(error_invalid_value!(a))?;
+        let b_: BigUint = b.unpack().ok_or(error_invalid_value!(b))?;
 
         if a_.$cmp(&b_) {
             $env.push(STACK_TRUE);
@@ -129,18 +84,10 @@ macro_rules! int_comparison {
         let b = stack_pop!($env);
         let a = stack_pop!($env);
 
-        let a_ = bytes_to_bigint(a);
-        let b_ = bytes_to_bigint(b);
+        let a_: BigInt = a.unpack().ok_or(error_invalid_value!(a))?;
+        let b_: BigInt = b.unpack().ok_or(error_invalid_value!(b))?;
 
-        if a_.is_none() {
-            return Err(error_invalid_value!(a));
-        }
-
-        if b_.is_none() {
-            return Err(error_invalid_value!(b));
-        }
-
-        if a_.unwrap().$cmp(&b_.unwrap()) {
+        if a_.$cmp(&b_) {
             $env.push(STACK_TRUE);
         } else {
             $env.push(STACK_FALSE);
@@ -352,14 +299,12 @@ impl<'a> Handler<'a> {
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
-        let a_uint = BigUint::from_bytes_be(a);
-        let b_uint = BigUint::from_bytes_be(b);
+        let a_int: BigUint = a.unpack().ok_or(error_invalid_value!(a))?;
+        let b_int: BigUint = b.unpack().ok_or(error_invalid_value!(b))?;
 
-        let c_uint = a_uint.add(b_uint);
+        let c_int = a_int.add(b_int);
 
-        let c_bytes = c_uint.to_bytes_be();
-
-        let slice = alloc_and_write!(c_bytes.as_slice(), env);
+        let slice = alloc_and_write!(c_int.pack().as_slice(), env);
         env.push(slice);
         Ok(())
     }
@@ -373,45 +318,12 @@ impl<'a> Handler<'a> {
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
-        let a_int = bytes_to_bigint(a);
-        let b_int = bytes_to_bigint(b);
+        let a_int: BigInt = a.unpack().ok_or(error_invalid_value!(a))?;
+        let b_int: BigInt = b.unpack().ok_or(error_invalid_value!(b))?;
 
-        if a_int == None {
-            return Err(error_invalid_value!(a));
-        }
-        if b_int == None {
-            return Err(error_invalid_value!(b));
-        }
+        let c_int = a_int.add(b_int);
 
-        let c_int = a_int.unwrap().add(b_int.unwrap());
-
-        let mut bytes = if c_int.is_negative() {
-            vec![0x00]
-        } else {
-            vec![0x01]
-        };
-        let (_, mut c_bytes) = c_int.to_bytes_be();
-        if c_int.is_negative() {
-            for i in 0..c_bytes.len() {
-                    c_bytes[i] = !c_bytes[i];
-                }
-                let mut nextbit = true;
-                for i in (0..c_bytes.len()).rev() {
-                    c_bytes[i] =  match c_bytes[i].checked_add(1) {
-                        Some(v) => {
-                            nextbit = false;
-                            v
-                        },
-                        None => 0,
-                    };
-                    if !nextbit {
-                        break;
-                    }
-                }
-        }
-
-        bytes.extend_from_slice(&c_bytes);
-        let slice = alloc_and_write!(bytes.as_slice(), env);
+        let slice = alloc_and_write!(c_int.pack().as_slice(), env);
         env.push(slice);
         Ok(())
     }
@@ -422,48 +334,15 @@ impl<'a> Handler<'a> {
                       _: EnvId)
                       -> PassResult<'a> {
         instruction_is!(instruction, INT_SUB);
-        let a = stack_pop!(env);
         let b = stack_pop!(env);
+        let a = stack_pop!(env);
 
-        let a_int = bytes_to_bigint(a);
-        let b_int = bytes_to_bigint(b);
+        let a_int: BigInt = a.unpack().ok_or(error_invalid_value!(a))?;
+        let b_int: BigInt = b.unpack().ok_or(error_invalid_value!(b))?;
 
-        if a_int == None {
-            return Err(error_invalid_value!(a));
-        }
-        if b_int == None {
-            return Err(error_invalid_value!(b));
-        }
+        let c_int = a_int.sub(b_int);
 
-        let c_int = b_int.unwrap().sub(a_int.unwrap());
-
-        let mut bytes = if c_int.is_negative() {
-            vec![0x00]
-        } else {
-            vec![0x01]
-        };
-        let (_, mut c_bytes) = c_int.to_bytes_be();
-        if c_int.is_negative() {
-            for i in 0..c_bytes.len() {
-                    c_bytes[i] = !c_bytes[i];
-                }
-                let mut nextbit = true;
-                for i in (0..c_bytes.len()).rev() {
-                    c_bytes[i] =  match c_bytes[i].checked_add(1) {
-                        Some(v) => {
-                            nextbit = false;
-                            v
-                        },
-                        None => 0,
-                    };
-                    if !nextbit {
-                        break;
-                    }
-                }
-        }
-
-        bytes.extend_from_slice(&c_bytes);
-        let slice = alloc_and_write!(bytes.as_slice(), env);
+        let slice = alloc_and_write!(c_int.pack().as_slice(), env);
         env.push(slice);
         Ok(())
     }
@@ -475,21 +354,12 @@ impl<'a> Handler<'a> {
                           -> PassResult<'a> {
         instruction_is!(instruction, INT_TO_UINT);
         let a = stack_pop!(env);
-        let a_int = bytes_to_bigint(a);
+        let a_int : BigInt = a.unpack().ok_or(error_invalid_value!(a))?;
 
-        if a_int == None {
-            return Err(error_invalid_value!(a));
-        }
-
-        match a_int.unwrap().to_biguint() {
-            Some(a_uint) => {
-                let a_bytes = a_uint.to_bytes_be();
-                let slice = alloc_and_write!(a_bytes.as_slice(), env);
-                env.push(slice);
-                Ok(())
-            }
-            None => Err(error_invalid_value!(a)),
-        }
+        let a_uint = a_int.to_biguint().ok_or(error_invalid_value!(a))?;
+        let slice = alloc_and_write!(a_uint.pack().as_slice(), env);
+        env.push(slice);
+        Ok(())
     }
 
     fn handle_uint_to_int(&mut self,
