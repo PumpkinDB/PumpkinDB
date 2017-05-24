@@ -6,6 +6,8 @@
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
+use num_bigint::{BigInt, BigUint, Sign};
+
 pub trait Packable {
     fn pack(&self) -> Vec<u8>;
 }
@@ -89,8 +91,79 @@ impl<'a> Unpackable<f64> for &'a [u8] {
     }
 }
 
+impl Packable for BigUint {
+    fn pack(&self) -> Vec<u8> {
+        self.to_bytes_be()
+    }
+}
+
+impl<'a> Unpackable<BigUint> for &'a [u8] {
+    fn unpack(&self) -> Option<BigUint> {
+        Some(BigUint::from_bytes_be(self))
+    }
+}
+
+impl Packable for BigInt {
+    fn pack(&self) -> Vec<u8> {
+        let (sign, mut bytes) = self.to_bytes_be();
+        if sign == Sign::Minus {
+            for i in 0..bytes.len() {
+                bytes[i] = !bytes[i];
+            }
+            let mut nextbit = true;
+            for i in (0..bytes.len()).rev() {
+                bytes[i] =  match bytes[i].checked_add(1) {
+                    Some(v) => {
+                        nextbit = false;
+                        v
+                    },
+                    None => 0,
+                };
+                if !nextbit {
+                    break;
+                }
+            }
+        }
+        let sign_byte = if sign == Sign::Minus { 0x00 } else { 0x01 };
+        let mut v = vec![sign_byte];
+        
+        v.extend_from_slice(&bytes);
+        v
+    }
+}
+
+impl<'a> Unpackable<BigInt> for &'a [u8] {
+    fn unpack(&self) -> Option<BigInt> {
+        let mut bytes: Vec<u8> = Vec::from(&self[1..]);
+        match self[0] {
+            0x01 => Some(BigInt::from_bytes_be(Sign::Plus, &bytes)),
+            0x00 => {
+                for i in 0..bytes.len() {
+                    bytes[i] = !bytes[i];
+                }
+                let mut nextbit = true;
+                for i in (0..bytes.len()).rev() {
+                    bytes[i] = match bytes[i].checked_add(1) {
+                        Some(v) => {
+                            nextbit = false;
+                            v
+                        },
+                        None => 0,
+                    };
+                    if !nextbit {
+                        break;
+                    }
+                }
+                Some(BigInt::from_bytes_be(Sign::Minus, &bytes))
+            }
+            _ => None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use core::str::FromStr;
     use super::*;
 
     #[test]
@@ -114,6 +187,17 @@ mod tests {
     #[test]
     fn test_f64_neg() {
         let v = 5.0f64;
+        assert_eq!(v, v.pack().as_slice().unpack().unwrap());
+    }
+
+    #[test]
+    fn test_biguint() {
+        let v = BigUint::from_str("100").unwrap();
+        assert_eq!(v, v.pack().as_slice().unpack().unwrap());
+    }
+    #[test]
+    fn test_bigint() {
+        let v = BigInt::from_str("-100").unwrap();
         assert_eq!(v, v.pack().as_slice().unpack().unwrap());
     }
 }
