@@ -87,6 +87,11 @@ macro_rules! for_each_dispatcher {
             let ref mut $module = $dispatcher.uuid;
             $expr
         }
+        #[cfg(feature="mod_string")]
+        {
+            let ref mut $module = $dispatcher.string;
+            $expr
+        }
     }};
 }
 
@@ -113,6 +118,8 @@ pub struct StandardDispatcher<'a, P: 'a, S: 'a>
     msg: mod_msg::Handler<'a, P, S>,
     #[cfg(feature = "mod_uuid")]
     uuid: mod_uuid::Handler<'a>,
+    #[cfg(feature = "mod_string")]
+    string: mod_string::Handler<'a>
 }
 
 impl<'a, P: 'a, S: 'a> StandardDispatcher<'a, P, S>
@@ -143,6 +150,8 @@ impl<'a, P: 'a, S: 'a> StandardDispatcher<'a, P, S>
                     msg: mod_msg::Handler::new(publisher, subscriber),
                 #[cfg(feature = "mod_uuid")]
                     uuid: mod_uuid::Handler::new(),
+                #[cfg(feature = "mod_string")]
+                    string: mod_string::Handler::new(),
         }
     }
 }

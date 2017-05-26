@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 
 use num_bigint::{BigInt, BigUint, Sign};
 
@@ -161,6 +161,107 @@ impl<'a> Unpackable<BigInt> for &'a [u8] {
     }
 }
 
+impl Packable for i8 {
+    fn pack(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(1);
+        bytes.write_i8(*self).expect("error writing bytes!");
+        bytes[0] ^= 0x80;
+        bytes
+    }
+}
+
+macro_rules! packable_int_impl {
+    ($type: ident, $write: ident, $bytes: expr) => {
+        impl Packable for $type {
+            fn pack(&self) -> Vec<u8> {
+                let mut bytes = vec![0; $bytes];
+                BigEndian::$write(&mut bytes, *self);
+                bytes[0] ^= 0x80;
+                bytes
+            }
+        }
+    }
+}
+
+packable_int_impl!(i16, write_i16, 2);
+packable_int_impl!(i32, write_i32, 4);
+packable_int_impl!(i64, write_i64, 8);
+
+impl Packable for u8 {
+    fn pack(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(1);
+        bytes.write_u8(*self).expect("error writing bytes!");
+        bytes
+    }
+}
+
+macro_rules! packable_uint_impl {
+    ($type: ident, $write: ident, $bytes: expr) => {
+        impl Packable for $type {
+            fn pack(&self) -> Vec<u8> {
+                let mut bytes = vec![0; $bytes];
+                BigEndian::$write(&mut bytes, *self);
+                bytes
+            }
+        }
+    }
+}
+
+packable_uint_impl!(u16, write_u16, 2);
+packable_uint_impl!(u32, write_u32, 4);
+packable_uint_impl!(u64, write_u64, 8);
+
+impl<'a> Unpackable<i8> for &'a [u8] {
+    fn unpack(&self) -> Option<i8> {
+        let mut v = Vec::from(*self);
+        v[0] ^= 0x80;
+        v.as_slice().read_i8().ok()
+    }
+}
+
+
+impl<'a> Unpackable<u8> for &'a [u8] {
+    fn unpack(&self) -> Option<u8> {
+        let v = Vec::from(*self);
+        v.as_slice().read_u8().ok()
+    }
+}
+
+
+macro_rules! unpackable_uint_impl {
+    ($type: ident, $read: ident) => {
+        impl<'a> Unpackable<$type> for &'a [u8] {
+            fn unpack(&self) -> Option<$type> {
+                let v = Vec::from(*self);
+                Some(BigEndian::$read(v.as_slice()))
+            }
+        }
+
+    }
+}
+
+macro_rules! unpackable_int_impl {
+    ($type: ident, $read: ident) => {
+        impl<'a> Unpackable<$type> for &'a [u8] {
+            fn unpack(&self) -> Option<$type> {
+                let mut v = Vec::from(*self);
+                v[0] ^= 0x80;
+                Some(BigEndian::$read(v.as_slice()))
+            }
+        }
+
+    }
+}
+
+unpackable_uint_impl!(u16, read_u16);
+unpackable_uint_impl!(u32, read_u32);
+unpackable_uint_impl!(u64, read_u64);
+
+unpackable_int_impl!(i16, read_i16);
+unpackable_int_impl!(i32, read_i32);
+unpackable_int_impl!(i64, read_i64);
+
+
 #[cfg(test)]
 mod tests {
     use core::str::FromStr;
@@ -198,6 +299,26 @@ mod tests {
     #[test]
     fn test_bigint() {
         let v = BigInt::from_str("-100").unwrap();
+        assert_eq!(v, v.pack().as_slice().unpack().unwrap());
+    }
+    #[test]
+    fn test_i8() {
+        let v = -1i8;
+        assert_eq!(v, v.pack().as_slice().unpack().unwrap());
+    }
+    #[test]
+    fn test_u8() {
+        let v = 4u8;
+        assert_eq!(v, v.pack().as_slice().unpack().unwrap());
+    }
+    #[test]
+    fn test_i32() {
+        let v = -12i32;
+        assert_eq!(v, v.pack().as_slice().unpack().unwrap());
+    }
+    #[test]
+    fn test_u32() {
+        let v = 2049u32;
         assert_eq!(v, v.pack().as_slice().unpack().unwrap());
     }
 }
