@@ -14,7 +14,6 @@ use std::marker::PhantomData;
 use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt};
 
 use num_bigint::{BigUint, BigInt};
-use num_traits::Signed;
 use core::ops::{Add, Sub};
 
 // Category: arithmetics
@@ -59,6 +58,23 @@ instruction!(UINT_LTQ, (a, b => c), b"\x88UINT/LT?");
 instruction!(INT_EQUALQ, (a, b => c), b"\x8AINT/EQUAL?");
 instruction!(INT_GTQ, (a, b => c), b"\x87INT/GT?");
 instruction!(INT_LTQ, (a, b => c), b"\x87INT/LT?");
+
+// Stringify
+instruction!(UINT_TO_STRING, b"\x8dUINT/->STRING");
+instruction!(INT_TO_STRING, b"\x8cINT/->STRING");
+
+instruction!(UINT8_TO_STRING, b"\x8eUINT8/->STRING");
+instruction!(UINT16_TO_STRING, b"\x8fUINT16/->STRING");
+instruction!(UINT32_TO_STRING, b"\x8fUINT32/->STRING");
+instruction!(UINT64_TO_STRING, b"\x8fUINT64/->STRING");
+
+instruction!(INT8_TO_STRING, b"\x8dINT8/->STRING");
+instruction!(INT16_TO_STRING, b"\x8eINT16/->STRING");
+instruction!(INT32_TO_STRING, b"\x8eINT32/->STRING");
+instruction!(INT64_TO_STRING, b"\x8eINT64/->STRING");
+
+instruction!(F32_TO_STRING, b"\x8cF32/->STRING");
+instruction!(F64_TO_STRING, b"\x8cF64/->STRING");
 
 macro_rules! uint_comparison {
     ($env: expr, $instruction: expr, $instruction_const: expr, $cmp: ident) => {{
@@ -241,6 +257,16 @@ macro_rules! sized_int_op {
     }};
 }
 
+macro_rules! to_string {
+    ($env: expr, $type: ident) => {{
+        let a_bytes = stack_pop!($env);
+        let a: $type = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
+        
+        format!("{}", a)
+    }}
+}
+
+
 pub struct Handler<'a> {
     phantom: PhantomData<&'a ()>,
 }
@@ -279,6 +305,10 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
         try_instruction!(env, self.handle_f32_sub(env, instruction, pid));
         try_instruction!(env, self.handle_f64_add(env, instruction, pid));
         try_instruction!(env, self.handle_f64_sub(env, instruction, pid));
+
+        try_instruction!(env, self.handle_uint_to_string(env, instruction, pid));
+        try_instruction!(env, self.handle_int_to_string(env, instruction, pid));
+        try_instruction!(env, self.handle_to_string(env, instruction, pid));
         Err(Error::UnknownInstruction)
     }
 }
@@ -699,4 +729,68 @@ impl<'a> Handler<'a> {
         Ok(())
     }
 
+    #[inline]
+    fn handle_uint_to_string(&mut self,
+                        env: &mut Env<'a>,
+                        instruction: &'a [u8],
+                        _: EnvId)
+                        -> PassResult<'a> {
+        instruction_is!(instruction, UINT_TO_STRING);
+
+        let a_bytes = stack_pop!(env);
+        let a: BigUint = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
+
+        let s = format!("{}", a);
+        let val = alloc_and_write!(s.as_bytes(), env);
+        env.push(val);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_int_to_string(&mut self,
+                             env: &mut Env<'a>,
+                             instruction: &'a [u8],
+                             _: EnvId)
+                             -> PassResult<'a> {
+        instruction_is!(instruction, INT_TO_STRING);
+        
+        let a_bytes = stack_pop!(env);
+        let a: BigInt = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
+
+        let s = format!("{}", a);
+        let val = alloc_and_write!(s.as_bytes(), env);
+        env.push(val);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_to_string(&mut self,
+                        env: &mut Env<'a>,
+                        instruction: &'a [u8],
+                        _: EnvId)
+                        -> PassResult<'a> {
+
+        let s = match instruction {
+            UINT8_TO_STRING        => to_string!(env, u8),
+            INT8_TO_STRING         => to_string!(env, i8),
+            UINT16_TO_STRING       => to_string!(env, u16),
+            INT16_TO_STRING        => to_string!(env, i16),
+            UINT32_TO_STRING       => to_string!(env, u32),
+            INT32_TO_STRING        => to_string!(env, i32),
+            UINT64_TO_STRING       => to_string!(env, u64),
+            INT64_TO_STRING        => to_string!(env, i64),
+            F32_TO_STRING          => to_string!(env, f32),
+            F64_TO_STRING          => to_string!(env, f64),
+            
+            _ => return Err(Error::UnknownInstruction),
+        };
+        
+        let val = alloc_and_write!(s.as_bytes(), env);
+        env.push(val);
+
+
+        Ok(())
+    }
 }

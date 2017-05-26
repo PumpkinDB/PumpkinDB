@@ -66,7 +66,7 @@ pub use self::dispatcher::Dispatcher;
 use super::messaging;
 
 const _EMPTY: &'static [u8] = b"";
-
+  
 /// `instruction!` macro is used to define a built-in instruction, its signature (if applicable)
 /// and representation
 macro_rules! instruction {
@@ -194,6 +194,8 @@ pub mod mod_json;
 pub mod mod_msg;
 #[cfg(feature="mod_uuid")]
 pub mod mod_uuid;
+#[cfg(feature="mod_string")]
+pub mod mod_string;
 
 /// Scheduler is a PumpkinScript scheduler and interpreter. This is the
 /// most central part of this module.
