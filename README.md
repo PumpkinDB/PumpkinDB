@@ -61,6 +61,7 @@ To name a few:
 
 | Language | Library | Status |
 |----------|---------|--------|
+| **Rust** | [pumpkindb_client](https://github.com/PumpkinDB/PumpkinDB/pumpkindb_client) | Pre-release |
 | **Java** | [pumpkindb-client](https://github.com/PumpkinDB/pumpkindb-java) | Pre-release |
 
 ## Trying it out
