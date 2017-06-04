@@ -11,18 +11,15 @@ extern crate ansi_term;
 extern crate uuid;
 #[macro_use]
 extern crate clap;
-extern crate byteorder;
 
 extern crate pumpkinscript;
 extern crate pumpkindb_engine;
+extern crate pumpkindb_client;
 
-use std::io::prelude::*;
 use std::net::TcpStream;
 use std::fmt::Write;
 use std::io::Write as IoWrite;
 use std::str;
-
-use byteorder::{ByteOrder, BigEndian};
 
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
@@ -36,6 +33,7 @@ use clap::{Arg, App};
 
 use pumpkindb_engine::script;
 use pumpkinscript::*;
+use pumpkindb_client::{PacketWriter, PacketReader};
 
 fn print_item(s: &mut String, data: &[u8]) {
     if data.iter()
@@ -81,7 +79,6 @@ fn main() {
     };
 
     let mut rl = Editor::<()>::new();
-    let mut r = Vec::new();
 
     let mut multine = History::new();
     println!("Connected to PumpkinDB at {}", address);
@@ -147,90 +144,78 @@ fn main() {
                                                             Instruction("___subscription___"),
                                                             Instruction("UNSUBSCRIBE")
                                ).encode();
-                            let mut buf = [0u8; 4];
 
-                            BigEndian::write_u32(&mut buf, msg.len() as u32);
-                            stream.write_all(buf.as_ref()).unwrap();
-                            stream.write_all(msg.as_ref()).unwrap();
+                            {
+                                let mut writer = PacketWriter::new(&mut stream);
+                                writer.write(&msg).expect("can't write");
+                            }
 
                             let mut done = false;
 
                             while !done {
-                                stream.read(&mut buf).unwrap();
-                                let msg_len = BigEndian::read_u32(&mut buf);
+                                let mut reader = PacketReader::new(&mut stream);
+                                let r = reader.read().unwrap();
 
-                                let s_ref = <TcpStream as Read>::by_ref(&mut stream);
-
-                                r.clear();
-
-                                match s_ref.take(msg_len as u64).read_to_end(&mut r) {
-                                    Ok(0) => {}
-                                    Ok(_) => {
-                                        if r[0..5].to_vec() == b"TRACE" {
-                                            let input = r[5..msg_len as usize].to_vec();
-                                            let mut s = String::new();
-                                            if cfg!(target_os = "windows") {
-                                                let _ = write!(&mut s, "Trace: ");
-                                            } else {
-                                                let _ = write!(&mut s,
-                                                               "{}", Cyan.paint("Trace: "));
-                                            }
-                                            match pumpkinscript::binparser::data(&input.clone()) {
-                                                pumpkinscript::ParseResult::Done(_, data) => {
-                                                    let (_, size) = pumpkinscript::binparser::data_size(data)
-                                                        .unwrap();
-                                                    let data = &data[script::offset_by_size(size)..];
-                                                    print_item(&mut s, data);
-                                                },
-                                                e => {
-                                                    panic!("{:?}", e);
-                                                }
-                                            }
-                                            println!("{}", s);
-                                        } else if r[0..6].to_vec() == b"RESULT" {
-                                            let mut input = r[6..msg_len as usize].to_vec();
-                                            done = true;
-                                            let mut top_level = true;
-                                            let mut s = String::new();
-                                            while input.len() > 0 {
-                                                match pumpkinscript::binparser::data(&input.clone()) {
-                                                    pumpkinscript::ParseResult::Done(rest, data) => {
-                                                        let (_, size) = pumpkinscript::binparser::data_size(data)
-                                                            .unwrap();
-                                                        let data = &data[script::offset_by_size(size)..];
-
-                                                        input = Vec::from(rest);
-
-                                                        if rest.len() == 0 && top_level {
-                                                            top_level = false;
-                                                            if data.len() > 0 {
-                                                                if cfg!(target_os = "windows") {
-                                                                    let _ = write!(&mut s, "Error: ");
-                                                                } else {
-                                                                    let _ = write!(&mut s,
-                                                                                   "{}",
-                                                                                   Red.paint("Error: "));
-                                                                }
-                                                                input = Vec::from(data);
-                                                            }
-                                                        } else {
-                                                            print_item(&mut s, data);
-                                                        }
-                                                    }
-                                                    e => {
-                                                        panic!("{:?}", e);
-                                                    }
-                                                }
-                                            }
-                                            println!("{}", s);
+                                if r[0..5].to_vec() == b"TRACE" {
+                                    let input = r[5..r.len()].to_vec();
+                                    let mut s = String::new();
+                                    if cfg!(target_os = "windows") {
+                                        let _ = write!(&mut s, "Trace: ");
+                                    } else {
+                                        let _ = write!(&mut s,
+                                                       "{}", Cyan.paint("Trace: "));
+                                    }
+                                    match pumpkinscript::binparser::data(&input.clone()) {
+                                        pumpkinscript::ParseResult::Done(_, data) => {
+                                            let (_, size) = pumpkinscript::binparser::data_size(data)
+                                                .unwrap();
+                                            let data = &data[script::offset_by_size(size)..];
+                                            print_item(&mut s, data);
+                                        },
+                                        e => {
+                                            panic!("{:?}", e);
                                         }
                                     }
-                                    Err(e) => {
-                                        panic!("{}", e);
+                                    println!("{}", s);
+                                } else if r[0..6].to_vec() == b"RESULT" {
+                                    let mut input = r[6..r.len()].to_vec();
+                                    done = true;
+                                    let mut top_level = true;
+                                    let mut s = String::new();
+                                    while input.len() > 0 {
+                                        match pumpkinscript::binparser::data(&input.clone()) {
+                                            pumpkinscript::ParseResult::Done(rest, data) => {
+                                                let (_, size) = pumpkinscript::binparser::data_size(data)
+                                                    .unwrap();
+                                                let data = &data[script::offset_by_size(size)..];
+
+                                                input = Vec::from(rest);
+
+                                                if rest.len() == 0 && top_level {
+                                                    top_level = false;
+                                                    if data.len() > 0 {
+                                                        if cfg!(target_os = "windows") {
+                                                            let _ = write!(&mut s, "Error: ");
+                                                        } else {
+                                                            let _ = write!(&mut s,
+                                                                           "{}",
+                                                                           Red.paint("Error: "));
+                                                        }
+                                                        input = Vec::from(data);
+                                                    }
+                                                } else {
+                                                    print_item(&mut s, data);
+                                                }
+                                            }
+                                            e => {
+                                                panic!("{:?}", e);
+                                            }
+                                        }
                                     }
+                                    println!("{}", s);
                                 }
                             }
-                        }
+                        },
                         Err(err) => {
                             println!("Script error: {}", err);
                         }

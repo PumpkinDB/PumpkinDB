@@ -1,0 +1,16 @@
+[package]
+name = "pumpkindb_client"
+version = "0.2.0"
+license = "MPL-2.0"
+repository = "https://github.com/PumpkinDB/PumpkinDB"
+homepage = "http://pumpkindb.org"
+keywords = [ "pumpkindb", "database" ]
+categories = [ "database" ]
+
+authors = ["Yurii Rashkovskii <yrashk@gmail.com>"]
+
+[dependencies]
+byteorder = "1.0"
+pumpkinscript = { version = "0.2", path = "../pumpkinscript" }
+
+[dev-dependencies]
