@@ -3,6 +3,7 @@ members = [
   "./pumpkinscript",
   "./pumpkindb_engine",
   "./pumpkindb_client",
+  "./pumpkindb_mio_server",
   "./pumpkindb_server",
   "./pumpkindb_term",
   "./tests/doctests"

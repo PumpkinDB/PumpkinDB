@@ -46,6 +46,7 @@ COPY Makefile /pumpkindb/
 COPY Cargo.* /pumpkindb/
 COPY pumpkindb_engine /pumpkindb/pumpkindb_engine
 COPY pumpkindb_server /pumpkindb/pumpkindb_server
+COPY pumpkindb_mio_server /pumpkindb/pumpkindb_mio_server
 COPY pumpkindb_term /pumpkindb/pumpkindb_term
 COPY pumpkindb_client /pumpkindb/pumpkindb_client
 COPY pumpkinscript /pumpkindb/pumpkinscript
