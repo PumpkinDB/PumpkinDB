@@ -3,47 +3,39 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
-#![feature(slice_patterns, advanced_slice_patterns)]
 
-extern crate mio;
-extern crate memmap;
-extern crate byteorder;
-extern crate rand;
-extern crate num_cpus;
 #[macro_use]
-extern crate log;
-extern crate log4rs;
-extern crate slab;
-extern crate num_bigint;
-extern crate num_traits;
-extern crate lmdb_zero as lmdb;
+extern crate clap;
 #[macro_use]
 extern crate lazy_static;
 extern crate config;
-#[macro_use]
-extern crate clap;
-extern crate uuid;
-
-extern crate pumpkinscript;
 extern crate pumpkindb_engine;
+extern crate num_cpus;
+extern crate memmap;
+#[macro_use]
+extern crate log;
+extern crate log4rs;
+extern crate lmdb_zero as lmdb;
+extern crate mio;
 
-mod connection;
-mod server;
-
-use std::fs;
-use std::fs::OpenOptions;
-use std::path::PathBuf;
-use std::thread;
-use std::sync::Arc;
-
-use memmap::{Mmap, Protection};
-use mio::*;
-use mio::tcp::*;
-use clap::{App, Arg};
+extern crate pumpkindb_mio_server as server;
 
 use pumpkindb_engine::{script, storage, timestamp};
 use pumpkindb_engine::script::dispatcher;
 use pumpkindb_engine::messaging;
+
+use clap::{App, Arg};
+use memmap::{Mmap, Protection};
+
+use std::thread;
+
+use std::fs;
+use std::fs::OpenOptions;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use mio::channel as mio_chan;
+
 
 lazy_static! {
  static ref ENVIRONMENT: lmdb::Environment = {
@@ -60,27 +52,6 @@ lazy_static! {
     }
     storage::create_environment(storage_path, map_size, maxreaders)
  };
-}
-
-use mio::channel as mio_chan;
-
-
-
-pub fn run(port: i64,
-           senders: Vec<script::Sender<script::RequestMessage>>,
-           relay_sender: mio_chan::Sender<server::RelayedPublishedMessage>,
-           relay_receiver: mio_chan::Receiver<server::RelayedPublishedMessage>) {
-    let addr = format!("0.0.0.0:{}", port).parse().unwrap();
-
-    info!("Listening on {}", addr);
-
-    let sock = TcpListener::bind(&addr).expect("Failed to bind address");
-
-    let mut poll = Poll::new().expect("Failed to initialize polling");
-
-    let mut server = server::Server::new(sock, relay_sender, relay_receiver, senders);
-    server.run(&mut poll).expect("Failed to run server");
-
 }
 
 /// Accepts storage path, filename and length and prepares the file. It is important that the length
@@ -103,7 +74,7 @@ fn prepare_mmap(storage_path: &str, filename: &str, length: u64) -> Mmap {
     Mmap::open_path(scratchpad_path, Protection::ReadWrite).expect("Could not open scratchpad")
 }
 
-fn main() {
+pub fn main() {
     let args = App::new("PumpkinDB Server")
         .version(crate_version!())
         .about("Event Sourcing Database Engine http://pumpkindb.org")
@@ -192,7 +163,6 @@ fn main() {
         senders.push(sender)
     }
 
-    run(config::get_int("server.port").unwrap(),
+    server::run(config::get_int("server.port").unwrap(),
                 senders, relay_sender, relay_receiver);
-
 }
