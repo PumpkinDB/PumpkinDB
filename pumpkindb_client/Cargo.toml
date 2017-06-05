@@ -12,5 +12,3 @@ authors = ["Yurii Rashkovskii <yrashk@gmail.com>"]
 [dependencies]
 byteorder = "1.0"
 pumpkinscript = { version = "0.2", path = "../pumpkinscript" }
-
-[dev-dependencies]
