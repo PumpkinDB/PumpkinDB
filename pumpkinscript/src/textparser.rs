@@ -510,7 +510,8 @@ named!(wrapped_program<Vec<u8>>, alt!(do_parse!(
                                (v))
                               | do_parse!(
                                take_while!(is_multispace)                        >>
-                         item: separated_list!(multispace, wrapped_item)         >>
+                         item: separated_list!(complete!(multispace),
+                                                complete!(wrapped_item))         >>
                                take_while!(is_multispace)                        >>
                                (flatten_program(item)))));
 
@@ -520,12 +521,13 @@ named!(program<Vec<u8>>, alt!(do_parse!(
                                (v))
                               | do_parse!(
                                take_while!(is_multispace)                        >>
-                         item: separated_list!(multispace, item)                 >>
+                         item: separated_list!(complete!(multispace),
+                                                 complete!(item))                >>
                                take_while!(is_multispace)                        >>
                                (flatten_program(item)))));
 
 named!(pub programs<Vec<Vec<u8>>>, do_parse!(
-                         item: separated_list!(tag!(b"."), program)              >>
+                         item: separated_list!(complete!(tag!(b".")), program)   >>
                                (item)));
 
 
@@ -767,6 +769,8 @@ mod tests {
     fn test_extra_spaces() {
         let script = parse(" 0xAABB  \"Hi\" ").unwrap();
         assert_eq!(script, vec![2, 0xaa,0xbb, 2, b'H', b'i']);
+        let script = parse("[ 0xAABB  \"Hi\" ]").unwrap();
+        assert_eq!(script, vec![6, 2, 0xaa,0xbb, 2, b'H', b'i']);
     }
 
     #[test]

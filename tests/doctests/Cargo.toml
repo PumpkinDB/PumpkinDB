@@ -12,7 +12,6 @@ regex = "0.2.1"
 crossbeam = "0.2.10"
 tempdir = "0.3.5"
 lmdb-zero = "0.4.0"
-nom = "^2.1"
 
 pumpkinscript = { version = "0.2", path = "../../pumpkinscript" }
 pumpkindb_engine = { version = "0.2", path = "../../pumpkindb_engine" }

@@ -13,7 +13,6 @@ extern crate regex;
 extern crate crossbeam;
 extern crate tempdir;
 extern crate lmdb_zero as lmdb;
-extern crate nom;
 
 extern crate pumpkinscript;
 extern crate pumpkindb_engine;
@@ -114,7 +113,7 @@ fn main() {
                     for program in programs {
                         if program.len() > 0 {
                             match binparser::instruction(program.as_slice()) {
-                                nom::IResult::Done(&[0x81, b':', ref rest..], program) => {
+                                pumpkinscript::ParseResult::Done(&[0x81, b':', ref rest..], program) => {
                                     eval(&program[1..], rest, timestamp.clone());
                                 }
                                 other => panic!("test definition parse error {:?}", other),
