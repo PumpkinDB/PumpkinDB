@@ -1,6 +1,7 @@
 [package]
 name = "pumpkindb_mio_server"
 version = "0.2.0"
+description = "PumpkinDB mio-based server primitives"
 license = "MPL-2.0"
 repository = "https://github.com/PumpkinDB/PumpkinDB"
 homepage = "http://pumpkindb.org"

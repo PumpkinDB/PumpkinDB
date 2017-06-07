@@ -1,6 +1,7 @@
 [package]
 name = "pumpkindb_client"
 version = "0.2.0"
+description = "PumpkinDB client library"
 license = "MPL-2.0"
 repository = "https://github.com/PumpkinDB/PumpkinDB"
 homepage = "http://pumpkindb.org"
