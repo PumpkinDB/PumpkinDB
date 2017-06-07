@@ -28,5 +28,5 @@ None
 ## Tests
 
 ```test
-works : $SYSTEM/VERSION "0.2-wip" EQUAL?.
+works : $SYSTEM/VERSION "0.2.0" EQUAL?.
 ```
