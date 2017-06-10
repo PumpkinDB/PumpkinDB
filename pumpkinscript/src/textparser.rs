@@ -146,6 +146,16 @@ named!(sign<Sign>,
             }
         })));
 
+named!(int_str<String>,
+       do_parse!(
+           sign_opt: opt!(sign_ch)              >>
+               num_part: take_while1!(is_digit) >>
+               ({
+                   let sign_str = if let Some(sign) = sign_opt { sign.to_string() } else { "".to_owned() };
+                   (sign_str + str::from_utf8(num_part).unwrap())})));
+           
+
+
 named!(biguint<BigUint>,
     do_parse!(
         biguint: take_while1!(is_digit) >>
@@ -154,201 +164,92 @@ named!(biguint<BigUint>,
 
 named!(u8int<Vec<u8>>,
     do_parse!(
-        int: map_res!(
-          take_while1!(is_digit),
-          |v| str::from_utf8(v).unwrap().parse())
-          >>
-        char!('u')                  >>
-        char!('8')                  >>
+        n: map_res!(int_str, |s: String| u8::from_str(&s)) >>
+        tag!("u8")                  >>
         delim_or_end                >>
         ({
             let mut u8i = vec![];
-            u8i.write_u8(int).unwrap();
+            u8i.write_u8(n).unwrap();
             u8i
         })));
 
 named!(u16int<Vec<u8>>,
-    do_parse!(
-        int: map_res!(
-          take_while1!(is_digit),
-          |v| str::from_utf8(v).unwrap().parse())
-          >>
-        char!('u')                  >>
-        char!('1')                  >>
-        char!('6')                  >>
+     do_parse!(
+        n: map_res!(int_str, |s: String| u16::from_str(&s)) >>
+        tag!("u16")                 >>
         delim_or_end                >>
         ({
             let mut u16i = vec![];
-            u16i.write_u16::<BigEndian>(int).unwrap();
+            u16i.write_u16::<BigEndian>(n).unwrap();
             u16i
         })));
 
 named!(u32int<Vec<u8>>,
     do_parse!(
-        int: map_res!(
-          take_while1!(is_digit),
-          |v| str::from_utf8(v).unwrap().parse())
-          >>
-        char!('u')                  >>
-        char!('3')                  >>
-        char!('2')                  >>
+        n: map_res!(int_str, |s: String| u32::from_str(&s)) >>
+        tag!("u32")                 >>
         delim_or_end                >>
         ({
             let mut u32i = vec![];
-            u32i.write_u32::<BigEndian>(int).unwrap();
+            u32i.write_u32::<BigEndian>(n).unwrap();
             u32i
         })));
 
 named!(u64int<Vec<u8>>,
     do_parse!(
-        int: map_res!(
-          take_while1!(is_digit),
-          |v| str::from_utf8(v).unwrap().parse())
-          >>
-        char!('u')                  >>
-        char!('6')                  >>
-        char!('4')                  >>
+        n: map_res!(int_str, |s: String| u64::from_str(&s)) >>
+        tag!("u64")                 >>
         delim_or_end                >>
         ({
             let mut u64i = vec![];
-            u64i.write_u64::<BigEndian>(int).unwrap();
+            u64i.write_u64::<BigEndian>(n).unwrap();
             u64i
         })));
 
 named!(int8<Vec<u8>>,
     do_parse!(
-        sign: alt!(char!('+') | char!('-')) >>
-        int: map_res!(
-          take_while1!(is_digit),
-          |v| (sign.to_string()+ str::from_utf8(v).unwrap()).parse())
-          >>
-        char!('i')                  >>
-        char!('8')                  >>
+        n: map_res!(int_str, |s: String| i8::from_str(&s)) >>
+        tag!("i8")                  >>
         delim_or_end                >>
         ({
             let mut i8 = vec![];
-            i8.write_i8(int).unwrap();
-            i8[0] ^= 1u8 << 7;
-            i8
-        })));
-
-named!(int8p<Vec<u8>>,
-    do_parse!(
-        int: map_res!(
-          take_while1!(is_digit),
-          |v| str::from_utf8(v).unwrap().parse())
-          >>
-        char!('i')                  >>
-        char!('8')                  >>
-        delim_or_end                >>
-        ({
-            let mut i8 = vec![];
-            i8.write_i8(int).unwrap();
+            i8.write_i8(n).unwrap();
             i8[0] ^= 1u8 << 7;
             i8
         })));
 
 named!(int16<Vec<u8>>,
     do_parse!(
-        sign: alt!(char!('+') | char!('-')) >>
-        int: map_res!(
-          take_while1!(is_digit),
-          |v| (sign.to_string()+ str::from_utf8(v).unwrap()).parse())
-          >>
-        char!('i')                  >>
-        char!('1')                  >>
-        char!('6')                  >>
+        n: map_res!(int_str, |s: String| i16::from_str(&s)) >>
+        tag!("i16")                 >>
         delim_or_end                >>
         ({
             let mut i16 = vec![];
-            i16.write_i16::<BigEndian>(int).unwrap();
-            i16[0] ^= 1u8 << 7;
-            i16
-        })));
-
-named!(int16p<Vec<u8>>,
-    do_parse!(
-        int: map_res!(
-          take_while1!(is_digit),
-          |v| str::from_utf8(v).unwrap().parse())
-          >>
-        char!('i')                  >>
-        char!('1')                  >>
-        char!('6')                  >>
-        delim_or_end                >>
-        ({
-            let mut i16 = vec![];
-            i16.write_i16::<BigEndian>(int).unwrap();
+            i16.write_i16::<BigEndian>(n).unwrap();
             i16[0] ^= 1u8 << 7;
             i16
         })));
 
 named!(int32<Vec<u8>>,
     do_parse!(
-        sign: alt!(char!('+') | char!('-')) >>
-        int: map_res!(
-          take_while1!(is_digit),
-          |v| (sign.to_string()+ str::from_utf8(v).unwrap()).parse())
-          >>
-        char!('i')                  >>
-        char!('3')                  >>
-        char!('2')                  >>
+        n: map_res!(int_str, |s: String| i32::from_str(&s)) >>
+        tag!("i32")                 >>
         delim_or_end                >>
         ({
             let mut i32 = vec![];
-            i32.write_i32::<BigEndian>(int).unwrap();
-            i32[0] ^= 1u8 << 7;
-            i32
-        })));
-
-named!(int32p<Vec<u8>>,
-    do_parse!(
-        int: map_res!(
-          take_while1!(is_digit),
-          |v| str::from_utf8(v).unwrap().parse())
-          >>
-        char!('i')                  >>
-        char!('3')                  >>
-        char!('2')                  >>
-        delim_or_end                >>
-        ({
-            let mut i32 = vec![];
-            i32.write_i32::<BigEndian>(int).unwrap();
+            i32.write_i32::<BigEndian>(n).unwrap();
             i32[0] ^= 1u8 << 7;
             i32
         })));
 
 named!(int64<Vec<u8>>,
     do_parse!(
-        sign: alt!(char!('+') | char!('-')) >>
-        int: map_res!(
-          take_while1!(is_digit),
-          |v| (sign.to_string()+ str::from_utf8(v).unwrap()).parse())
-          >>
-        char!('i')                  >>
-        char!('6')                  >>
-        char!('4')                  >>
+        n: map_res!(int_str, |s: String| i64::from_str(&s)) >>
+        tag!("i64")                 >>
         delim_or_end                >>
         ({
             let mut i64 = vec![];
-            i64.write_i64::<BigEndian>(int).unwrap();
-            i64[0] ^= 1u8 << 7;
-            i64
-        })));
-
-named!(int64p<Vec<u8>>,
-    do_parse!(
-        int: map_res!(
-          take_while1!(is_digit),
-          |v| str::from_utf8(v).unwrap().parse())
-          >>
-        char!('i')                  >>
-        char!('6')                  >>
-        char!('4')                  >>
-        delim_or_end                >>
-        ({
-            let mut i64 = vec![];
-            i64.write_i64::<BigEndian>(int).unwrap();
+            i64.write_i64::<BigEndian>(n).unwrap();
             i64[0] ^= 1u8 << 7;
             i64
         })));
@@ -398,8 +299,7 @@ named!(uint<Vec<u8>>,
 
 named!(int_sized<Vec<u8>>,
     do_parse!(
-        int: alt!(u8int | int8 | int8p | u16int | int16 | int16p | u32int | int32 | int32p |
-                  u64int | int64 | int64p ) >>
+        int: alt!(u8int | int8 | u16int | int16 | u32int | int32 | u64int | int64 ) >>
             (sized_vec(int))));
 
 named!(float32<Vec<u8>>,
@@ -408,9 +308,7 @@ named!(float32<Vec<u8>>,
            left: take_while1!(is_digit)  >>
            char!('.')                    >>
            right: take_while1!(is_digit) >>
-           char!('f')                    >>
-           char!('3')                    >>
-           char!('2')                    >>
+           tag!("f32")                   >>
            delim_or_end                  >>
                ({
                    let mut bytes = vec![];
@@ -436,9 +334,7 @@ named!(float64<Vec<u8>>,
                left: take_while1!(is_digit)  >>
                char!('.')                    >>
                right: take_while1!(is_digit) >>
-               char!('f')                    >>
-               char!('6')                    >>
-               char!('4')                    >>
+               tag!("f64")                   >>
                delim_or_end                  >>
                ({
                    let mut bytes = vec![];
