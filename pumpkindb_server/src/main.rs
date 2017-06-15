@@ -15,12 +15,11 @@ extern crate memmap;
 #[macro_use]
 extern crate log;
 extern crate log4rs;
-extern crate lmdb_zero as lmdb;
 extern crate mio;
 
 extern crate pumpkindb_mio_server as server;
 
-use pumpkindb_engine::{script, storage, timestamp};
+use pumpkindb_engine::{script, storage, timestamp, lmdb};
 use pumpkindb_engine::script::dispatcher;
 use pumpkindb_engine::messaging;
 

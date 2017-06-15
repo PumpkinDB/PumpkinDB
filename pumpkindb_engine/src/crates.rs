@@ -18,7 +18,7 @@ extern crate num_bigint;
 extern crate num_iter;
 extern crate num_traits;
 extern crate snowflake;
-extern crate lmdb_zero as lmdb;
+pub extern crate lmdb_zero as lmdb;
 #[cfg(test)]
 extern crate tempdir;
 #[cfg(test)]
