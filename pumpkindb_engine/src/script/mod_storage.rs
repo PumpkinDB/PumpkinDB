@@ -570,6 +570,7 @@ impl<'a> Handler<'a> {
 mod tests {
     use pumpkinscript::{parse, offset_by_size};
     use messaging;
+    use nvmem::{MmapedFile, MmapedRegion, NonVolatileMemory};
     use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, dispatcher};
 
     use byteorder::WriteBytesExt;
@@ -630,7 +631,9 @@ mod tests {
             builder.set_mapsize(1024 * 1024 * 1024).expect("can't set mapsize");
             builder.open(path, lmdb::open::NOTLS, 0o600).expect("can't open env")
         };
-        let timestamp = timestamp::Timestamp::new(None);
+        let mut nvmem = MmapedFile::new_anonymous(20).unwrap();
+        let region = nvmem.claim(20).unwrap();
+        let timestamp = Arc::new(timestamp::Timestamp::new(region));
         let db = storage::Storage::new(&env);
         b.iter(move || {
             let mut timestamps = Vec::new();

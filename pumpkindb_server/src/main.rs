@@ -11,7 +11,6 @@ extern crate lazy_static;
 extern crate config;
 extern crate pumpkindb_engine;
 extern crate num_cpus;
-extern crate memmap;
 #[macro_use]
 extern crate log;
 extern crate log4rs;
@@ -24,7 +23,6 @@ use pumpkindb_engine::script::dispatcher;
 use pumpkindb_engine::messaging;
 
 use clap::{App, Arg};
-use memmap::{Mmap, Protection};
 
 use std::thread;
 
@@ -53,25 +51,7 @@ lazy_static! {
  };
 }
 
-/// Accepts storage path, filename and length and prepares the file. It is important that the length
-/// is the total length of the memory mapped file, otherwise the application _will segfault_ when
-/// trying to read those sections later. There is no way to handle that.
-/// The mmap file is structured as such now:
-/// Byte Range         Used for
-/// [0..20]            Last known HTC timestamp
-fn prepare_mmap(storage_path: &str, filename: &str, length: u64) -> Mmap {
-    let mut scratchpad_pathbuf = PathBuf::from(storage_path);
-    scratchpad_pathbuf.push(filename);
-    scratchpad_pathbuf.set_extension("dat");
-    let scratchpad_path = scratchpad_pathbuf.as_path();
-    let scratchpad_file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .open(scratchpad_path)
-        .expect("Could not open or create scratchpad");
-    let _ = scratchpad_file.set_len(length);
-    Mmap::open_path(scratchpad_path, Protection::ReadWrite).expect("Could not open scratchpad")
-}
+use pumpkindb_engine::nvmem::{MmapedFile, MmapedRegion};
 
 pub fn main() {
     let args = App::new("PumpkinDB Server")
@@ -95,10 +75,11 @@ pub fn main() {
     let storage_path = config::get_str("storage.path").unwrap().into_owned();
     fs::create_dir_all(storage_path.as_str()).expect("can't create directory");
 
-    // Initialize Mmap
-    let scratchpad = prepare_mmap(storage_path.as_str(), "scratchpad", 20);
-    let mut hlc_state = scratchpad.into_view_sync();
-    hlc_state.restrict(0, 20).expect("Could not prepare HLC state");
+    let mut nvmem_pathbuf = PathBuf::from(storage_path);
+    nvmem_pathbuf.push("nvmem");
+    nvmem_pathbuf.set_extension("dat");
+    let mut nvmem = MmapedFile::new(nvmem_pathbuf, 20).unwrap();
+    let nvmem_hlc = nvmem.claim(20).unwrap();
 
     // Initialize logging
     let log_config = config::get_str("logging.config");
@@ -136,14 +117,14 @@ pub fn main() {
     let subscriber_accessor = client_messaging.accessor();
     let _ = thread::spawn(move || client_messaging.run());
     let storage = Arc::new(storage::Storage::new(&ENVIRONMENT));
-    let timestamp = Arc::new(timestamp::Timestamp::new(Some(hlc_state)));
+    let timestamp = Arc::new(timestamp::Timestamp::new(nvmem_hlc));
 
     let cpus = num_cpus::get();
     info!("Starting {} schedulers", cpus);
     for i in 0..cpus {
         debug!("Starting scheduler on core {}.", i);
         let (sender, receiver) = script::Scheduler::<dispatcher::StandardDispatcher<
-            messaging::SimpleAccessor, messaging::SimpleAccessor>>::create_sender();
+            messaging::SimpleAccessor, messaging::SimpleAccessor, MmapedRegion>>::create_sender();
         let storage_clone = storage.clone();
         let timestamp_clone = timestamp.clone();
 

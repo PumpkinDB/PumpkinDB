@@ -23,13 +23,14 @@ use hlc;
 use std::marker::PhantomData;
 use byteorder::{BigEndian, WriteBytesExt};
 use std::sync::Arc;
+use super::super::nvmem::NonVolatileMemory;
 
-pub struct Handler<'a> {
+pub struct Handler<'a, N> where N : NonVolatileMemory {
     phantom: PhantomData<&'a ()>,
-    timestamp: Arc<timestamp::Timestamp>,
+    timestamp: Arc<timestamp::Timestamp<N>>,
 }
 
-impl<'a> Dispatcher<'a> for Handler<'a> {
+impl<'a, N> Dispatcher<'a> for Handler<'a, N> where N : NonVolatileMemory {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
         try_instruction!(env, self.handle_hlc(env, instruction, pid));
         try_instruction!(env, self.handle_hlc_lc(env, instruction, pid));
@@ -40,8 +41,8 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
     }
 }
 
-impl<'a> Handler<'a> {
-    pub fn new(timestamp_state: Arc<timestamp::Timestamp>) -> Self {
+impl<'a, N> Handler<'a, N> where N : NonVolatileMemory {
+    pub fn new(timestamp_state: Arc<timestamp::Timestamp<N>>) -> Self {
         Handler {
             phantom: PhantomData,
             timestamp: timestamp_state,

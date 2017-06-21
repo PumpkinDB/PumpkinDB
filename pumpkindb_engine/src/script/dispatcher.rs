@@ -95,8 +95,11 @@ macro_rules! for_each_dispatcher {
     }};
 }
 
-pub struct StandardDispatcher<'a, P: 'a, S: 'a>
-    where P : messaging::Publisher, S : messaging::Subscriber
+use super::super::nvmem::NonVolatileMemory;
+
+pub struct StandardDispatcher<'a, P: 'a, S: 'a, N: 'a>
+    where P : messaging::Publisher, S : messaging::Subscriber,
+          N : NonVolatileMemory
 {
     #[cfg(feature = "mod_core")]
     core: mod_core::Handler<'a>,
@@ -111,7 +114,7 @@ pub struct StandardDispatcher<'a, P: 'a, S: 'a>
     #[cfg(feature = "mod_hash")]
     hash: mod_hash::Handler<'a>,
     #[cfg(feature = "mod_hlc")]
-    hlc: mod_hlc::Handler<'a>,
+    hlc: mod_hlc::Handler<'a, N>,
     #[cfg(feature = "mod_json")]
     json: mod_json::Handler<'a>,
     #[cfg(feature = "mod_msg")]
@@ -122,12 +125,14 @@ pub struct StandardDispatcher<'a, P: 'a, S: 'a>
     string: mod_string::Handler<'a>
 }
 
-impl<'a, P: 'a, S: 'a> StandardDispatcher<'a, P, S>
-    where P : messaging::Publisher, S : messaging::Subscriber {
+
+impl<'a, P: 'a, S: 'a, N: 'a> StandardDispatcher<'a, P, S, N>
+    where P : messaging::Publisher, S : messaging::Subscriber,
+          N : NonVolatileMemory {
 
     pub fn new(db: &'a storage::Storage<'a>,
                publisher: P, subscriber: S,
-               timestamp_state: Arc<timestamp::Timestamp>)
+               timestamp_state: Arc<timestamp::Timestamp<N>>)
                -> Self {
         StandardDispatcher {
                 #[cfg(feature = "mod_core")]
@@ -156,8 +161,8 @@ impl<'a, P: 'a, S: 'a> StandardDispatcher<'a, P, S>
     }
 }
 
-impl<'a, P: 'a, S: 'a> Dispatcher<'a> for StandardDispatcher<'a, P, S>
-    where P : messaging::Publisher, S : messaging::Subscriber {
+impl<'a, P: 'a, S: 'a, N: 'a> Dispatcher<'a> for StandardDispatcher<'a, P, S, N>
+    where P : messaging::Publisher, S : messaging::Subscriber, N : NonVolatileMemory {
     fn init(&mut self, env: &mut Env<'a>, pid: EnvId) {
         for_each_dispatcher!(disp, self, disp.init(env, pid));
     }

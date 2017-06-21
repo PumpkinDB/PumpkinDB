@@ -16,3 +16,4 @@ pub mod script;
 pub mod messaging;
 pub mod storage;
 pub mod timestamp;
+pub mod nvmem;
