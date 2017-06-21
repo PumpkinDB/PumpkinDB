@@ -106,6 +106,7 @@ mod tests {
     use crossbeam;
     use storage;
     use timestamp;
+    use nvmem::{MmapedFile, MmapedRegion, NonVolatileMemory};
 
     use std::time::Duration;
 

@@ -491,6 +491,7 @@ mod tests {
 
     use pumpkinscript::{parse, offset_by_size};
     use messaging;
+    use nvmem::{MmapedFile, MmapedRegion, NonVolatileMemory};
     use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, dispatcher};
     use std::sync::mpsc;
     use std::sync::Arc;

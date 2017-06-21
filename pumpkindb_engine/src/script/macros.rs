@@ -260,7 +260,9 @@ macro_rules! eval {
 
             let db = storage::Storage::new(&env);
             crossbeam::scope(|scope| {
-                let timestamp = Arc::new(timestamp::Timestamp::new(None));
+                let mut nvmem = MmapedFile::new_anonymous(20).unwrap();
+                let region = nvmem.claim(20).unwrap();
+                let timestamp = Arc::new(timestamp::Timestamp::new(region));
                 let mut simple = messaging::Simple::new();
                 let messaging_accessor = simple.accessor();
                 let publisher_thread = scope.spawn(move || simple.run());
@@ -268,7 +270,7 @@ macro_rules! eval {
                 let subscriber_clone = messaging_accessor.clone();
                 let timestamp_clone = timestamp.clone();
                 let (sender, receiver) = Scheduler::<dispatcher::StandardDispatcher<
-                    messaging::SimpleAccessor, messaging::SimpleAccessor>>::create_sender();
+                    messaging::SimpleAccessor, messaging::SimpleAccessor, MmapedRegion, >>::create_sender();
                 let handle = scope.spawn(move || {
                     let mut scheduler = Scheduler::new(
                         dispatcher::StandardDispatcher::new(&db,
@@ -338,7 +340,9 @@ macro_rules! bench_eval {
                 let messaging_accessor = simple.accessor();
                 let messaging_accessor_ = simple.accessor();
                 let simple_thread = scope.spawn(move || simple.run());
-                let timestamp = Arc::new(timestamp::Timestamp::new(None));
+                let mut nvmem = MmapedFile::new_anonymous(20).unwrap();
+                let region = nvmem.claim(20).unwrap();
+                let timestamp = Arc::new(timestamp::Timestamp::new(region));
 
                 let mut handles = vec![];
                 let mut senders = vec![];
@@ -347,7 +351,7 @@ macro_rules! bench_eval {
                     let subscriber_clone = messaging_accessor.clone();
                     let timestamp_clone = timestamp.clone();
                     let (sender, receiver) = Scheduler::<dispatcher::StandardDispatcher<
-                        messaging::SimpleAccessor, messaging::SimpleAccessor>>::create_sender();
+                        messaging::SimpleAccessor, messaging::SimpleAccessor, MmapedRegion, >>::create_sender();
                     let storage = db.clone();
                     let handle = scope.spawn(move || {
                         let mut scheduler = Scheduler::new(

@@ -29,9 +29,9 @@ use tempdir::TempDir;
 
 use pumpkindb_engine::script::{RequestMessage, ResponseMessage, EnvId, Env, Scheduler, dispatcher};
 use pumpkinscript::{textparser, binparser};
-use pumpkindb_engine::{messaging, storage, timestamp};
+use pumpkindb_engine::{messaging, storage, timestamp, nvmem};
 
-fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp>) {
+fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp<nvmem::MmapedRegion>>) {
     let dir = TempDir::new("pumpkindb").unwrap();
     let path = dir.path().to_str().unwrap();
     fs::create_dir_all(path).expect("can't create directory");
@@ -51,7 +51,7 @@ fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp>) {
         let subscriber_clone = simple_accessor.clone();
         let timestamp_clone = timestamp.clone();
         let (sender, receiver) = Scheduler::<dispatcher::StandardDispatcher<
-            messaging::SimpleAccessor, messaging::SimpleAccessor>>::create_sender();
+            messaging::SimpleAccessor, messaging::SimpleAccessor, nvmem::MmapedRegion>>::create_sender();
         let handle = scope.spawn(move || {
             let mut scheduler = Scheduler::new(
                 dispatcher::StandardDispatcher::new(&db, publisher_clone, subscriber_clone,
@@ -96,7 +96,9 @@ fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp>) {
 }
 
 fn main() {
-    let timestamp = Arc::new(timestamp::Timestamp::new(None));
+    let mut nvmem_mmap = nvmem::MmapedFile::new_anonymous(20).unwrap();
+    let nvmem_region = nvmem_mmap.claim(20).unwrap();
+    let timestamp = Arc::new(timestamp::Timestamp::new(nvmem_region));
     let re = Regex::new(r"```test\r?\n((.+(\r?\n)*)+)```").unwrap();
     for entry in glob("doc/script/**/*.md").expect("Failed to read glob pattern") {
         match entry {
