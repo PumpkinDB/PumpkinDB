@@ -370,7 +370,7 @@ named!(string<Vec<u8>>,  alt!(do_parse!(tag!(b"\"\"") >> (vec![0])) |
                               (string_to_vec(str)))));
 named!(comment<Vec<u8>>, do_parse!(delimited!(char!('('), opt!(is_not!(")")), char!(')')) >>
                                (vec![])));
-named!(item<Vec<u8>>, alt!(comment | binary | string | uint | sint | int_sized | float32 |
+named!(item<Vec<u8>>, alt!(comment | uint | binary | string | sint | int_sized | float32 |
                            float64 | wrap | instructionref | instruction));
 
 fn unwrap_instruction(mut instruction: Vec<u8>) -> Vec<u8> {
