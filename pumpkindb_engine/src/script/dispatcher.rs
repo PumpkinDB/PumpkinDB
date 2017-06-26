@@ -182,7 +182,7 @@ mod tests {
 
   use pumpkinscript::parse;
   use script::{Env, EnvId, PassResult,
-               Scheduler, Error, RequestMessage, ResponseMessage,
+               Scheduler, SchedulerHandle, Error, RequestMessage, ResponseMessage,
                Dispatcher};
   use std::sync::mpsc;
   use crossbeam;
@@ -225,8 +225,7 @@ mod tests {
           let script = parse("TEST").unwrap();
           let (callback, receiver) = mpsc::channel::<ResponseMessage>();
           let (sender0, _) = mpsc::channel();
-          let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(), script.clone(),
-                                                          callback, Box::new(sender0)));
+          sender.schedule_env(EnvId::new(), script.clone(), callback, Box::new(sender0));
           match receiver.recv() {
               Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
                   // terminated without an error
@@ -247,7 +246,7 @@ mod tests {
                   panic!("recv error: {:?}", err);
              }
          }
-         let _ = sender_.send(RequestMessage::Shutdown);
+         sender_.shutdown();
          let _ = handle.join();
     });
   }
