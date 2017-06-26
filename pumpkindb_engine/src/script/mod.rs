@@ -275,7 +275,7 @@ pub struct Scheduler<'a, T : Dispatcher<'a>> {
 
 unsafe impl<'a, T : Dispatcher<'a>> Send for Scheduler<'a, T> {}
 
-type PassResult<'a> = Result<(), Error>;
+pub type PassResult<'a> = Result<(), Error>;
 
 const STACK_TRUE: &'static [u8] = b"\x01";
 const STACK_FALSE: &'static [u8] = b"\x00";
