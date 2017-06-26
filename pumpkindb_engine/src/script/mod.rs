@@ -203,12 +203,10 @@ pub mod mod_string;
 /// # Example
 ///
 /// ```norun
-/// let mut scheduler = Scheduler::new(dispatcher, receiver);
+/// let (mut scheduler, sender) = Scheduler::new(dispatcher);
 ///
-/// let sender = scheduler.sender();
-/// let handle = thread::spawn(move || {
-///     scheduler.run();
-/// });
+/// let handle = thread::spawn(move || scheduler.run());
+///
 /// let script = parse("..script..");
 /// let (callback, receiver) = mpsc::channel::<ResponseMessage>();
 /// let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(), script.clone(), callback));
@@ -261,19 +259,14 @@ use std::sync::Arc;
 use pumpkinscript::{binparser};
 
 impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
-    /// Creates an instance of Scheduler with three communication channels:
-    pub fn new(dispatcher: T,
-               receiver: Receiver<RequestMessage>)
-               -> Self {
-        Scheduler::<'a, T> {
-            inbox: receiver,
+    /// Creates an instance of Scheduler and a Sender
+    pub fn new(dispatcher: T) -> (Self, Sender<RequestMessage>) {
+        let (tx, rx) = mpsc::channel::<RequestMessage>();
+        (Scheduler::<'a, T> {
+            inbox: rx,
             dispatcher: dispatcher,
             phantom: PhantomData,
-        }
-    }
-
-    pub fn create_sender() -> (Sender<RequestMessage>, Receiver<RequestMessage>) {
-        mpsc::channel::<RequestMessage>()
+        }, tx)
     }
 
     /// Scheduler. It is supposed to be running in a separate thread

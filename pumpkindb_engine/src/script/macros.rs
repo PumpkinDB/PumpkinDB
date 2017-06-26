@@ -258,7 +258,7 @@ macro_rules! eval {
                     .expect("can't open env")
             };
 
-            let db = storage::Storage::new(&env);
+            let db = Arc::new(storage::Storage::new(&env));
             crossbeam::scope(|scope| {
                 let mut nvmem = MmapedFile::new_anonymous(20).unwrap();
                 let region = nvmem.claim(20).unwrap();
@@ -269,16 +269,10 @@ macro_rules! eval {
                 let publisher_clone = messaging_accessor.clone();
                 let subscriber_clone = messaging_accessor.clone();
                 let timestamp_clone = timestamp.clone();
-                let (sender, receiver) = Scheduler::<dispatcher::StandardDispatcher<
-                    messaging::SimpleAccessor, messaging::SimpleAccessor, MmapedRegion, >>::create_sender();
-                let handle = scope.spawn(move || {
-                    let mut scheduler = Scheduler::new(
-                        dispatcher::StandardDispatcher::new(&db,
-                          publisher_clone.clone(), subscriber_clone.clone(),
-                          timestamp_clone),
-                        receiver);
-                    scheduler.run()
-                });
+                let (mut scheduler, sender) = Scheduler::new(
+                    dispatcher::StandardDispatcher::new(db.clone(), publisher_clone.clone(), subscriber_clone.clone(),
+                    timestamp_clone));
+                let handle = scope.spawn(move || scheduler.run());
                 let script = parse($script).unwrap();
                 let (callback, receiver) = mpsc::channel::<ResponseMessage>();
                 let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(),
@@ -350,17 +344,11 @@ macro_rules! bench_eval {
                     let publisher_clone = messaging_accessor.clone();
                     let subscriber_clone = messaging_accessor.clone();
                     let timestamp_clone = timestamp.clone();
-                    let (sender, receiver) = Scheduler::<dispatcher::StandardDispatcher<
-                        messaging::SimpleAccessor, messaging::SimpleAccessor, MmapedRegion, >>::create_sender();
+                    let (mut scheduler, sender) = Scheduler::new(
+                        dispatcher::StandardDispatcher::new(db.clone(), publisher_clone.clone(), subscriber_clone.clone(),
+                        timestamp_clone));
                     let storage = db.clone();
-                    let handle = scope.spawn(move || {
-                        let mut scheduler = Scheduler::new(
-                            dispatcher::StandardDispatcher::new(&storage,
-                               publisher_clone, subscriber_clone, timestamp_clone),
-                            receiver,
-                        );
-                        scheduler.run()
-                    });
+                    let handle = scope.spawn(move || scheduler.run());
                     handles.push(handle);
                     senders.push(sender.clone());
                 }
