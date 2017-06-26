@@ -97,9 +97,9 @@ macro_rules! for_each_dispatcher {
 
 use super::super::nvmem::NonVolatileMemory;
 
-pub struct StandardDispatcher<'a, P: 'a, S: 'a, N: 'a>
+pub struct StandardDispatcher<'a, P: 'a, S: 'a, N: 'a, T>
     where P : messaging::Publisher, S : messaging::Subscriber,
-          N : NonVolatileMemory
+          N : NonVolatileMemory, T : AsRef<storage::Storage<'a>> + 'a
 {
     #[cfg(feature = "mod_core")]
     core: mod_core::Handler<'a>,
@@ -110,7 +110,7 @@ pub struct StandardDispatcher<'a, P: 'a, S: 'a, N: 'a>
     #[cfg(feature = "mod_numbers")]
     numbers: mod_numbers::Handler<'a>,
     #[cfg(feature = "mod_storage")]
-    storage: mod_storage::Handler<'a>,
+    storage: mod_storage::Handler<'a, T>,
     #[cfg(feature = "mod_hash")]
     hash: mod_hash::Handler<'a>,
     #[cfg(feature = "mod_hlc")]
@@ -126,11 +126,11 @@ pub struct StandardDispatcher<'a, P: 'a, S: 'a, N: 'a>
 }
 
 
-impl<'a, P: 'a, S: 'a, N: 'a> StandardDispatcher<'a, P, S, N>
+impl<'a, P: 'a, S: 'a, N: 'a, T> StandardDispatcher<'a, P, S, N, T>
     where P : messaging::Publisher, S : messaging::Subscriber,
-          N : NonVolatileMemory {
+          N : NonVolatileMemory, T : AsRef<storage::Storage<'a>> + 'a {
 
-    pub fn new(db: &'a storage::Storage<'a>,
+    pub fn new(db: T,
                publisher: P, subscriber: S,
                timestamp_state: Arc<timestamp::Timestamp<N>>)
                -> Self {
@@ -161,8 +161,9 @@ impl<'a, P: 'a, S: 'a, N: 'a> StandardDispatcher<'a, P, S, N>
     }
 }
 
-impl<'a, P: 'a, S: 'a, N: 'a> Dispatcher<'a> for StandardDispatcher<'a, P, S, N>
-    where P : messaging::Publisher, S : messaging::Subscriber, N : NonVolatileMemory {
+impl<'a, P: 'a, S: 'a, N: 'a, T> Dispatcher<'a> for StandardDispatcher<'a, P, S, N, T>
+    where P : messaging::Publisher, S : messaging::Subscriber, N : NonVolatileMemory,
+          T : AsRef<storage::Storage<'a>> + 'a {
     fn init(&mut self, env: &mut Env<'a>, pid: EnvId) {
         for_each_dispatcher!(disp, self, disp.init(env, pid));
     }
@@ -217,12 +218,9 @@ mod tests {
   #[test]
   pub fn dynamic_dispatch() {
       crossbeam::scope(|scope| {
-          let (sender, receiver) = Scheduler::<Vec<Box<Dispatcher>>>::create_sender();
-          let handle = scope.spawn(move || {
-              let dispatchers: Vec<Box<Dispatcher>> = vec![Box::new(MyDispatcher::new())];
-              let mut scheduler = Scheduler::new(dispatchers, receiver);
-              scheduler.run()
-          });
+          let dispatchers: Vec<Box<Dispatcher>> = vec![Box::new(MyDispatcher::new())];
+          let (mut scheduler, sender) = Scheduler::new(dispatchers);
+          let handle = scope.spawn(move || scheduler.run() );
           let sender_ = sender.clone();
           let script = parse("TEST").unwrap();
           let (callback, receiver) = mpsc::channel::<ResponseMessage>();

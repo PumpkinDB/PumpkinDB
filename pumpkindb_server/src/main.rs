@@ -20,7 +20,6 @@ extern crate pumpkindb_mio_server as server;
 
 use pumpkindb_engine::{script, storage, timestamp, lmdb};
 use pumpkindb_engine::script::dispatcher;
-use pumpkindb_engine::messaging;
 
 use clap::{App, Arg};
 
@@ -123,24 +122,14 @@ pub fn main() {
     info!("Starting {} schedulers", cpus);
     for i in 0..cpus {
         debug!("Starting scheduler on core {}.", i);
-        let (sender, receiver) = script::Scheduler::<dispatcher::StandardDispatcher<
-            messaging::SimpleAccessor, messaging::SimpleAccessor, MmapedRegion>>::create_sender();
-        let storage_clone = storage.clone();
-        let timestamp_clone = timestamp.clone();
 
-        let publisher_accessor1 = publisher_accessor.clone();
-        let subscriber_accessor1 = subscriber_accessor.clone();
-
-        thread::spawn(move || {
-            let mut scheduler =
-                script::Scheduler::new(
-                    dispatcher::StandardDispatcher::new(&storage_clone,
-                                                        publisher_accessor1, subscriber_accessor1,
-                                                        timestamp_clone),
-                    receiver);
-            scheduler.run()
-        });
-        senders.push(sender)
+        let (mut scheduler, sender) =
+            script::Scheduler::new(
+                dispatcher::StandardDispatcher::new(storage.clone(),
+                                                    publisher_accessor.clone(), subscriber_accessor.clone(),
+                                                    timestamp.clone()));
+        thread::spawn(move || scheduler.run());
+        senders.push(sender);
     }
 
     server::run(config::get_int("server.port").unwrap(),

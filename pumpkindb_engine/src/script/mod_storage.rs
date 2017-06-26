@@ -103,8 +103,8 @@ impl<'a> Txn<'a> {
     }
 }
 
-pub struct Handler<'a> {
-    db: &'a storage::Storage<'a>,
+pub struct Handler<'a, T : AsRef<storage::Storage<'a>> + 'a> {
+    db: T,
     txns: HashMap<EnvId, Vec<Txn<'a>>>,
     cursors: BTreeMap<(EnvId, Vec<u8>), (TxType, lmdb::Cursor<'a, 'a>)>,
     maxkeysize: Vec<u8>,
@@ -176,7 +176,7 @@ macro_rules! cursor_map_op {
 
 builtins!("mod_storage.builtins");
 
-impl<'a> Dispatcher<'a> for Handler<'a> {
+impl<'a, T : AsRef<storage::Storage<'a>> + 'a> Dispatcher<'a> for Handler<'a, T> {
     fn done(&mut self, _: &mut Env, pid: EnvId) {
         self.txns.get_mut(&pid)
             .and_then(|vec| {
@@ -210,9 +210,9 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
     }
 }
 
-impl<'a> Handler<'a> {
-    pub fn new(db: &'a storage::Storage<'a>) -> Self {
-        let maxkeysize = BigUint::from_u32(db.env.maxkeysize()).unwrap().to_bytes_be();
+impl<'a, T : AsRef<storage::Storage<'a>> + 'a> Handler<'a, T> {
+    pub fn new(db: T) -> Self {
+        let maxkeysize = BigUint::from_u32(db.as_ref().env.maxkeysize()).unwrap().to_bytes_be();
         Handler {
             db: db,
             txns: HashMap::new(),
@@ -238,7 +238,7 @@ impl<'a> Handler<'a> {
                                "".as_bytes(),
                                ERROR_DATABASE));
                 }
-                match self.db.write() {
+                match self.db.as_ref().write() {
                     None => Err(Error::Reschedule),
                     Some(result) =>
                         match result {
@@ -279,7 +279,7 @@ impl<'a> Handler<'a> {
         match instruction {
             READ => {
                 let v = stack_pop!(env);
-                match self.db.read() {
+                match self.db.as_ref().read() {
                     None => Err(Error::Reschedule),
                     Some(result) =>
                         match result {
@@ -330,7 +330,7 @@ impl<'a> Handler<'a> {
 
                 let mut access = txn.access();
 
-                match access.put(&self.db.db, key, value, lmdb::put::NOOVERWRITE) {
+                match access.put(&self.db.as_ref().db, key, value, lmdb::put::NOOVERWRITE) {
                     Ok(_) => Ok(()),
                     Err(lmdb::Error::Code(code)) if lmdb::error::KEYEXIST == code => Err(error_duplicate_key!(key)),
                     Err(err) => Err(error_database!(err)),
@@ -376,7 +376,7 @@ impl<'a> Handler<'a> {
             .and_then(|v| Some(&v[v.len() - 1]))
             .and_then(|txn| Some(txn.access()))
             .map_or_else(|| Err(error_no_transaction!()), |acc| {
-                match acc.get::<[u8], [u8]>(&self.db.db, key) {
+                match acc.get::<[u8], [u8]>(&self.db.as_ref().db, key) {
                     Ok(Some(val)) => {
                         let slice = alloc_and_write!(val, env);
                         env.push(slice);
@@ -400,7 +400,7 @@ impl<'a> Handler<'a> {
             .and_then(|v| Some(&v[v.len() - 1]))
             .and_then(|txn| Some(txn.access()))
             .map_or_else(|| Err(error_no_transaction!()),  |acc| {
-                match acc.get::<[u8], [u8]>(&self.db.db, key) {
+                match acc.get::<[u8], [u8]>(&self.db.as_ref().db, key) {
                     Ok(Some(_)) => {
                         env.push(STACK_TRUE);
                         Ok(())
@@ -426,16 +426,17 @@ impl<'a> Handler<'a> {
 						 -> PassResult<'a> {
         use serde_cbor;
         instruction_is!(instruction, CURSOR);
+        let db = self.db.as_ref();
         let cursor = self.txns.get(&pid)
             .and_then(|v| Some(&v[v.len() - 1]))
-            .map(|txn| txn.cursor(&self.db.db));
+            .map(|txn| txn.cursor(&db.db));
         match cursor {
             Some(cursor) => {
                 match cursor {
                     Ok(cursor) => {
                         let id = CursorId::new();
                         let bytes = serde_cbor::to_vec(&id).unwrap();
-                        self.cursors.insert((pid.clone(), bytes.clone()), (tx_type!(self, pid), Handler::cast_away(cursor)));
+                        self.cursors.insert((pid.clone(), bytes.clone()), (tx_type!(self, pid), Handler::<T>::cast_away(cursor)));
                         let slice = alloc_and_write!(bytes.as_slice(), env);
                         env.push(slice);
                         Ok(())

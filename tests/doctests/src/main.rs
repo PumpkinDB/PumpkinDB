@@ -42,7 +42,7 @@ fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp<nvmem::M
             .expect("can't open env")
     };
     let name = String::from(std::str::from_utf8(name).unwrap());
-    let db = storage::Storage::new(&env);
+    let db = Arc::new(storage::Storage::new(&env));
     crossbeam::scope(|scope| {
         let mut simple = messaging::Simple::new();
         let simple_accessor = simple.accessor();
@@ -50,15 +50,10 @@ fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp<nvmem::M
         let publisher_clone = simple_accessor.clone();
         let subscriber_clone = simple_accessor.clone();
         let timestamp_clone = timestamp.clone();
-        let (sender, receiver) = Scheduler::<dispatcher::StandardDispatcher<
-            messaging::SimpleAccessor, messaging::SimpleAccessor, nvmem::MmapedRegion>>::create_sender();
-        let handle = scope.spawn(move || {
-            let mut scheduler = Scheduler::new(
-                dispatcher::StandardDispatcher::new(&db, publisher_clone, subscriber_clone,
-                                                    timestamp_clone),
-                receiver);
-            scheduler.run()
-        });
+        let (mut scheduler, sender) = Scheduler::new(
+            dispatcher::StandardDispatcher::new(db.clone(), publisher_clone, subscriber_clone,
+                                                timestamp_clone));
+        let handle = scope.spawn(move || scheduler.run());
         let (callback, receiver) = mpsc::channel::<ResponseMessage>();
         let (sender0, _) = mpsc::channel();
         let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(), Vec::from(script), callback,
