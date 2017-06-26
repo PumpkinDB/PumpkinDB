@@ -4,6 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+#[macro_export]
 macro_rules! builtins {
     ($file: expr) => {
     lazy_static! {
@@ -28,6 +29,7 @@ macro_rules! builtins {
     }};
 }
 
+#[macro_export]
 macro_rules! handle_builtins {
     () => {
         #[inline]
@@ -47,6 +49,7 @@ macro_rules! handle_builtins {
     };
 }
 
+#[macro_export]
 macro_rules! handle_error {
     ($env: expr, $err: expr) => {
        handle_error!($env, $err, Ok(()))
@@ -61,6 +64,7 @@ macro_rules! handle_error {
     }};
 }
 
+#[macro_export]
 macro_rules! try_instruction {
   ($env: expr, $handler : expr) => {
     match $handler {
@@ -72,6 +76,7 @@ macro_rules! try_instruction {
   };
 }
 
+#[macro_export]
 macro_rules! stack_pop {
     ($env: expr) => {
         match $env.pop() {
@@ -85,6 +90,7 @@ macro_rules! stack_pop {
     }
 }
 
+#[macro_export]
 macro_rules! instruction_is {
     ($instruction: expr, $exp: expr) => {
         if $instruction != $exp {
@@ -93,6 +99,7 @@ macro_rules! instruction_is {
     };
 }
 
+#[macro_export]
 macro_rules! error_program {
     ($desc: expr, $details: expr, $code: expr) => {{
         let mut error = Vec::new();
@@ -113,6 +120,7 @@ macro_rules! error_program {
     }}
 }
 
+#[macro_export]
 macro_rules! error_database {
     ($err: expr) => {{
         let vec = Vec::new();
@@ -125,6 +133,7 @@ macro_rules! error_database {
     }}
 }
 
+#[macro_export]
 macro_rules! error_no_transaction {
     () => {{
         let vec = Vec::new();
@@ -136,6 +145,7 @@ macro_rules! error_no_transaction {
     }}
 }
 
+#[macro_export]
 macro_rules! error_unknown_key {
     ($key: expr) => {{
         error_program!(
@@ -146,6 +156,7 @@ macro_rules! error_unknown_key {
     }}
 }
 
+#[macro_export]
 macro_rules! error_duplicate_key {
     ($key: expr) => {{
         error_program!(
@@ -156,6 +167,7 @@ macro_rules! error_duplicate_key {
     }}
 }
 
+#[macro_export]
 macro_rules! error_decoding {
     () => {{
         let vec = Vec::new();
@@ -167,6 +179,7 @@ macro_rules! error_decoding {
     }}
 }
 
+#[macro_export]
 macro_rules! error_empty_stack {
     () => {{
         let vec = Vec::new();
@@ -178,6 +191,7 @@ macro_rules! error_empty_stack {
     }}
 }
 
+#[macro_export]
 macro_rules! error_invalid_value {
     ($value: expr) => {{
         error_program!(
@@ -188,6 +202,7 @@ macro_rules! error_invalid_value {
     }}
 }
 
+#[macro_export]
 macro_rules! error_no_value {
     () => {{
         let vec = Vec::new();
@@ -199,6 +214,7 @@ macro_rules! error_no_value {
     }}
 }
 
+#[macro_export]
 macro_rules! error_unknown_instruction {
     ($instruction: expr) => { {
         let (_, w) = binparser::instruction_or_internal_instruction($instruction).unwrap();
@@ -219,6 +235,7 @@ macro_rules! error_unknown_instruction {
     } }
 }
 
+#[macro_export]
 macro_rules! alloc_slice {
     ($size: expr, $env: expr) => {{
         let slice = $env.alloc($size);
@@ -229,6 +246,7 @@ macro_rules! alloc_slice {
     }};
 }
 
+#[macro_export]
 macro_rules! alloc_and_write {
     ($bytes: expr, $env: expr) => {{
         let slice = alloc_slice!($bytes.len(), $env);
