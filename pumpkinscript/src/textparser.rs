@@ -368,8 +368,12 @@ named!(string<Vec<u8>>,  alt!(do_parse!(tag!(b"\"\"") >> (vec![0])) |
                                          escaped!(is_not!("\"\\"), '\\', one_of!("\"n\\")),
                                          char!('"')) >>
                               (string_to_vec(str)))));
-named!(comment<Vec<u8>>, do_parse!(delimited!(char!('('), opt!(is_not!(")")), char!(')')) >>
-                               (vec![])));
+named!(comment_, do_parse!(
+                               char!('(')                            >>
+                               many0!(alt!(is_not!("()") | comment_ | is_not!(")"))) >>
+                               char!(')')                            >>
+                               (&[])));
+named!(comment<Vec<u8>>, do_parse!(comment_ >> (vec![])));
 named!(item<Vec<u8>>, alt!(comment | uint | binary | string | sint | int_sized | float32 |
                            float64 | wrap | instructionref | instruction));
 
@@ -553,6 +557,12 @@ mod tests {
     #[test]
     fn test_multiline_comment() {
         let script = parse("1 (hel\nlo) 2").unwrap();
+        assert_eq!(script, parse("1 2").unwrap());
+    }
+
+    #[test]
+    fn test_nested_comment() {
+        let script = parse("1 (he(l\n) (l)o) 2").unwrap();
         assert_eq!(script, parse("1 2").unwrap());
     }
 
