@@ -248,6 +248,7 @@ macro_rules! eval {
         }};
         ($script: expr, $env: ident, $result: ident, $sender: expr, $receiver: ident, $expr: expr) => {
           {
+            use $crate::script::SchedulerHandle;
             let dir = TempDir::new("pumpkindb").unwrap();
             let path = dir.path().to_str().unwrap();
             fs::create_dir_all(path).expect("can't create directory");
@@ -281,11 +282,11 @@ macro_rules! eval {
                 });
                 let script = parse($script).unwrap();
                 let (callback, receiver) = mpsc::channel::<ResponseMessage>();
-                let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(),
-                                    script.clone(), callback, Box::new($sender)));
+                sender.schedule_env(EnvId::new(),
+                                    script.clone(), callback, Box::new($sender));
                 match receiver.recv() {
                    Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
-                      let _ = sender.send(RequestMessage::Shutdown);
+                      sender.shutdown();
                       messaging_accessor.shutdown();
                       let $result = Ok::<(), Error>(());
                       let mut stack_ = Vec::with_capacity(stack.len());
@@ -296,7 +297,7 @@ macro_rules! eval {
                       $expr;
                    }
                    Ok(ResponseMessage::EnvFailed(_, err, stack, stack_size)) => {
-                      let _ = sender.send(RequestMessage::Shutdown);
+                      sender.shutdown();
                       messaging_accessor.shutdown();
                       let $result = Err::<(), Error>(err);
                       let stack = stack.unwrap();
@@ -308,7 +309,7 @@ macro_rules! eval {
                       $expr;
                    }
                    Err(err) => {
-                      let _ = sender.send(RequestMessage::Shutdown);
+                      sender.shutdown();
                       messaging_accessor.shutdown();
                       panic!("recv error: {:?}", err);
                    }
@@ -324,6 +325,7 @@ macro_rules! eval {
 macro_rules! bench_eval {
         ($script: expr, $b: expr) => {
           {
+            use $crate::script::SchedulerHandle;
             let dir = TempDir::new("pumpkindb").unwrap();
             let path = dir.path().to_str().unwrap();
             fs::create_dir_all(path).expect("can't create directory");
@@ -367,32 +369,25 @@ macro_rules! bench_eval {
                 let original_senders = senders.clone();
                 let script = parse($script).unwrap();
                 $b.iter(move || {
-                    let mut rng = ::rand::thread_rng();
-                    let s = senders.clone();
-                    let index: usize = rng.gen_range(0, s.len() - 1);
-                    let sender = s.get(index).unwrap();
-
                     let (callback, receiver) = mpsc::channel::<ResponseMessage>();
                     let (sender0, _) = mpsc::channel();
-                    let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(),
-                                        script.clone(), callback, Box::new(sender0)));
+                    let _ = senders.clone().schedule_env(EnvId::new(),
+                                           script.clone(), callback, Box::new(sender0));
                     match receiver.recv() {
                        Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => (),
                        Ok(ResponseMessage::EnvFailed(_, err, stack, stack_size)) => {
-                          let _ = sender.send(RequestMessage::Shutdown);
+                          senders.shutdown();
                           messaging_accessor.shutdown();
                           panic!("error: {:?}", err);
                        }
                        Err(err) => {
-                          let _ = sender.send(RequestMessage::Shutdown);
+                          senders.shutdown();
                           messaging_accessor.shutdown();
                           panic!("recv error: {:?}", err);
                        }
                     }
                 });
-                for s in original_senders {
-                   let _ = s.send(RequestMessage::Shutdown);
-                }
+                original_senders.shutdown();
                 messaging_accessor_.shutdown();
                 for handle in handles {
                    handle.join();

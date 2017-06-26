@@ -145,8 +145,44 @@ use std;
 
 pub type EnvId = ProcessUniqueId;
 
+pub trait SchedulerHandle {
+    fn schedule_env(&self, env_id: EnvId, program: Vec<u8>, response_sender: Sender<ResponseMessage>,
+                    published_message_callback: Box<messaging::PublishedMessageCallback + Send>);
+    fn shutdown(&self);
+}
+
 pub type Sender<T> = mpsc::Sender<T>;
 pub type Receiver<T> = mpsc::Receiver<T>;
+
+impl SchedulerHandle for Sender<RequestMessage> {
+    fn schedule_env(&self, env_id: EnvId, program: Vec<u8>, response_sender: Sender<ResponseMessage>,
+                    published_message_callback: Box<messaging::PublishedMessageCallback + Send>) {
+        let _ = self.send(RequestMessage::ScheduleEnv(env_id, program, response_sender, published_message_callback));
+    }
+
+    fn shutdown(&self) {
+        let _ = self.send(RequestMessage::Shutdown);
+    }
+}
+
+use rand::{thread_rng, Rng};
+
+impl<T : SchedulerHandle> SchedulerHandle for Vec<T> {
+    fn schedule_env(&self, env_id: EnvId, program: Vec<u8>, response_sender: Sender<ResponseMessage>, published_message_callback: Box<messaging::PublishedMessageCallback + Send>) {
+        let mut rng = thread_rng();
+        let index: usize = rng.gen_range(0, self.len() - 1);
+        match self.get(index) {
+            None => panic!("no available schedulers"),
+            Some(scheduler) => scheduler.schedule_env(env_id, program, response_sender, published_message_callback)
+        }
+    }
+
+    fn shutdown(&self) {
+        for scheduler in self {
+            scheduler.shutdown();
+        }
+    }
+}
 
 /// Communication messages used to talk with the [Scheduler](struct.Scheduler.html) thread.
 pub enum RequestMessage {
@@ -211,15 +247,15 @@ pub mod mod_string;
 /// });
 /// let script = parse("..script..");
 /// let (callback, receiver) = mpsc::channel::<ResponseMessage>();
-/// let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(), script.clone(), callback));
+/// sender.schedule_env(EnvId::new(), script.clone(), callback);
 /// match receiver.recv() {
 ///     Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
-///         let _ = sender.send(RequestMessage::Shutdown);
+///         sender.shutdown();
 ///         // success
 ///         // ...
 ///     }
 ///     Ok(ResponseMessage::EnvFailed(_, err, stack, stack_size)) => {
-///         let _ = sender.send(RequestMessage::Shutdown);
+///         sender.shutdown();
 ///         // failure
 ///         // ...
 ///     }

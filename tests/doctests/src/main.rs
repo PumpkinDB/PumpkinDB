@@ -27,7 +27,7 @@ use regex::Regex;
 use glob::glob;
 use tempdir::TempDir;
 
-use pumpkindb_engine::script::{RequestMessage, ResponseMessage, EnvId, Env, Scheduler, dispatcher};
+use pumpkindb_engine::script::{SchedulerHandle, ResponseMessage, EnvId, Env, Scheduler, dispatcher};
 use pumpkinscript::{textparser, binparser};
 use pumpkindb_engine::{messaging, storage, timestamp, nvmem};
 
@@ -61,11 +61,11 @@ fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp<nvmem::M
         });
         let (callback, receiver) = mpsc::channel::<ResponseMessage>();
         let (sender0, _) = mpsc::channel();
-        let _ = sender.send(RequestMessage::ScheduleEnv(EnvId::new(), Vec::from(script), callback,
-                                                        Box::new(sender0)));
+        sender.schedule_env(EnvId::new(), Vec::from(script), callback,
+                                                        Box::new(sender0));
         match receiver.recv() {
             Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
-                let _ = sender.send(RequestMessage::Shutdown);
+                sender.shutdown();
                 simple_accessor.shutdown();
                 let mut stack_ = Vec::with_capacity(stack.len());
                 for i in 0..(&stack).len() {
@@ -80,12 +80,12 @@ fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp<nvmem::M
                 println!(" * {}", &name);
             }
             Ok(ResponseMessage::EnvFailed(_, err, _, _)) => {
-                let _ = sender.send(RequestMessage::Shutdown);
+                sender.shutdown();
                 simple_accessor.shutdown();
                 panic!("Error while executing {:?}: {:?}", &name, err)
             }
             Err(err) => {
-                let _ = sender.send(RequestMessage::Shutdown);
+                sender.shutdown();
                 simple_accessor.shutdown();
                 panic!("recv error: {:?}", err);
             }

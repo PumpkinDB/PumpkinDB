@@ -13,14 +13,13 @@ use slab;
 use mio::channel as mio_chan;
 use mio::*;
 use mio::tcp::*;
-use rand::{thread_rng, Rng};
 
 use super::connection::Connection;
 
 type Slab<T> = slab::Slab<T, Token>;
 
 use pumpkindb_engine::messaging;
-use pumpkindb_engine::script::{EnvId, Sender, RequestMessage, ResponseMessage};
+use pumpkindb_engine::script::{EnvId, Sender, RequestMessage, ResponseMessage, SchedulerHandle};
 
 use uuid::Uuid;
 
@@ -225,19 +224,13 @@ impl Server {
         while let Some(message) = self.find_connection_by_token(token).readable()? {
             let id = EnvId::new();
             let session = self.token_session.get(&token).unwrap();
-
-            let mut rng = thread_rng();
-            let index: usize = rng.gen_range(0, self.senders.len() - 1);
-            let sender = self.senders.get(index);
-            let _ = sender.unwrap()
-                .send(RequestMessage::ScheduleEnv(id,
-                                                  message,
-                                                  self.response_sender.clone(),
-                                                  Box::new(RelayedPublishedMessageSender {
-                                                      identifier: session.to_vec(),
-                                                      sender: self.relay_sender.clone(),
-                                                  })));
-
+            let _ = self.senders.schedule_env(id,
+                                                 message,
+                                                 self.response_sender.clone(),
+                                                 Box::new(RelayedPublishedMessageSender {
+                                                     identifier: session.to_vec(),
+                                                     sender: self.relay_sender.clone(),
+                                                 }));
         }
 
         Ok(())
