@@ -27,6 +27,7 @@ use num_traits::FromPrimitive;
 
 pub type CursorId = ProcessUniqueId;
 
+instruction!(TXID, b"\x84TXID");
 instruction!(WRITE, b"\x85WRITE");
 instruction!(WRITE_END, b"\x80\x85WRITE"); // internal instruction
 
@@ -76,38 +77,53 @@ impl<'a> Accessor<'a> {
     }
 }
 
+type TxnId<'a> = &'a [u8];
+
 #[derive(Debug)]
 enum Txn<'a> {
-    Read(lmdb::ReadTransaction<'a>),
-    Write(WriteTransactionContainer<'a>),
+    Read(lmdb::ReadTransaction<'a>, TxnId<'a>),
+    Write(WriteTransactionContainer<'a>, TxnId<'a>),
 }
 
 impl<'a> Txn<'a> {
     fn access(&self) -> Accessor {
         match self {
-            &Txn::Read(ref txn) => Accessor::Const(txn.access()),
-            &Txn::Write(ref txn) => Accessor::Write(txn.access()),
+            &Txn::Read(ref txn, _) => Accessor::Const(txn.access()),
+            &Txn::Write(ref txn, _) => Accessor::Write(txn.access()),
         }
     }
     fn cursor(&self, db: &'a lmdb::Database) -> Result<lmdb::Cursor, lmdb::Error> {
         match self {
-            &Txn::Read(ref txn) => txn.cursor(db),
-            &Txn::Write(ref txn) => txn.cursor(db),
+            &Txn::Read(ref txn, _) => txn.cursor(db),
+            &Txn::Write(ref txn, _) => txn.cursor(db),
         }
     }
     fn tx_type(&self) -> TxType {
         match self {
-            &Txn::Read(_) => TxType::Read,
-            &Txn::Write(_) => TxType::Write,
+            &Txn::Read(_, _) => TxType::Read,
+            &Txn::Write(_, _) => TxType::Write,
+        }
+    }
+    fn id(&self) -> TxnId<'a> {
+        match self {
+            &Txn::Read(_, txid) => txid,
+            &Txn::Write(_, txid) => txid,
         }
     }
 }
 
-pub struct Handler<'a, T : AsRef<storage::Storage<'a>> + 'a> {
+use std::sync::Arc;
+use super::super::timestamp;
+use super::super::nvmem::NonVolatileMemory;
+
+pub struct Handler<'a, T, N>
+    where T : AsRef<storage::Storage<'a>> + 'a,
+          N : NonVolatileMemory {
     db: T,
     txns: HashMap<EnvId, Vec<Txn<'a>>>,
     cursors: BTreeMap<(EnvId, Vec<u8>), (TxType, lmdb::Cursor<'a, 'a>)>,
     maxkeysize: Vec<u8>,
+    timestamp: Arc<timestamp::Timestamp<N>>,
 }
 
 macro_rules! read_or_write_transaction {
@@ -176,7 +192,9 @@ macro_rules! cursor_map_op {
 
 builtins!("mod_storage.builtins");
 
-impl<'a, T : AsRef<storage::Storage<'a>> + 'a> Dispatcher<'a> for Handler<'a, T> {
+impl<'a, T, N> Dispatcher<'a> for Handler<'a, T, N>
+    where T : AsRef<storage::Storage<'a>> + 'a,
+          N : NonVolatileMemory {
     fn done(&mut self, _: &mut Env, pid: EnvId) {
         self.txns.get_mut(&pid)
             .and_then(|vec| {
@@ -192,6 +210,7 @@ impl<'a, T : AsRef<storage::Storage<'a>> + 'a> Dispatcher<'a> for Handler<'a, T>
         try_instruction!(env, self.handle_builtins(env, instruction, pid));
         try_instruction!(env, self.handle_write(env, instruction, pid));
         try_instruction!(env, self.handle_read(env, instruction, pid));
+        try_instruction!(env, self.handle_txid(env, instruction, pid));
         try_instruction!(env, self.handle_assoc(env, instruction, pid));
         try_instruction!(env, self.handle_assocq(env, instruction, pid));
         try_instruction!(env, self.handle_retr(env, instruction, pid));
@@ -210,15 +229,29 @@ impl<'a, T : AsRef<storage::Storage<'a>> + 'a> Dispatcher<'a> for Handler<'a, T>
     }
 }
 
-impl<'a, T : AsRef<storage::Storage<'a>> + 'a> Handler<'a, T> {
-    pub fn new(db: T) -> Self {
+impl<'a, T, N> Handler<'a, T, N>
+    where T : AsRef<storage::Storage<'a>> + 'a,
+          N : NonVolatileMemory {
+    pub fn new(db: T, timestamp: Arc<timestamp::Timestamp<N>>) -> Self {
         let maxkeysize = BigUint::from_u32(db.as_ref().env.maxkeysize()).unwrap().to_bytes_be();
         Handler {
             db: db,
             txns: HashMap::new(),
             cursors: BTreeMap::new(),
-            maxkeysize: maxkeysize
+            maxkeysize: maxkeysize,
+            timestamp,
         }
+    }
+
+    fn new_txid(&self, env: &mut Env<'a>) -> Result<TxnId<'a>, super::Error> {
+        let now = self.timestamp.hlc();
+        let slice = env.alloc(16);
+        if slice.is_err() {
+            return Err(slice.unwrap_err());
+        }
+        let mut slice = slice.unwrap();
+        let _ = now.write_bytes(&mut slice[0..]).unwrap();
+        Ok(slice)
     }
 
     handle_builtins!();
@@ -244,10 +277,11 @@ impl<'a, T : AsRef<storage::Storage<'a>> + 'a> Handler<'a, T> {
                         match result {
                             Err(e) => Err(error_database!(e)),
                             Ok(txn) => {
+                                let txid = self.new_txid(env).unwrap();
                                 if !self.txns.contains_key(&pid) {
                                     self.txns.insert(pid, Vec::new());
                                 }
-                                let _ = self.txns.get_mut(&pid).unwrap().push(Txn::Write(txn));
+                                let _ = self.txns.get_mut(&pid).unwrap().push(Txn::Write(txn, txid));
                                 env.program.push(WRITE_END);
                                 env.program.push(v);
                                 Ok(())
@@ -285,10 +319,11 @@ impl<'a, T : AsRef<storage::Storage<'a>> + 'a> Handler<'a, T> {
                         match result {
                             Err(e) => Err(error_database!(e)),
                             Ok(txn) => {
+                                let txid = self.new_txid(env).unwrap();
                                 if !self.txns.contains_key(&pid) {
                                     self.txns.insert(pid, Vec::new());
                                 }
-                                let _ = self.txns.get_mut(&pid).unwrap().push(Txn::Read(txn));
+                                let _ = self.txns.get_mut(&pid).unwrap().push(Txn::Read(txn, txid));
                                 env.program.push(READ_END);
                                 env.program.push(v);
                                 Ok(())
@@ -311,6 +346,23 @@ impl<'a, T : AsRef<storage::Storage<'a>> + 'a> Handler<'a, T> {
         }
     }
 
+
+    #[inline]
+    pub fn handle_txid(&self,
+                       env: &mut Env<'a>,
+                       instruction: &'a [u8],
+                       pid: EnvId)
+                       -> PassResult<'a> {
+        instruction_is!(instruction, TXID);
+        self.txns.get(&pid)
+            .and_then(|v| Some(&v[v.len() - 1]))
+            .and_then(|txn| Some(txn.id()))
+            .map_or_else(|| Err(error_no_transaction!()),  |txid| {
+                env.push(txid);
+                Ok(())
+            })
+    }
+
     #[inline]
     pub fn handle_assoc(&self,
 						env: &mut Env<'a>,
@@ -324,7 +376,7 @@ impl<'a, T : AsRef<storage::Storage<'a>> + 'a> Handler<'a, T> {
                 TxType::Write => Some(txn),
                 _ => None
             }) {
-            Some(&Txn::Write(ref txn)) => {
+            Some(&Txn::Write(ref txn, _)) => {
                 let value = stack_pop!(env);
                 let key = stack_pop!(env);
 
@@ -349,7 +401,7 @@ impl<'a, T : AsRef<storage::Storage<'a>> + 'a> Handler<'a, T> {
         instruction_is!(instruction, COMMIT);
         match self.txns.get_mut(&pid)
             .and_then(|vec| vec.pop()) {
-            Some(Txn::Write(txn)) => {
+            Some(Txn::Write(txn, _)) => {
                 match txn.commit() {
                     Ok(_) => Ok(()),
                     Err(reason) => Err(error_database!(reason))
@@ -436,7 +488,9 @@ impl<'a, T : AsRef<storage::Storage<'a>> + 'a> Handler<'a, T> {
                     Ok(cursor) => {
                         let id = CursorId::new();
                         let bytes = serde_cbor::to_vec(&id).unwrap();
-                        self.cursors.insert((pid.clone(), bytes.clone()), (tx_type!(self, pid), Handler::<T>::cast_away(cursor)));
+                        self.cursors.insert((pid.clone(), bytes.clone()),
+                                            (tx_type!(self, pid),
+                                             Handler::<T, N>::cast_away(cursor)));
                         let slice = alloc_and_write!(bytes.as_slice(), env);
                         env.push(slice);
                         Ok(())

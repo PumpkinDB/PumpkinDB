@@ -51,6 +51,7 @@
    * [CURSOR/VAL](script/CURSOR/VAL.md)
    * [READ](script/READ.md)
    * [RETR](script/RETR.md)
+   * [TXID](script/TXID.md)
    * [WRITE](script/WRITE.md)
  * Binaries
    * [CONCAT](script/CONCAT.md)

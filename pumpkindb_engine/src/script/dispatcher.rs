@@ -110,7 +110,7 @@ pub struct StandardDispatcher<'a, P: 'a, S: 'a, N: 'a, T>
     #[cfg(feature = "mod_numbers")]
     numbers: mod_numbers::Handler<'a>,
     #[cfg(feature = "mod_storage")]
-    storage: mod_storage::Handler<'a, T>,
+    storage: mod_storage::Handler<'a, T, N>,
     #[cfg(feature = "mod_hash")]
     hash: mod_hash::Handler<'a>,
     #[cfg(feature = "mod_hlc")]
@@ -144,7 +144,7 @@ impl<'a, P: 'a, S: 'a, N: 'a, T> StandardDispatcher<'a, P, S, N, T>
                 #[cfg(feature = "mod_numbers")]
                     numbers: mod_numbers::Handler::new(),
                 #[cfg(feature = "mod_storage")]
-                    storage: mod_storage::Handler::new(db),
+                    storage: mod_storage::Handler::new(db, timestamp_state.clone()),
                 #[cfg(feature = "mod_hash")]
                     hash: mod_hash::Handler::new(),
                 #[cfg(feature = "mod_hlc")]
