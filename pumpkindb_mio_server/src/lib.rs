@@ -15,7 +15,6 @@ extern crate log4rs;
 extern crate slab;
 extern crate num_bigint;
 extern crate num_traits;
-extern crate lmdb_zero as lmdb;
 extern crate uuid;
 
 extern crate pumpkindb_engine;
@@ -28,7 +27,7 @@ use mio::tcp::TcpListener;
 
 use mio::channel as mio_chan;
 
-use pumpkindb_engine::script;
+use pumpkindb_engine::{script, lmdb};
 
 pub fn run(port: i64,
            senders: Vec<script::Sender<script::RequestMessage>>,

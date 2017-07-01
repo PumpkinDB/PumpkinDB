@@ -12,7 +12,6 @@ extern crate glob;
 extern crate regex;
 extern crate crossbeam;
 extern crate tempdir;
-extern crate lmdb_zero as lmdb;
 
 extern crate pumpkinscript;
 extern crate pumpkindb_engine;
@@ -29,7 +28,7 @@ use tempdir::TempDir;
 
 use pumpkindb_engine::script::{SchedulerHandle, ResponseMessage, EnvId, Env, Scheduler, dispatcher};
 use pumpkinscript::{textparser, binparser};
-use pumpkindb_engine::{messaging, storage, timestamp, nvmem};
+use pumpkindb_engine::{messaging, storage, timestamp, nvmem, lmdb};
 
 fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp<nvmem::MmapedRegion>>) {
     let dir = TempDir::new("pumpkindb").unwrap();
