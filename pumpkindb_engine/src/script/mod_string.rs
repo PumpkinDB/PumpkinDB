@@ -5,7 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size};
+            offset_by_size, InstructionIs, TryInstruction};
 
 use ::pumpkinscript::Packable;
 use core::str::FromStr;
@@ -40,11 +40,10 @@ pub struct Handler<'a> {
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_instruction!(env, self.handle_to_uint(env, instruction, pid));
-        try_instruction!(env, self.handle_to_int(env, instruction, pid));
-        try_instruction!(env, self.handle_to_sized_num(env, instruction, pid));
-        
-        Err(Error::UnknownInstruction)
+        self.handle_to_uint(env, instruction, pid)
+        .if_unhandled_try(|| self.handle_to_int(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_to_sized_num(env, instruction, pid))
+        .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
 
@@ -59,7 +58,7 @@ impl<'a> Handler<'a> {
                                instruction: &'a [u8],
                                _: EnvId)
                                -> PassResult<'a> {
-        instruction_is!(instruction, STRING_TO_UINT);
+        InstructionIs(instruction, STRING_TO_UINT)?;
 
         let a_bytes = stack_pop!(env);
         let s = String::from_utf8(Vec::from(a_bytes)).or(Err(error_invalid_value!(a_bytes)))?;
@@ -76,7 +75,7 @@ impl<'a> Handler<'a> {
                           instruction: &'a [u8],
                           _: EnvId)
                           -> PassResult<'a> {
-        instruction_is!(instruction, STRING_TO_INT);
+        InstructionIs(instruction, STRING_TO_INT)?;
 
         let a_bytes = stack_pop!(env);
         let s = String::from_utf8(Vec::from(a_bytes)).or(Err(error_invalid_value!(a_bytes)))?;

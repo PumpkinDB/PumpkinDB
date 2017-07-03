@@ -16,7 +16,7 @@ instruction!(HLC_TICK, b"\x88HLC/TICK");
 instruction!(HLC_OBSERVE, b"\x8BHLC/OBSERVE");
 
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size};
+            offset_by_size, InstructionIs, TryInstruction};
 use timestamp;
 
 use hlc;
@@ -32,12 +32,11 @@ pub struct Handler<'a, N> where N : NonVolatileMemory {
 
 impl<'a, N> Dispatcher<'a> for Handler<'a, N> where N : NonVolatileMemory {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_instruction!(env, self.handle_hlc(env, instruction, pid));
-        try_instruction!(env, self.handle_hlc_lc(env, instruction, pid));
-        try_instruction!(env, self.handle_hlc_tick(env, instruction, pid));
-        try_instruction!(env, self.handle_hlc_observe(env, instruction, pid));
-
-        Err(Error::UnknownInstruction)
+        self.handle_hlc(env, instruction, pid)
+        .if_unhandled_try(|| self.handle_hlc_lc(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_hlc_tick(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_hlc_observe(env, instruction, pid))
+        .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
 
@@ -51,7 +50,7 @@ impl<'a, N> Handler<'a, N> where N : NonVolatileMemory {
 
     #[inline]
     pub fn handle_hlc(&self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(instruction, HLC);
+        InstructionIs(instruction, HLC)?;
         let now = self.timestamp.hlc();
         let slice = alloc_slice!(16, env);
         let _ = now.write_bytes(&mut slice[0..]).unwrap();
@@ -65,7 +64,7 @@ impl<'a, N> Handler<'a, N> where N : NonVolatileMemory {
                            instruction: &'a [u8],
                            _: EnvId)
                            -> PassResult<'a> {
-        instruction_is!(instruction, HLC_TICK);
+        InstructionIs(instruction, HLC_TICK)?;
 
         let a = env.pop();
 
@@ -97,7 +96,7 @@ impl<'a, N> Handler<'a, N> where N : NonVolatileMemory {
                          instruction: &'a [u8],
                          _: EnvId)
                          -> PassResult<'a> {
-        instruction_is!(instruction, HLC_LC);
+        InstructionIs(instruction, HLC_LC)?;
         let a = env.pop();
 
         if a.is_none() {
@@ -128,7 +127,7 @@ impl<'a, N> Handler<'a, N> where N : NonVolatileMemory {
                               instruction: &'a [u8],
                               _: EnvId)
                               -> PassResult<'a> {
-        instruction_is!(instruction, HLC_OBSERVE);
+        InstructionIs(instruction, HLC_OBSERVE)?;
         if let Some(mut observed_bytes) = env.pop() {
             if let Ok(observed_time) = hlc::Timestamp::read_bytes(&mut observed_bytes) {
                 if self.timestamp.observe(&observed_time).is_err() {

@@ -7,7 +7,7 @@
 use pumpkinscript::{parse_bin, binparser};
 
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size, STACK_TRUE, STACK_FALSE};
+            offset_by_size, STACK_TRUE, STACK_FALSE, InstructionIs, TryInstruction};
 
 use std::marker::PhantomData;
 
@@ -45,21 +45,21 @@ pub struct Handler<'a> {
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_instruction!(env, self.handle_builtins(env, instruction, pid));
-        try_instruction!(env, self.handle_dowhile(env, instruction, pid));
-        try_instruction!(env, self.handle_times(env, instruction, pid));
-        try_instruction!(env, self.handle_scope_end(env, instruction, pid));
-        try_instruction!(env, self.handle_eval(env, instruction, pid));
-        try_instruction!(env, self.handle_eval_validp(env, instruction, pid));
-        try_instruction!(env, self.handle_eval_scoped(env, instruction, pid));
-        try_instruction!(env, self.handle_set(env, instruction, pid));
-        try_instruction!(env, self.handle_def(env, instruction, pid));
-        try_instruction!(env, self.handle_not(env, instruction, pid));
-        try_instruction!(env, self.handle_and(env, instruction, pid));
-        try_instruction!(env, self.handle_or(env, instruction, pid));
-        try_instruction!(env, self.handle_ifelse(env, instruction, pid));
-        try_instruction!(env, self.handle_featurep(env, instruction, pid));
-        Err(Error::UnknownInstruction)
+        self.handle_builtins(env, instruction, pid)
+        .if_unhandled_try(|| self.handle_dowhile(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_times(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_scope_end(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_eval(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_eval_validp(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_eval_scoped(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_set(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_def(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_not(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_and(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_or(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_ifelse(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_featurep(env, instruction, pid))
+        .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
 
@@ -74,7 +74,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_not(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(instruction, NOT);
+        InstructionIs(instruction, NOT)?;
         let a = stack_pop!(env);
 
         if a == STACK_TRUE {
@@ -90,7 +90,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_and(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(instruction, AND);
+        InstructionIs(instruction, AND)?;
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -112,7 +112,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_or(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(instruction, OR);
+        InstructionIs(instruction, OR)?;
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -138,7 +138,7 @@ impl<'a> Handler<'a> {
                      instruction: &'a [u8],
                      _: EnvId)
                      -> PassResult<'a> {
-        instruction_is!(instruction, IFELSE);
+        InstructionIs(instruction, IFELSE)?;
         let else_ = stack_pop!(env);
         let then = stack_pop!(env);
         let cond = stack_pop!(env);
@@ -161,7 +161,7 @@ impl<'a> Handler<'a> {
                           instruction: &'a [u8],
                           _: EnvId)
                           -> PassResult<'a> {
-        instruction_is!(instruction, EVAL_SCOPED);
+        InstructionIs(instruction, EVAL_SCOPED)?;
         env.push_dictionary();
         let a = stack_pop!(env);
         env.program.push(SCOPE_END);
@@ -183,7 +183,7 @@ impl<'a> Handler<'a> {
                         instruction: &'a [u8],
                         _: EnvId)
                         -> PassResult<'a> {
-        instruction_is!(instruction, SCOPE_END);
+        InstructionIs(instruction, SCOPE_END)?;
         env.pop_dictionary();
         Ok(())
     }
@@ -201,7 +201,7 @@ impl<'a> Handler<'a> {
                    instruction: &'a [u8],
                    _: EnvId)
                    -> PassResult<'a> {
-        instruction_is!(instruction, EVAL);
+        InstructionIs(instruction, EVAL)?;
         let a = stack_pop!(env);
         env.program.push(a);
         Ok(())
@@ -213,7 +213,7 @@ impl<'a> Handler<'a> {
                           instruction: &'a [u8],
                           _: EnvId)
                           -> PassResult<'a> {
-        instruction_is!(instruction, EVAL_VALIDP);
+        InstructionIs(instruction, EVAL_VALIDP)?;
         let a = stack_pop!(env);
         if parse_bin(a).is_ok() {
             env.push(STACK_TRUE);
@@ -229,7 +229,7 @@ impl<'a> Handler<'a> {
                       instruction: &'a [u8],
                       _: EnvId)
                       -> PassResult<'a> {
-        instruction_is!(instruction, DOWHILE);
+        InstructionIs(instruction, DOWHILE)?;
         let v = stack_pop!(env);
 
         let mut vec = Vec::new();
@@ -264,7 +264,7 @@ impl<'a> Handler<'a> {
                     instruction: &'a [u8],
                     _: EnvId)
                     -> PassResult<'a> {
-        instruction_is!(instruction, TIMES);
+        InstructionIs(instruction, TIMES)?;
         let count = stack_pop!(env);
 
         let v = stack_pop!(env);
@@ -279,7 +279,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_set(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(instruction, SET);
+        InstructionIs(instruction, SET)?;
         let instruction = stack_pop!(env);
         let value = stack_pop!(env);
         match binparser::instruction(instruction) {
@@ -304,7 +304,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_def(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(instruction, DEF);
+        InstructionIs(instruction, DEF)?;
         let instruction = stack_pop!(env);
         let value = stack_pop!(env);
         match binparser::instruction(instruction) {
@@ -330,7 +330,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, FEATUREQ);
+        InstructionIs(instruction, FEATUREQ)?;
         let name = stack_pop!(env);
 
         #[cfg(feature = "scoped_dictionary")]

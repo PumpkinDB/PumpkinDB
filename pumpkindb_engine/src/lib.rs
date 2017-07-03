@@ -5,6 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #![feature(slice_patterns, advanced_slice_patterns)]
 #![feature(struct_field_attributes)]
+#![feature(try_trait)]
 
 #![cfg_attr(test, feature(test))]
 #![cfg_attr(not(target_os = "windows"), feature(alloc, heap_api))]

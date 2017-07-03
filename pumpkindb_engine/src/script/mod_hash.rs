@@ -25,7 +25,8 @@ instruction!(HASH_SHA512_256, b"\x8FHASH/SHA512-256");
 // `Sha512Trunc256`, which is the 64-bit `Sha512` algorithm with the result truncated to 256 bits.
 //
 
-use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, offset_by_size};
+use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, offset_by_size, InstructionIs,
+            TryInstruction};
 use crypto::digest::Digest;
 use crypto::sha1::Sha1;
 use crypto::sha2::*;
@@ -40,7 +41,7 @@ macro_rules! hash_instruction {
     ($name : ident, $constant: ident, $i: ident, $size: expr) => {
     #[inline]
     pub fn $name(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(instruction, $constant);
+        InstructionIs(instruction, $constant)?;
         let a = stack_pop!(env);
         let mut hasher = $i::new();
         hasher.input(a);
@@ -54,14 +55,14 @@ macro_rules! hash_instruction {
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_instruction!(env, self.handle_hash_sha1(env, instruction, pid));
-        try_instruction!(env, self.handle_hash_sha224(env, instruction, pid));
-        try_instruction!(env, self.handle_hash_sha256(env, instruction, pid));
-        try_instruction!(env, self.handle_hash_sha384(env, instruction, pid));
-        try_instruction!(env, self.handle_hash_sha512(env, instruction, pid));
-        try_instruction!(env, self.handle_hash_sha512_224(env, instruction, pid));
-        try_instruction!(env, self.handle_hash_sha512_256(env, instruction, pid));
-        Err(Error::UnknownInstruction)
+        self.handle_hash_sha1(env, instruction, pid)
+        .if_unhandled_try(|| self.handle_hash_sha224(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_hash_sha256(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_hash_sha384(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_hash_sha512(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_hash_sha512_224(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_hash_sha512_256(env, instruction, pid))
+        .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
 

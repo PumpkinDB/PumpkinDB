@@ -25,7 +25,7 @@ instruction!(JSON_STRING_TO, b"\x8dJSON/STRING->");
 instruction!(JSON_TO_STRING, b"\x8dJSON/->STRING");
 
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size, STACK_TRUE, STACK_FALSE};
+            offset_by_size, STACK_TRUE, STACK_FALSE, InstructionIs, TryInstruction};
 use serde_json as json;
 
 use std::marker::PhantomData;
@@ -36,7 +36,7 @@ pub struct Handler<'a> {
 
 macro_rules! json_is_a {
     ($env: expr, $instruction: expr, $c: expr, { $t: ident }) => {{
-        instruction_is!($instruction, $c);
+        InstructionIs($instruction, $c)?;
         let a = stack_pop!($env);
 
         match json::from_slice::<json::Value>(a) {
@@ -47,7 +47,7 @@ macro_rules! json_is_a {
         Ok(())
     }};
     ($env: expr, $instruction: expr, $c: expr, $t: ident) => {{
-        instruction_is!($instruction, $c);
+        InstructionIs($instruction, $c)?;
         let a = stack_pop!($env);
 
         match json::from_slice::<json::Value>(a) {
@@ -63,20 +63,20 @@ builtins!("mod_json.builtins");
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_instruction!(env, self.handle_builtins(env, instruction, pid));
-        try_instruction!(env, self.handle_jsonq(env, instruction, pid));
-        try_instruction!(env, self.handle_json_objectq(env, instruction, pid));
-        try_instruction!(env, self.handle_json_stringq(env, instruction, pid));
-        try_instruction!(env, self.handle_json_numberq(env, instruction, pid));
-        try_instruction!(env, self.handle_json_booleanq(env, instruction, pid));
-        try_instruction!(env, self.handle_json_arrayq(env, instruction, pid));
-        try_instruction!(env, self.handle_json_nullq(env, instruction, pid));
-        try_instruction!(env, self.handle_json_get(env, instruction, pid));
-        try_instruction!(env, self.handle_json_hasq(env, instruction, pid));
-        try_instruction!(env, self.handle_json_set(env, instruction, pid));
-        try_instruction!(env, self.handle_json_string_to(env, instruction, pid));
-        try_instruction!(env, self.handle_json_to_string(env, instruction, pid));
-        Err(Error::UnknownInstruction)
+        self.handle_builtins(env, instruction, pid)
+        .if_unhandled_try(|| self.handle_jsonq(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_json_objectq(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_json_stringq(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_json_numberq(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_json_booleanq(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_json_arrayq(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_json_nullq(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_json_get(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_json_hasq(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_json_set(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_json_string_to(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_json_to_string(env, instruction, pid))
+        .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
 
@@ -93,7 +93,7 @@ impl<'a> Handler<'a> {
                         instruction: &'a [u8],
                         _: EnvId)
                         -> PassResult<'a> {
-        instruction_is!(instruction, JSONQ);
+        InstructionIs(instruction, JSONQ)?;
         let a = stack_pop!(env);
 
         match json::from_slice::<json::Value>(a) {
@@ -165,7 +165,7 @@ impl<'a> Handler<'a> {
                            instruction: &'a [u8],
                            _: EnvId)
                            -> PassResult<'a> {
-        instruction_is!(instruction, JSON_GET);
+        InstructionIs(instruction, JSON_GET)?;
 
         let field = stack_pop!(env);
         let a = stack_pop!(env);
@@ -199,7 +199,7 @@ impl<'a> Handler<'a> {
                             instruction: &'a [u8],
                             _: EnvId)
                             -> PassResult<'a> {
-        instruction_is!(instruction, JSON_HASQ);
+        InstructionIs(instruction, JSON_HASQ)?;
 
         let field = stack_pop!(env);
         let a = stack_pop!(env);
@@ -230,7 +230,7 @@ impl<'a> Handler<'a> {
                            instruction: &'a [u8],
                            _: EnvId)
                            -> PassResult<'a> {
-        instruction_is!(instruction, JSON_SET);
+        InstructionIs(instruction, JSON_SET)?;
 
         let value = stack_pop!(env);
         let field = stack_pop!(env);
@@ -266,7 +266,7 @@ impl<'a> Handler<'a> {
                                  instruction: &'a [u8],
                                  _: EnvId)
                                  -> PassResult<'a> {
-        instruction_is!(instruction, JSON_STRING_TO);
+        InstructionIs(instruction, JSON_STRING_TO)?;
 
         let a = stack_pop!(env);
 
@@ -288,7 +288,7 @@ impl<'a> Handler<'a> {
                                  instruction: &'a [u8],
                                  _: EnvId)
                                  -> PassResult<'a> {
-        instruction_is!(instruction, JSON_TO_STRING);
+        InstructionIs(instruction, JSON_TO_STRING)?;
 
         let a = stack_pop!(env);
 

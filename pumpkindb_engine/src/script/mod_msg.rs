@@ -4,7 +4,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, offset_by_size};
+use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, offset_by_size,
+            InstructionIs, TryInstruction};
 use super::super::messaging;
 
 use std::marker::PhantomData;
@@ -21,10 +22,10 @@ pub struct Handler<'a, P: messaging::Publisher, S: messaging::Subscriber> {
 
 impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Dispatcher<'a> for Handler<'a, P, S> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_instruction!(env, self.handle_publish(env, instruction, pid));
-        try_instruction!(env, self.handle_subscribe(env, instruction, pid));
-        try_instruction!(env, self.handle_unsubscribe(env, instruction, pid));
-        Err(Error::UnknownInstruction)
+        self.handle_publish(env, instruction, pid)
+        .if_unhandled_try(|| self.handle_subscribe(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_unsubscribe(env, instruction, pid))
+        .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
 
@@ -43,7 +44,7 @@ impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Handler<'a, P, S> {
                       instruction: &'a [u8],
                       _: EnvId)
                       -> PassResult<'a> {
-        instruction_is!(instruction, PUBLISH);
+        InstructionIs(instruction, PUBLISH)?;
         let topic = stack_pop!(env);
         let data = stack_pop!(env);
 
@@ -58,7 +59,7 @@ impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Handler<'a, P, S> {
                       instruction: &'a [u8],
                       _: EnvId)
                       -> PassResult<'a> {
-        instruction_is!(instruction, SUBSCRIBE);
+        InstructionIs(instruction, SUBSCRIBE)?;
 
         let topic = stack_pop!(env);
 
@@ -80,7 +81,7 @@ impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Handler<'a, P, S> {
                         instruction: &'a [u8],
                         _: EnvId)
                         -> PassResult<'a> {
-        instruction_is!(instruction, UNSUBSCRIBE);
+        InstructionIs(instruction, UNSUBSCRIBE)?;
 
         let identifier = stack_pop!(env);
 

@@ -86,6 +86,56 @@ macro_rules! instruction {
 instruction!(TRY, b"\x83TRY");
 instruction!(TRY_END, b"\x80\x83TRY"); // internal instruction
 
+use std::ops::Try;
+include!("macros.rs");
+
+/// Represents instruction equality check, defined as a
+/// structure to define `Try` trait implementation over it
+pub struct InstructionIs<T : PartialEq>(T, T);
+
+impl<T : PartialEq> Try for InstructionIs<T> {
+    type Ok = ();
+    type Error = Error;
+
+    fn into_result(self) -> Result<Self::Ok, Self::Error> {
+        if self.0 == self.1 {
+            Ok(())
+        } else {
+            Err(Error::UnknownInstruction)
+        }
+    }
+
+    fn from_error(_: Self::Error) -> Self {
+        unimplemented!()
+    }
+
+    fn from_ok(_: Self::Ok) -> Self {
+        unimplemented!()
+    }
+}
+
+trait TryInstruction {
+    fn if_unhandled_try<F>(self, f: F) -> Result<(), Error> where F: FnOnce() -> Result<(), Error>;
+    fn is_unhandled(&self) -> bool;
+}
+
+impl TryInstruction for Result<(), Error> {
+    #[inline]
+    fn if_unhandled_try<F>(self, f: F) -> Result<(), Error> where F: FnOnce() -> Result<(), Error> {
+        if self.is_unhandled() {
+            f()
+        } else {
+            self
+        }
+    }
+    #[inline]
+    fn is_unhandled(&self) -> bool {
+        match self {
+            &Err(Error::UnknownInstruction) => true,
+            _ => false,
+        }
+    }
+}
 
 use std::str;
 
@@ -136,8 +186,6 @@ pub fn offset_by_size(size: usize) -> usize {
         _ => unreachable!(),
     }
 }
-
-include!("macros.rs");
 
 use std::sync::mpsc;
 use snowflake::ProcessUniqueId;
@@ -414,10 +462,13 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
                 return Ok(());
             }
 
-            try_instruction!(env, self.handle(env, instruction, pid));
+            match self.handle(env, instruction, pid) {
+                Ok(()) => Ok(()),
+                Err(Error::UnknownInstruction) => handle_error!(env, error_unknown_instruction!(instruction)),
+                Err(err @ Error::ProgramError(_)) => handle_error!(env, err),
+                Err(err) => Err(err),
+            }
 
-            // if nothing worked...
-            handle_error!(env, error_unknown_instruction!(instruction))
         } else {
             handle_error!(env, error_decoding!())
         }
@@ -469,7 +520,7 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
 
     #[inline]
     fn handle_try(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(instruction, TRY);
+        InstructionIs(instruction, TRY)?;
         let v = stack_pop!(env);
         env.tracking_errors += 1;
         env.program.push(TRY_END);
@@ -483,7 +534,7 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
                       instruction: &'a [u8],
                       pid: EnvId)
                       -> PassResult<'a> {
-        instruction_is!(instruction, TRY_END);
+        InstructionIs(instruction, TRY_END)?;
         env.tracking_errors -= 1;
         if env.aborting_try.is_empty() {
             env.push(_EMPTY);
@@ -502,14 +553,11 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
 
 impl<'a, T: Dispatcher<'a>> Dispatcher<'a> for Scheduler<'a, T> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_instruction!(env, self.handle_try(env, instruction, pid));
-        try_instruction!(env, self.handle_try_end(env, instruction, pid));
-
-        try_instruction!(env, self.dispatcher.handle(env, instruction, pid));
-
-        // catch-all (NB: keep it last)
-        try_instruction!(env, self.handle_dictionary(env, instruction, pid));
-        Err(Error::UnknownInstruction)
+        self.handle_try(env, instruction, pid)
+            .if_unhandled_try(|| self.handle_try_end(env, instruction, pid))
+            .if_unhandled_try(|| self.dispatcher.handle(env, instruction, pid))
+            .if_unhandled_try(|| self.handle_dictionary(env, instruction, pid))
+            .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
 

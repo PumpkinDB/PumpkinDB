@@ -5,7 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use pumpkinscript::{offset_by_size, binparser};
-use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE};
+use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE, InstructionIs, TryInstruction};
 
 use std::marker::PhantomData;
 
@@ -33,19 +33,19 @@ builtins!("mod_stack.builtins");
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_instruction!(env, self.handle_builtins(env, instruction, pid));
-        try_instruction!(env, self.handle_drop(env, instruction, pid));
-        try_instruction!(env, self.handle_dup(env, instruction, pid));
-        try_instruction!(env, self.handle_swap(env, instruction, pid));
-        try_instruction!(env, self.handle_2swap(env, instruction, pid));
-        try_instruction!(env, self.handle_rot(env, instruction, pid));
-        try_instruction!(env, self.handle_2rot(env, instruction, pid));
-        try_instruction!(env, self.handle_over(env, instruction, pid));
-        try_instruction!(env, self.handle_2over(env, instruction, pid));
-        try_instruction!(env, self.handle_depth(env, instruction, pid));
-        try_instruction!(env, self.handle_wrap(env, instruction, pid));
-        try_instruction!(env, self.handle_unwrap(env, instruction, pid));
-        Err(Error::UnknownInstruction)
+        self.handle_builtins(env, instruction, pid)
+        .if_unhandled_try(|| self.handle_drop(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_dup(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_swap(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_2swap(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_rot(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_2rot(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_over(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_2over(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_depth(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_wrap(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_unwrap(env, instruction, pid))
+        .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
 
@@ -58,7 +58,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_dup(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(instruction, DUP);
+        InstructionIs(instruction, DUP)?;
         let v = stack_pop!(env);
 
         env.push(v);
@@ -72,7 +72,7 @@ impl<'a> Handler<'a> {
                    instruction: &'a [u8],
                    _: EnvId)
                    -> PassResult<'a> {
-        instruction_is!(instruction, SWAP);
+        InstructionIs(instruction, SWAP)?;
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -88,7 +88,7 @@ impl<'a> Handler<'a> {
                     instruction: &'a [u8],
                     _: EnvId)
                     -> PassResult<'a> {
-        instruction_is!(instruction, TWOSWAP);
+        InstructionIs(instruction, TWOSWAP)?;
         let a = stack_pop!(env);
         let b = stack_pop!(env);
         let c = stack_pop!(env);
@@ -109,7 +109,7 @@ impl<'a> Handler<'a> {
                    instruction: &'a [u8],
                    _: EnvId)
                    -> PassResult<'a> {
-        instruction_is!(instruction, OVER);
+        InstructionIs(instruction, OVER)?;
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -126,7 +126,7 @@ impl<'a> Handler<'a> {
                     instruction: &'a [u8],
                     _: EnvId)
                     -> PassResult<'a> {
-        instruction_is!(instruction, TWOOVER);
+        InstructionIs(instruction, TWOOVER)?;
         let d = stack_pop!(env);
         let c = stack_pop!(env);
         let b = stack_pop!(env);
@@ -144,7 +144,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_rot(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(instruction, ROT);
+        InstructionIs(instruction, ROT)?;
         let a = stack_pop!(env);
         let b = stack_pop!(env);
         let c = stack_pop!(env);
@@ -162,7 +162,7 @@ impl<'a> Handler<'a> {
                    instruction: &'a [u8],
                    _: EnvId)
                    -> PassResult<'a> {
-        instruction_is!(instruction, TWOROT);
+        InstructionIs(instruction, TWOROT)?;
         let f = stack_pop!(env);
         let e = stack_pop!(env);
         let d = stack_pop!(env);
@@ -186,7 +186,7 @@ impl<'a> Handler<'a> {
                    instruction: &'a [u8],
                    _: EnvId)
                    -> PassResult<'a> {
-        instruction_is!(instruction, DROP);
+        InstructionIs(instruction, DROP)?;
         let _ = stack_pop!(env);
 
         Ok(())
@@ -198,7 +198,7 @@ impl<'a> Handler<'a> {
                     instruction: &'a [u8],
                     _: EnvId)
                     -> PassResult<'a> {
-        instruction_is!(instruction, DEPTH);
+        InstructionIs(instruction, DEPTH)?;
         let bytes = BigUint::from(env.stack_size).to_bytes_be();
         let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
@@ -211,7 +211,7 @@ impl<'a> Handler<'a> {
                    instruction: &'a [u8],
                    _: EnvId)
                    -> PassResult<'a> {
-        instruction_is!(instruction, WRAP);
+        InstructionIs(instruction, WRAP)?;
         let n = stack_pop!(env);
 
         let mut n_int = BigUint::from_bytes_be(n).to_u64().unwrap() as usize;
@@ -247,7 +247,7 @@ impl<'a> Handler<'a> {
                      instruction: &'a [u8],
                      _: EnvId)
                      -> PassResult<'a> {
-        instruction_is!(instruction, UNWRAP);
+        InstructionIs(instruction, UNWRAP)?;
         let mut current = stack_pop!(env);
         while current.len() > 0 {
             match binparser::data(current) {
