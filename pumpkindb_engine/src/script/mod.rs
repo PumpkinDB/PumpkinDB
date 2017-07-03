@@ -277,18 +277,18 @@ unsafe impl<'a, T : Dispatcher<'a>> Send for Scheduler<'a, T> {}
 
 pub type PassResult<'a> = Result<(), Error>;
 
-const STACK_TRUE: &'static [u8] = b"\x01";
-const STACK_FALSE: &'static [u8] = b"\x00";
+pub const STACK_TRUE: &'static [u8] = b"\x01";
+pub const STACK_FALSE: &'static [u8] = b"\x00";
 
-const ERROR_UNKNOWN_INSTRUCTION: &'static [u8] = b"\x01\x02";
-const ERROR_INVALID_VALUE: &'static [u8] = b"\x01\x03";
-const ERROR_EMPTY_STACK: &'static [u8] = b"\x01\x04";
-const ERROR_DECODING: &'static [u8] = b"\x01\x05";
-const ERROR_DUPLICATE_KEY: &'static [u8] = b"\x01\x06";
-const ERROR_UNKNOWN_KEY: &'static [u8] = b"\x01\x07";
-const ERROR_NO_TX: &'static [u8] = b"\x01\x08";
-const ERROR_DATABASE: &'static [u8] = b"\x01\x09";
-const ERROR_NO_VALUE: &'static [u8] = b"\x01\x0A";
+pub const ERROR_UNKNOWN_INSTRUCTION: &'static [u8] = b"\x01\x02";
+pub const ERROR_INVALID_VALUE: &'static [u8] = b"\x01\x03";
+pub const ERROR_EMPTY_STACK: &'static [u8] = b"\x01\x04";
+pub const ERROR_DECODING: &'static [u8] = b"\x01\x05";
+pub const ERROR_DUPLICATE_KEY: &'static [u8] = b"\x01\x06";
+pub const ERROR_UNKNOWN_KEY: &'static [u8] = b"\x01\x07";
+pub const ERROR_NO_TX: &'static [u8] = b"\x01\x08";
+pub const ERROR_DATABASE: &'static [u8] = b"\x01\x09";
+pub const ERROR_NO_VALUE: &'static [u8] = b"\x01\x0A";
 
 use std::sync::Arc;
 
