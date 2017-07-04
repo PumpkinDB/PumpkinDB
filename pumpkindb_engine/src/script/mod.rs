@@ -86,33 +86,7 @@ macro_rules! instruction {
 instruction!(TRY, b"\x83TRY");
 instruction!(TRY_END, b"\x80\x83TRY"); // internal instruction
 
-use std::ops::Try;
 include!("macros.rs");
-
-/// Represents instruction equality check, defined as a
-/// structure to define `Try` trait implementation over it
-pub struct InstructionIs<T : PartialEq>(T, T);
-
-impl<T : PartialEq> Try for InstructionIs<T> {
-    type Ok = ();
-    type Error = Error;
-
-    fn into_result(self) -> Result<Self::Ok, Self::Error> {
-        if self.0 == self.1 {
-            Ok(())
-        } else {
-            Err(Error::UnknownInstruction)
-        }
-    }
-
-    fn from_error(_: Self::Error) -> Self {
-        unimplemented!()
-    }
-
-    fn from_ok(_: Self::Ok) -> Self {
-        unimplemented!()
-    }
-}
 
 trait TryInstruction {
     fn if_unhandled_try<F>(self, f: F) -> Result<(), Error> where F: FnOnce() -> Result<(), Error>;
@@ -520,7 +494,7 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
 
     #[inline]
     fn handle_try(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        InstructionIs(instruction, TRY)?;
+        return_unless_instructions_equal!(instruction, TRY);
         let v = stack_pop!(env);
         env.tracking_errors += 1;
         env.program.push(TRY_END);
@@ -534,7 +508,7 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
                       instruction: &'a [u8],
                       pid: EnvId)
                       -> PassResult<'a> {
-        InstructionIs(instruction, TRY_END)?;
+        return_unless_instructions_equal!(instruction, TRY_END);
         env.tracking_errors -= 1;
         if env.aborting_try.is_empty() {
             env.push(_EMPTY);

@@ -5,7 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size, InstructionIs, TryInstruction};
+            offset_by_size, TryInstruction};
 
 use ::pumpkinscript::Packable;
 use core::str::FromStr;
@@ -58,7 +58,7 @@ impl<'a> Handler<'a> {
                                instruction: &'a [u8],
                                _: EnvId)
                                -> PassResult<'a> {
-        InstructionIs(instruction, STRING_TO_UINT)?;
+        return_unless_instructions_equal!(instruction, STRING_TO_UINT);
 
         let a_bytes = stack_pop!(env);
         let s = String::from_utf8(Vec::from(a_bytes)).or(Err(error_invalid_value!(a_bytes)))?;
@@ -75,7 +75,7 @@ impl<'a> Handler<'a> {
                           instruction: &'a [u8],
                           _: EnvId)
                           -> PassResult<'a> {
-        InstructionIs(instruction, STRING_TO_INT)?;
+        return_unless_instructions_equal!(instruction, STRING_TO_INT);
 
         let a_bytes = stack_pop!(env);
         let s = String::from_utf8(Vec::from(a_bytes)).or(Err(error_invalid_value!(a_bytes)))?;

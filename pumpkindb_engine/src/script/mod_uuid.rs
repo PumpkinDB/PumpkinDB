@@ -10,7 +10,7 @@ instruction!(UUID_TO_STRING, b"\x8dUUID/->STRING");
 instruction!(UUID_STRING_TO, b"\x8dUUID/STRING->");
 
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size, InstructionIs, TryInstruction};
+            offset_by_size, TryInstruction};
 
 use core::str::FromStr;
 use uuid::Uuid;
@@ -42,7 +42,7 @@ impl<'a> Handler<'a> {
                           instruction: &'a [u8],
                           _: EnvId)
                           -> PassResult<'a> {
-        InstructionIs(instruction, UUID_V4)?;
+        return_unless_instructions_equal!(instruction, UUID_V4);
         let uuid = Uuid::new_v4();
         let mut slice = alloc_slice!(16, env);
         slice.copy_from_slice(uuid.as_bytes());
@@ -56,7 +56,7 @@ impl<'a> Handler<'a> {
                           instruction: &'a [u8],
                           _: EnvId)
                           -> PassResult<'a> {
-        InstructionIs(instruction, UUID_V5)?;
+        return_unless_instructions_equal!(instruction, UUID_V5);
         let name_bytes = stack_pop!(env);
         if let Ok(name) = str::from_utf8(name_bytes) {
             let ns_uuid_bytes = stack_pop!(env);
@@ -81,7 +81,7 @@ impl<'a> Handler<'a> {
                                  instruction: &'a [u8],
                                  _: EnvId)
                                  -> PassResult<'a> {
-        InstructionIs(instruction, UUID_TO_STRING)?;
+        return_unless_instructions_equal!(instruction, UUID_TO_STRING);
 
         let top = stack_pop!(env);
 
@@ -102,7 +102,7 @@ impl<'a> Handler<'a> {
                                  instruction: &'a [u8],
                                  _: EnvId)
                                  -> PassResult<'a> {
-        InstructionIs(instruction, UUID_STRING_TO)?;
+        return_unless_instructions_equal!(instruction, UUID_STRING_TO);
 
         let top = stack_pop!(env);
 

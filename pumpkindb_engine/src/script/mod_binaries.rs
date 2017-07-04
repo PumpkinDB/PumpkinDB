@@ -5,7 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size, STACK_TRUE, STACK_FALSE, InstructionIs, TryInstruction};
+            offset_by_size, STACK_TRUE, STACK_FALSE, TryInstruction};
 
 use std::marker::PhantomData;
 
@@ -54,7 +54,7 @@ impl<'a> Handler<'a> {
                     instruction: &'a [u8],
                     _: EnvId)
                     -> PassResult<'a> {
-        InstructionIs(instruction, EQUALQ)?;
+        return_unless_instructions_equal!(instruction, EQUALQ);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -69,7 +69,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_ltp(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        InstructionIs(instruction, LTQ)?;
+        return_unless_instructions_equal!(instruction, LTQ);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -84,7 +84,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_gtp(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        InstructionIs(instruction, GTQ)?;
+        return_unless_instructions_equal!(instruction, GTQ);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -103,7 +103,7 @@ impl<'a> Handler<'a> {
                      instruction: &'a [u8],
                      _: EnvId)
                      -> PassResult<'a> {
-        InstructionIs(instruction, CONCAT)?;
+        return_unless_instructions_equal!(instruction, CONCAT);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -123,7 +123,7 @@ impl<'a> Handler<'a> {
                     instruction: &'a [u8],
                     _: EnvId)
                     -> PassResult<'a> {
-        InstructionIs(instruction, SLICE)?;
+        return_unless_instructions_equal!(instruction, SLICE);
         let end = stack_pop!(env);
         let start = stack_pop!(env);
         let slice = stack_pop!(env);
@@ -151,7 +151,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_pad(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        InstructionIs(instruction, PAD)?;
+        return_unless_instructions_equal!(instruction, PAD);
         let byte = stack_pop!(env);
         let size = stack_pop!(env);
         let value = stack_pop!(env);
@@ -188,7 +188,7 @@ impl<'a> Handler<'a> {
                      instruction: &'a [u8],
                      _: EnvId)
                      -> PassResult<'a> {
-        InstructionIs(instruction, LENGTH)?;
+        return_unless_instructions_equal!(instruction, LENGTH);
         let a = stack_pop!(env);
 
         let len = BigUint::from(a.len() as u64);

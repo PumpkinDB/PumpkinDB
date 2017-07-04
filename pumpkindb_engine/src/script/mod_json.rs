@@ -25,7 +25,7 @@ instruction!(JSON_STRING_TO, b"\x8dJSON/STRING->");
 instruction!(JSON_TO_STRING, b"\x8dJSON/->STRING");
 
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size, STACK_TRUE, STACK_FALSE, InstructionIs, TryInstruction};
+            offset_by_size, STACK_TRUE, STACK_FALSE, TryInstruction};
 use serde_json as json;
 
 use std::marker::PhantomData;
@@ -36,7 +36,7 @@ pub struct Handler<'a> {
 
 macro_rules! json_is_a {
     ($env: expr, $instruction: expr, $c: expr, { $t: ident }) => {{
-        InstructionIs($instruction, $c)?;
+        return_unless_instructions_equal!($instruction, $c);
         let a = stack_pop!($env);
 
         match json::from_slice::<json::Value>(a) {
@@ -47,7 +47,7 @@ macro_rules! json_is_a {
         Ok(())
     }};
     ($env: expr, $instruction: expr, $c: expr, $t: ident) => {{
-        InstructionIs($instruction, $c)?;
+        return_unless_instructions_equal!($instruction, $c);
         let a = stack_pop!($env);
 
         match json::from_slice::<json::Value>(a) {
@@ -93,7 +93,7 @@ impl<'a> Handler<'a> {
                         instruction: &'a [u8],
                         _: EnvId)
                         -> PassResult<'a> {
-        InstructionIs(instruction, JSONQ)?;
+        return_unless_instructions_equal!(instruction, JSONQ);
         let a = stack_pop!(env);
 
         match json::from_slice::<json::Value>(a) {
@@ -165,7 +165,7 @@ impl<'a> Handler<'a> {
                            instruction: &'a [u8],
                            _: EnvId)
                            -> PassResult<'a> {
-        InstructionIs(instruction, JSON_GET)?;
+        return_unless_instructions_equal!(instruction, JSON_GET);
 
         let field = stack_pop!(env);
         let a = stack_pop!(env);
@@ -199,7 +199,7 @@ impl<'a> Handler<'a> {
                             instruction: &'a [u8],
                             _: EnvId)
                             -> PassResult<'a> {
-        InstructionIs(instruction, JSON_HASQ)?;
+        return_unless_instructions_equal!(instruction, JSON_HASQ);
 
         let field = stack_pop!(env);
         let a = stack_pop!(env);
@@ -230,7 +230,7 @@ impl<'a> Handler<'a> {
                            instruction: &'a [u8],
                            _: EnvId)
                            -> PassResult<'a> {
-        InstructionIs(instruction, JSON_SET)?;
+        return_unless_instructions_equal!(instruction, JSON_SET);
 
         let value = stack_pop!(env);
         let field = stack_pop!(env);
@@ -266,7 +266,7 @@ impl<'a> Handler<'a> {
                                  instruction: &'a [u8],
                                  _: EnvId)
                                  -> PassResult<'a> {
-        InstructionIs(instruction, JSON_STRING_TO)?;
+        return_unless_instructions_equal!(instruction, JSON_STRING_TO);
 
         let a = stack_pop!(env);
 
@@ -288,7 +288,7 @@ impl<'a> Handler<'a> {
                                  instruction: &'a [u8],
                                  _: EnvId)
                                  -> PassResult<'a> {
-        InstructionIs(instruction, JSON_TO_STRING)?;
+        return_unless_instructions_equal!(instruction, JSON_TO_STRING);
 
         let a = stack_pop!(env);
 

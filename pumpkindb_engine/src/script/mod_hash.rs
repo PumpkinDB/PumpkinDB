@@ -25,7 +25,7 @@ instruction!(HASH_SHA512_256, b"\x8FHASH/SHA512-256");
 // `Sha512Trunc256`, which is the 64-bit `Sha512` algorithm with the result truncated to 256 bits.
 //
 
-use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, offset_by_size, InstructionIs,
+use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, offset_by_size,
             TryInstruction};
 use crypto::digest::Digest;
 use crypto::sha1::Sha1;
@@ -41,7 +41,7 @@ macro_rules! hash_instruction {
     ($name : ident, $constant: ident, $i: ident, $size: expr) => {
     #[inline]
     pub fn $name(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        InstructionIs(instruction, $constant)?;
+        return_unless_instructions_equal!(instruction, $constant);
         let a = stack_pop!(env);
         let mut hasher = $i::new();
         hasher.input(a);

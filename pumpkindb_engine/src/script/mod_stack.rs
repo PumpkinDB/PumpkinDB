@@ -5,7 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use pumpkinscript::{offset_by_size, binparser};
-use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE, InstructionIs, TryInstruction};
+use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE, TryInstruction};
 
 use std::marker::PhantomData;
 
@@ -58,7 +58,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_dup(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        InstructionIs(instruction, DUP)?;
+        return_unless_instructions_equal!(instruction, DUP);
         let v = stack_pop!(env);
 
         env.push(v);
@@ -72,7 +72,7 @@ impl<'a> Handler<'a> {
                    instruction: &'a [u8],
                    _: EnvId)
                    -> PassResult<'a> {
-        InstructionIs(instruction, SWAP)?;
+        return_unless_instructions_equal!(instruction, SWAP);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -88,7 +88,7 @@ impl<'a> Handler<'a> {
                     instruction: &'a [u8],
                     _: EnvId)
                     -> PassResult<'a> {
-        InstructionIs(instruction, TWOSWAP)?;
+        return_unless_instructions_equal!(instruction, TWOSWAP);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
         let c = stack_pop!(env);
@@ -109,7 +109,7 @@ impl<'a> Handler<'a> {
                    instruction: &'a [u8],
                    _: EnvId)
                    -> PassResult<'a> {
-        InstructionIs(instruction, OVER)?;
+        return_unless_instructions_equal!(instruction, OVER);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -126,7 +126,7 @@ impl<'a> Handler<'a> {
                     instruction: &'a [u8],
                     _: EnvId)
                     -> PassResult<'a> {
-        InstructionIs(instruction, TWOOVER)?;
+        return_unless_instructions_equal!(instruction, TWOOVER);
         let d = stack_pop!(env);
         let c = stack_pop!(env);
         let b = stack_pop!(env);
@@ -144,7 +144,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_rot(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        InstructionIs(instruction, ROT)?;
+        return_unless_instructions_equal!(instruction, ROT);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
         let c = stack_pop!(env);
@@ -162,7 +162,7 @@ impl<'a> Handler<'a> {
                    instruction: &'a [u8],
                    _: EnvId)
                    -> PassResult<'a> {
-        InstructionIs(instruction, TWOROT)?;
+        return_unless_instructions_equal!(instruction, TWOROT);
         let f = stack_pop!(env);
         let e = stack_pop!(env);
         let d = stack_pop!(env);
@@ -186,7 +186,7 @@ impl<'a> Handler<'a> {
                    instruction: &'a [u8],
                    _: EnvId)
                    -> PassResult<'a> {
-        InstructionIs(instruction, DROP)?;
+        return_unless_instructions_equal!(instruction, DROP);
         let _ = stack_pop!(env);
 
         Ok(())
@@ -198,7 +198,7 @@ impl<'a> Handler<'a> {
                     instruction: &'a [u8],
                     _: EnvId)
                     -> PassResult<'a> {
-        InstructionIs(instruction, DEPTH)?;
+        return_unless_instructions_equal!(instruction, DEPTH);
         let bytes = BigUint::from(env.stack_size).to_bytes_be();
         let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
@@ -211,7 +211,7 @@ impl<'a> Handler<'a> {
                    instruction: &'a [u8],
                    _: EnvId)
                    -> PassResult<'a> {
-        InstructionIs(instruction, WRAP)?;
+        return_unless_instructions_equal!(instruction, WRAP);
         let n = stack_pop!(env);
 
         let mut n_int = BigUint::from_bytes_be(n).to_u64().unwrap() as usize;
@@ -247,7 +247,7 @@ impl<'a> Handler<'a> {
                      instruction: &'a [u8],
                      _: EnvId)
                      -> PassResult<'a> {
-        InstructionIs(instruction, UNWRAP)?;
+        return_unless_instructions_equal!(instruction, UNWRAP);
         let mut current = stack_pop!(env);
         while current.len() > 0 {
             match binparser::data(current) {

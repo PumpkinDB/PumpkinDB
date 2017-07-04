@@ -79,6 +79,15 @@ macro_rules! stack_pop {
 }
 
 #[macro_export]
+macro_rules! return_unless_instructions_equal {
+    ($instruction: expr, $exp: expr) => {
+        if $instruction != $exp {
+            return Err(Error::UnknownInstruction)
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! error_program {
     ($desc: expr, $details: expr, $code: expr) => {{
         let mut error = Vec::new();

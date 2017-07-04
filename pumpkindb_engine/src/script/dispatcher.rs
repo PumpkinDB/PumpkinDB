@@ -199,7 +199,7 @@ mod tests {
   use pumpkinscript::parse;
   use script::{Env, EnvId, PassResult,
                Scheduler, SchedulerHandle, Error, RequestMessage, ResponseMessage,
-               Dispatcher, InstructionIs, TryInstruction};
+               Dispatcher, TryInstruction};
   use std::sync::mpsc;
   use crossbeam;
 
@@ -217,7 +217,7 @@ mod tests {
 
       pub fn handle_test(&mut self, env: &mut Env<'a>,
                           instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-          InstructionIs(instruction, b"\x84TEST")?;
+          return_unless_instructions_equal!(instruction, b"\x84TEST");
           env.push(b"TEST");
           Ok(())
       }

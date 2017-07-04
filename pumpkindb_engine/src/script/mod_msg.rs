@@ -5,7 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, offset_by_size,
-            InstructionIs, TryInstruction};
+            TryInstruction};
 use super::super::messaging;
 
 use std::marker::PhantomData;
@@ -44,7 +44,7 @@ impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Handler<'a, P, S> {
                       instruction: &'a [u8],
                       _: EnvId)
                       -> PassResult<'a> {
-        InstructionIs(instruction, PUBLISH)?;
+        return_unless_instructions_equal!(instruction, PUBLISH);
         let topic = stack_pop!(env);
         let data = stack_pop!(env);
 
@@ -59,7 +59,7 @@ impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Handler<'a, P, S> {
                       instruction: &'a [u8],
                       _: EnvId)
                       -> PassResult<'a> {
-        InstructionIs(instruction, SUBSCRIBE)?;
+        return_unless_instructions_equal!(instruction, SUBSCRIBE);
 
         let topic = stack_pop!(env);
 
@@ -81,7 +81,7 @@ impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Handler<'a, P, S> {
                         instruction: &'a [u8],
                         _: EnvId)
                         -> PassResult<'a> {
-        InstructionIs(instruction, UNSUBSCRIBE)?;
+        return_unless_instructions_equal!(instruction, UNSUBSCRIBE);
 
         let identifier = stack_pop!(env);
 

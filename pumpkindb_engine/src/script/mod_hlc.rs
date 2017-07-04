@@ -16,7 +16,7 @@ instruction!(HLC_TICK, b"\x88HLC/TICK");
 instruction!(HLC_OBSERVE, b"\x8BHLC/OBSERVE");
 
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size, InstructionIs, TryInstruction};
+            offset_by_size, TryInstruction};
 use timestamp;
 
 use hlc;
@@ -50,7 +50,7 @@ impl<'a, N> Handler<'a, N> where N : NonVolatileMemory {
 
     #[inline]
     pub fn handle_hlc(&self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        InstructionIs(instruction, HLC)?;
+        return_unless_instructions_equal!(instruction, HLC);
         let now = self.timestamp.hlc();
         let slice = alloc_slice!(16, env);
         let _ = now.write_bytes(&mut slice[0..]).unwrap();
@@ -64,7 +64,7 @@ impl<'a, N> Handler<'a, N> where N : NonVolatileMemory {
                            instruction: &'a [u8],
                            _: EnvId)
                            -> PassResult<'a> {
-        InstructionIs(instruction, HLC_TICK)?;
+        return_unless_instructions_equal!(instruction, HLC_TICK);
 
         let a = env.pop();
 
@@ -96,7 +96,7 @@ impl<'a, N> Handler<'a, N> where N : NonVolatileMemory {
                          instruction: &'a [u8],
                          _: EnvId)
                          -> PassResult<'a> {
-        InstructionIs(instruction, HLC_LC)?;
+        return_unless_instructions_equal!(instruction, HLC_LC);
         let a = env.pop();
 
         if a.is_none() {
@@ -127,7 +127,7 @@ impl<'a, N> Handler<'a, N> where N : NonVolatileMemory {
                               instruction: &'a [u8],
                               _: EnvId)
                               -> PassResult<'a> {
-        InstructionIs(instruction, HLC_OBSERVE)?;
+        return_unless_instructions_equal!(instruction, HLC_OBSERVE);
         if let Some(mut observed_bytes) = env.pop() {
             if let Ok(observed_time) = hlc::Timestamp::read_bytes(&mut observed_bytes) {
                 if self.timestamp.observe(&observed_time).is_err() {
