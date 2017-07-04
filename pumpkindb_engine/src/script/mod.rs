@@ -315,42 +315,65 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
     /// Once an environment execution has been terminated, a message will be sent,
     /// depending on the result (`EnvTerminated` or `EnvFailed`)
     pub fn run(&mut self) {
+        let mut rng = thread_rng();
         let mut envs: VecDeque<(EnvId, Env<'a>, Sender<ResponseMessage>)> = VecDeque::new();
-
+        // Flag that indicates that the Env being processed should be removed from
+        // the queue
+        let mut pop_front = false;
+        // Queue length is dynamically updated to avoid scanning the queue
+        // every time we need to know its size
+        let mut len = 0;
         loop {
-            match envs.pop_front() {
-                Some((pid, mut env, chan)) => {
-                    let program = env.program[env.program.len() - 1];
-                    match self.pass(&mut env, pid.clone()) {
-                        Err(Error::Reschedule) => {
-                            env.program.push(program);
-                            envs.push_back((pid, env, chan));
-                        }
-                        Err(err) => {
-                            self.dispatcher.done(&mut env, pid);
-                            let stack_size = env.stack_size;
-                            let _ = chan.send(ResponseMessage::EnvFailed(pid,
-                                                                         err,
-                                                                         Some(env.stack_copy()),
-                                                                         Some(stack_size)));
-                        }
-                        Ok(()) => {
-                            if env.program.is_empty() ||
-                                (env.program.len() == 1 && env.program[0].len() == 0) {
-                                self.dispatcher.done(&mut env, pid);
-                                let stack_size = env.stack_size;
-                                let _ = chan.send(ResponseMessage::EnvTerminated(pid,
-                                                                                 env.stack_copy(),
-                                                                                 stack_size));
-                            } else {
-                                envs.push_back((pid, env, chan));
+            {
+                // Borrow the front of the queue mutably
+                match envs.front_mut() {
+                    Some(&mut (pid, ref mut env, ref chan)) => {
+                        let program = env.program[env.program.len() - 1];
+                        match self.pass(env, pid) {
+                            Err(Error::Reschedule) => {
+                                env.program.push(program);
                             }
-                        }
-                    };
+                            Err(err) => {
+                                self.dispatcher.done(env, pid);
+                                let stack_size = env.stack_size;
+                                let _ = chan.send(ResponseMessage::EnvFailed(pid,
+                                                                             err,
+                                                                             Some(env.stack_copy()),
+                                                                             Some(stack_size)));
+                                pop_front = true;
+                            }
+                            Ok(()) => {
+                                if env.program.is_empty() ||
+                                    (env.program.len() == 1 && env.program[0].len() == 0) {
+                                    self.dispatcher.done(env, pid);
+                                    let stack_size = env.stack_size;
+                                    let _ = chan.send(ResponseMessage::EnvTerminated(pid,
+                                                                                     env.stack_copy(),
+                                                                                     stack_size));
+                                    pop_front = true;
+                                }
+                            }
+                        };
+                    }
+                    None => (),
                 }
-                None => (),
             }
-            let message = if envs.len() == 0 {
+            // Drop the front of the queue if it's done
+            if pop_front {
+                pop_front = false;
+                len -= 1;
+                let _ = envs.pop_front();
+            } else {
+                // Otherwise, if there's more than one Env left,
+                // pick the next Env to schedule randomly
+                if len > 1 {
+                    let index: usize = rng.gen_range(1, len);
+                    // Swapping is used to avoid removing elements
+                    // from the queue
+                    envs.swap(0, len - 1);
+                }
+            }
+            let message = if envs.is_empty() {
                 self.inbox.recv()
             } else {
                 let msg = self.inbox.try_recv();
@@ -372,6 +395,7 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
                                     env.program.push(slice);
                                     self.dispatcher.init(&mut env, pid);
                                     envs.push_back((pid, env, chan));
+                                    len += 1;
                                 }
                                 Err(err) => {
                                     let _ =
