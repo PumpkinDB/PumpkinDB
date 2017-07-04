@@ -87,7 +87,7 @@ impl<'a> Env<'a> {
 
     /// Returns a copy of the entire stack
     #[inline]
-    pub fn stack_copy(self) -> Vec<Vec<u8>> {
+    pub fn stack_copy(&self) -> Vec<Vec<u8>> {
         self.stack[0..self.stack_size as usize].into_iter().map(|v| Vec::from(*v)).collect()
     }
 
