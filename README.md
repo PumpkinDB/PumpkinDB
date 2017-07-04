@@ -160,6 +160,19 @@ path = "path/to/db"
 port = 9981
 ```
 
+
+## Components
+
+PumpkinDB project is split into a couple of separate components (crates):
+
+* [pumpkinscript](https://github.com/PumpkinDB/PumpkinDB/tree/master/pumpkinscript) — PumpkinScript parser. Allows to convert text PumpkinScript form into binary one.
+* [pumpkindb_engine](https://github.com/PumpkinDB/PumpkinDB/tree/master/pumpkindb_engine) — Core PumpkinDB library. Provides PumpkinScript scheduler, and a standard library of instructions
+* [pumpkindb_mio_server](https://github.com/PumpkinDB/PumpkinDB/tree/master/pumpkindb_mio_server) — Async MIO-based PumpkinDB server library. Useful for building custom PumpkinProtocol-compatible servers.
+* [pumpkindb_client](https://github.com/PumpkinDB/PumpkinDB/tree/master/pumpkindb_client) — PumpkinProtocol client library.
+* [pumpkindb_server](https://github.com/PumpkinDB/PumpkinDB/tree/master/pumpkindb_server) — Stock PumpkinDB server. Built on top of `pumpkindb_mio_server`.
+* [pumpkindb_term](https://github.com/PumpkinDB/PumpkinDB/tree/master/pumpkindb_term) — console-based PumpkinDB server client.
+* [doctests](https://github.com/PumpkinDB/PumpkinDB/tree/master/tests/doctests) — a small utility to run instructions doctests.
+
 ## Contributing
 
 This project is in its very early days and we will always be welcoming
