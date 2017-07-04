@@ -65,18 +65,6 @@ macro_rules! handle_error {
 }
 
 #[macro_export]
-macro_rules! try_instruction {
-  ($env: expr, $handler : expr) => {
-    match $handler {
-        Err(Error::UnknownInstruction) => (),
-        Err(err @ Error::ProgramError(_)) => return handle_error!($env, err),
-        Err(err) => return Err(err),
-        Ok(()) => return Ok(())
-    }
-  };
-}
-
-#[macro_export]
 macro_rules! stack_pop {
     ($env: expr) => {
         match $env.pop() {
@@ -91,7 +79,7 @@ macro_rules! stack_pop {
 }
 
 #[macro_export]
-macro_rules! instruction_is {
+macro_rules! return_unless_instructions_equal {
     ($instruction: expr, $exp: expr) => {
         if $instruction != $exp {
             return Err(Error::UnknownInstruction)

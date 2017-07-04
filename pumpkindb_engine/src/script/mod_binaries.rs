@@ -5,7 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size, STACK_TRUE, STACK_FALSE};
+            offset_by_size, STACK_TRUE, STACK_FALSE, TryInstruction};
 
 use std::marker::PhantomData;
 
@@ -29,15 +29,15 @@ builtins!("mod_binaries.builtins");
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_instruction!(env, self.handle_builtins(env, instruction, pid));
-        try_instruction!(env, self.handle_ltp(env, instruction, pid));
-        try_instruction!(env, self.handle_gtp(env, instruction, pid));
-        try_instruction!(env, self.handle_equal(env, instruction, pid));
-        try_instruction!(env, self.handle_concat(env, instruction, pid));
-        try_instruction!(env, self.handle_slice(env, instruction, pid));
-        try_instruction!(env, self.handle_pad(env, instruction, pid));
-        try_instruction!(env, self.handle_length(env, instruction, pid));
-        Err(Error::UnknownInstruction)
+        self.handle_builtins(env, instruction, pid)
+        .if_unhandled_try(|| self.handle_ltp(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_gtp(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_equal(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_concat(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_slice(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_pad(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_length(env, instruction, pid))
+        .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
 
@@ -54,7 +54,7 @@ impl<'a> Handler<'a> {
                     instruction: &'a [u8],
                     _: EnvId)
                     -> PassResult<'a> {
-        instruction_is!(instruction, EQUALQ);
+        return_unless_instructions_equal!(instruction, EQUALQ);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -69,7 +69,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_ltp(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(instruction, LTQ);
+        return_unless_instructions_equal!(instruction, LTQ);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -84,7 +84,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_gtp(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(instruction, GTQ);
+        return_unless_instructions_equal!(instruction, GTQ);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -103,7 +103,7 @@ impl<'a> Handler<'a> {
                      instruction: &'a [u8],
                      _: EnvId)
                      -> PassResult<'a> {
-        instruction_is!(instruction, CONCAT);
+        return_unless_instructions_equal!(instruction, CONCAT);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -123,7 +123,7 @@ impl<'a> Handler<'a> {
                     instruction: &'a [u8],
                     _: EnvId)
                     -> PassResult<'a> {
-        instruction_is!(instruction, SLICE);
+        return_unless_instructions_equal!(instruction, SLICE);
         let end = stack_pop!(env);
         let start = stack_pop!(env);
         let slice = stack_pop!(env);
@@ -151,7 +151,7 @@ impl<'a> Handler<'a> {
 
     #[inline]
     fn handle_pad(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-        instruction_is!(instruction, PAD);
+        return_unless_instructions_equal!(instruction, PAD);
         let byte = stack_pop!(env);
         let size = stack_pop!(env);
         let value = stack_pop!(env);
@@ -188,7 +188,7 @@ impl<'a> Handler<'a> {
                      instruction: &'a [u8],
                      _: EnvId)
                      -> PassResult<'a> {
-        instruction_is!(instruction, LENGTH);
+        return_unless_instructions_equal!(instruction, LENGTH);
         let a = stack_pop!(env);
 
         let len = BigUint::from(a.len() as u64);

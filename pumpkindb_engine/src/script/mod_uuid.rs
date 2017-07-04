@@ -10,7 +10,7 @@ instruction!(UUID_TO_STRING, b"\x8dUUID/->STRING");
 instruction!(UUID_STRING_TO, b"\x8dUUID/STRING->");
 
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size};
+            offset_by_size, TryInstruction};
 
 use core::str::FromStr;
 use uuid::Uuid;
@@ -23,11 +23,11 @@ pub struct Handler<'a> {
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_instruction!(env, self.handle_uuid_v4(env, instruction, pid));
-        try_instruction!(env, self.handle_uuid_v5(env, instruction, pid));
-        try_instruction!(env, self.handle_uuid_to_string(env, instruction, pid));
-        try_instruction!(env, self.handle_uuid_string_to(env, instruction, pid));
-        Err(Error::UnknownInstruction)
+        self.handle_uuid_v4(env, instruction, pid)
+        .if_unhandled_try(|| self.handle_uuid_v5(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_uuid_to_string(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_uuid_string_to(env, instruction, pid))
+        .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
 
@@ -42,7 +42,7 @@ impl<'a> Handler<'a> {
                           instruction: &'a [u8],
                           _: EnvId)
                           -> PassResult<'a> {
-        instruction_is!(instruction, UUID_V4);
+        return_unless_instructions_equal!(instruction, UUID_V4);
         let uuid = Uuid::new_v4();
         let mut slice = alloc_slice!(16, env);
         slice.copy_from_slice(uuid.as_bytes());
@@ -56,7 +56,7 @@ impl<'a> Handler<'a> {
                           instruction: &'a [u8],
                           _: EnvId)
                           -> PassResult<'a> {
-        instruction_is!(instruction, UUID_V5);
+        return_unless_instructions_equal!(instruction, UUID_V5);
         let name_bytes = stack_pop!(env);
         if let Ok(name) = str::from_utf8(name_bytes) {
             let ns_uuid_bytes = stack_pop!(env);
@@ -81,7 +81,7 @@ impl<'a> Handler<'a> {
                                  instruction: &'a [u8],
                                  _: EnvId)
                                  -> PassResult<'a> {
-        instruction_is!(instruction, UUID_TO_STRING);
+        return_unless_instructions_equal!(instruction, UUID_TO_STRING);
 
         let top = stack_pop!(env);
 
@@ -102,7 +102,7 @@ impl<'a> Handler<'a> {
                                  instruction: &'a [u8],
                                  _: EnvId)
                                  -> PassResult<'a> {
-        instruction_is!(instruction, UUID_STRING_TO);
+        return_unless_instructions_equal!(instruction, UUID_STRING_TO);
 
         let top = stack_pop!(env);
 

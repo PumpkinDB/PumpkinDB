@@ -5,6 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use super::*;
+use std::iter::Iterator;
 
 pub trait Dispatcher<'a> {
     #[allow(unused_variables)]
@@ -28,8 +29,18 @@ impl<'a> Dispatcher<'a> for Vec<Box<Dispatcher<'a>>> {
         }
     }
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        for mut disp in self.into_iter() {
-            try_instruction!(env, disp.handle(env, instruction, pid));
+        let mut iter = self.into_iter();
+        while true {
+            match iter.next() {
+                None => break,
+                Some(mut disp) => {
+                    let result = disp.handle(env, instruction, pid);
+                    if result.is_unhandled() {
+                        continue
+                    }
+                    return result;
+                }
+            }
         }
         Err(Error::UnknownInstruction)
     }
@@ -171,7 +182,12 @@ impl<'a, P: 'a, S: 'a, N: 'a, T> Dispatcher<'a> for StandardDispatcher<'a, P, S,
         for_each_dispatcher!(disp, self, disp.done(env, pid));
     }
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        for_each_dispatcher!(disp, self, try_instruction!(env, disp.handle(env, instruction, pid)));
+        for_each_dispatcher!(disp, self, {
+           let result = disp.handle(env, instruction, pid);
+           if !result.is_unhandled() {
+              return result;
+           }
+        });
         Err(Error::UnknownInstruction)
     }
 }
@@ -183,7 +199,7 @@ mod tests {
   use pumpkinscript::parse;
   use script::{Env, EnvId, PassResult,
                Scheduler, SchedulerHandle, Error, RequestMessage, ResponseMessage,
-               Dispatcher};
+               Dispatcher, TryInstruction};
   use std::sync::mpsc;
   use crossbeam;
 
@@ -201,7 +217,7 @@ mod tests {
 
       pub fn handle_test(&mut self, env: &mut Env<'a>,
                           instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
-          instruction_is!(instruction, b"\x84TEST");
+          return_unless_instructions_equal!(instruction, b"\x84TEST");
           env.push(b"TEST");
           Ok(())
       }
@@ -210,8 +226,8 @@ mod tests {
 
   impl<'a> Dispatcher<'a> for MyDispatcher<'a> {
      fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
-         try_instruction!(env, self.handle_test(env, instruction, pid));
-         Err(Error::UnknownInstruction)
+         self.handle_test(env, instruction, pid)
+             .if_unhandled_try(|| Err(Error::UnknownInstruction))
      }
   }
 

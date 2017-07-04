@@ -18,7 +18,7 @@ use std::error::Error as StdError;
 use std::collections::HashMap;
 use super::{Env, EnvId, Dispatcher, PassResult, Error, STACK_TRUE, STACK_FALSE, offset_by_size,
             ERROR_EMPTY_STACK, ERROR_INVALID_VALUE, ERROR_DUPLICATE_KEY, ERROR_NO_TX,
-            ERROR_UNKNOWN_KEY, ERROR_DATABASE, ERROR_NO_VALUE};
+            ERROR_UNKNOWN_KEY, ERROR_DATABASE, ERROR_NO_VALUE, TryInstruction};
 use snowflake::ProcessUniqueId;
 use std::collections::BTreeMap;
 use storage::WriteTransactionContainer;
@@ -207,25 +207,25 @@ impl<'a, T, N> Dispatcher<'a> for Handler<'a, T, N>
     }
 
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_instruction!(env, self.handle_builtins(env, instruction, pid));
-        try_instruction!(env, self.handle_write(env, instruction, pid));
-        try_instruction!(env, self.handle_read(env, instruction, pid));
-        try_instruction!(env, self.handle_txid(env, instruction, pid));
-        try_instruction!(env, self.handle_assoc(env, instruction, pid));
-        try_instruction!(env, self.handle_assocq(env, instruction, pid));
-        try_instruction!(env, self.handle_retr(env, instruction, pid));
-        try_instruction!(env, self.handle_commit(env, instruction, pid));
-        try_instruction!(env, self.handle_cursor(env, instruction, pid));
-        try_instruction!(env, self.handle_cursor_first(env, instruction, pid));
-        try_instruction!(env, self.handle_cursor_next(env, instruction, pid));
-        try_instruction!(env, self.handle_cursor_prev(env, instruction, pid));
-        try_instruction!(env, self.handle_cursor_last(env, instruction, pid));
-        try_instruction!(env, self.handle_cursor_seek(env, instruction, pid));
-        try_instruction!(env, self.handle_cursor_positionedq(env, instruction, pid));
-        try_instruction!(env, self.handle_cursor_key(env, instruction, pid));
-        try_instruction!(env, self.handle_cursor_val(env, instruction, pid));
-        try_instruction!(env, self.handle_maxkeysize(env, instruction, pid));
-        Err(Error::UnknownInstruction)
+        self.handle_builtins(env, instruction, pid)
+        .if_unhandled_try(|| self.handle_write(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_read(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_txid(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_assoc(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_assocq(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_retr(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_commit(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_cursor(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_cursor_first(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_cursor_next(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_cursor_prev(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_cursor_last(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_cursor_seek(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_cursor_positionedq(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_cursor_key(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_cursor_val(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_maxkeysize(env, instruction, pid))
+        .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
 
@@ -353,7 +353,7 @@ impl<'a, T, N> Handler<'a, T, N>
                        instruction: &'a [u8],
                        pid: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, TXID);
+        return_unless_instructions_equal!(instruction, TXID);
         self.txns.get(&pid)
             .and_then(|v| Some(&v[v.len() - 1]))
             .and_then(|txn| Some(txn.id()))
@@ -369,7 +369,7 @@ impl<'a, T, N> Handler<'a, T, N>
 						instruction: &'a [u8],
 						pid: EnvId)
 						-> PassResult<'a> {
-        instruction_is!(instruction, ASSOC);
+        return_unless_instructions_equal!(instruction, ASSOC);
         match self.txns.get(&pid)
             .and_then(|v| Some(&v[v.len() - 1]))
             .and_then(|txn| match txn.tx_type() {
@@ -398,7 +398,7 @@ impl<'a, T, N> Handler<'a, T, N>
 						 instruction: &'a [u8],
 						 pid: EnvId)
 						 -> PassResult<'a> {
-        instruction_is!(instruction, COMMIT);
+        return_unless_instructions_equal!(instruction, COMMIT);
         match self.txns.get_mut(&pid)
             .and_then(|vec| vec.pop()) {
             Some(Txn::Write(txn, _)) => {
@@ -422,7 +422,7 @@ impl<'a, T, N> Handler<'a, T, N>
                        instruction: &'a [u8],
                        pid: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, RETR);
+        return_unless_instructions_equal!(instruction, RETR);
         let key = stack_pop!(env);
         self.txns.get(&pid)
             .and_then(|v| Some(&v[v.len() - 1]))
@@ -446,7 +446,7 @@ impl<'a, T, N> Handler<'a, T, N>
                          instruction: &'a [u8],
                          pid: EnvId)
                          -> PassResult<'a> {
-        instruction_is!(instruction, ASSOCQ);
+        return_unless_instructions_equal!(instruction, ASSOCQ);
         let key = stack_pop!(env);
         self.txns.get(&pid)
             .and_then(|v| Some(&v[v.len() - 1]))
@@ -477,7 +477,7 @@ impl<'a, T, N> Handler<'a, T, N>
 						 pid: EnvId)
 						 -> PassResult<'a> {
         use serde_cbor;
-        instruction_is!(instruction, CURSOR);
+        return_unless_instructions_equal!(instruction, CURSOR);
         let db = self.db.as_ref();
         let cursor = self.txns.get(&pid)
             .and_then(|v| Some(&v[v.len() - 1]))
@@ -508,7 +508,7 @@ impl<'a, T, N> Handler<'a, T, N>
                                instruction: &'a [u8],
                                pid: EnvId)
                                -> PassResult<'a> {
-        instruction_is!(instruction, CURSOR_FIRST);
+        return_unless_instructions_equal!(instruction, CURSOR_FIRST);
         cursor_op!(self, env, pid, first, ());
         Ok(())
     }
@@ -520,7 +520,7 @@ impl<'a, T, N> Handler<'a, T, N>
                               instruction: &'a [u8],
                               pid: EnvId)
                               -> PassResult<'a> {
-        instruction_is!(instruction, CURSOR_NEXT);
+        return_unless_instructions_equal!(instruction, CURSOR_NEXT);
         cursor_op!(self, env, pid, next, ());
         Ok(())
     }
@@ -531,7 +531,7 @@ impl<'a, T, N> Handler<'a, T, N>
                               instruction: &'a [u8],
                               pid: EnvId)
                               -> PassResult<'a> {
-        instruction_is!(instruction, CURSOR_PREV);
+        return_unless_instructions_equal!(instruction, CURSOR_PREV);
         cursor_op!(self, env, pid, prev, ());
         Ok(())
     }
@@ -542,7 +542,7 @@ impl<'a, T, N> Handler<'a, T, N>
                               instruction: &'a [u8],
                               pid: EnvId)
                               -> PassResult<'a> {
-        instruction_is!(instruction, CURSOR_LAST);
+        return_unless_instructions_equal!(instruction, CURSOR_LAST);
         cursor_op!(self, env, pid, last, ());
         Ok(())
     }
@@ -553,7 +553,7 @@ impl<'a, T, N> Handler<'a, T, N>
                               instruction: &'a [u8],
                               pid: EnvId)
                               -> PassResult<'a> {
-        instruction_is!(instruction, CURSOR_SEEK);
+        return_unless_instructions_equal!(instruction, CURSOR_SEEK);
         let key = stack_pop!(env);
         cursor_op!(self, env, pid, seek_range_k, (key));
         Ok(())
@@ -565,7 +565,7 @@ impl<'a, T, N> Handler<'a, T, N>
                               instruction: &'a [u8],
                               pid: EnvId)
                               -> PassResult<'a> {
-        instruction_is!(instruction, CURSOR_POSITIONEDQ);
+        return_unless_instructions_equal!(instruction, CURSOR_POSITIONEDQ);
         let result = match cursor_map_op!(self, env, pid, get_current, (), |_| Ok(true), |_| false) {
             Ok(true) => STACK_TRUE,
             Err(false) => STACK_FALSE,
@@ -581,7 +581,7 @@ impl<'a, T, N> Handler<'a, T, N>
                              instruction: &'a [u8],
                              pid: EnvId)
                              -> PassResult<'a> {
-        instruction_is!(instruction, CURSOR_KEY);
+        return_unless_instructions_equal!(instruction, CURSOR_KEY);
         cursor_map_op!(self, env, pid, get_current, (),
            |(key, _) | {
               let slice = alloc_slice!(key.len(), env);
@@ -597,7 +597,7 @@ impl<'a, T, N> Handler<'a, T, N>
                              instruction: &'a [u8],
                              pid: EnvId)
                              -> PassResult<'a> {
-        instruction_is!(instruction, CURSOR_VAL);
+        return_unless_instructions_equal!(instruction, CURSOR_VAL);
         cursor_map_op!(self, env, pid, get_current, (),
            |(_, val) | {
               let slice = alloc_slice!(val.len(), env);
@@ -613,7 +613,7 @@ impl<'a, T, N> Handler<'a, T, N>
                              instruction: &'a [u8],
                              _: EnvId)
                              -> PassResult<'a> {
-        instruction_is!(instruction, MAXKEYSIZE);
+        return_unless_instructions_equal!(instruction, MAXKEYSIZE);
         let slice = alloc_and_write!(self.maxkeysize.as_slice(), env);
         env.push(slice);
         Ok(())

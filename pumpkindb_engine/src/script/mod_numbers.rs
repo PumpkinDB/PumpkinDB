@@ -5,7 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
-            offset_by_size, STACK_TRUE, STACK_FALSE};
+            offset_by_size, STACK_TRUE, STACK_FALSE, TryInstruction};
 
 use ::pumpkinscript::{Packable, Unpackable};
 
@@ -78,7 +78,7 @@ instruction!(F64_TO_STRING, b"\x8cF64/->STRING");
 
 macro_rules! uint_comparison {
     ($env: expr, $instruction: expr, $instruction_const: expr, $cmp: ident) => {{
-        instruction_is!($instruction, $instruction_const);
+        return_unless_instructions_equal!($instruction, $instruction_const);
         let b = stack_pop!($env);
         let a = stack_pop!($env);
 
@@ -96,7 +96,7 @@ macro_rules! uint_comparison {
 
 macro_rules! int_comparison {
     ($env: expr, $instruction: expr, $instruction_const: expr, $cmp: ident) => {{
-        instruction_is!($instruction, $instruction_const);
+        return_unless_instructions_equal!($instruction, $instruction_const);
         let b = stack_pop!($env);
         let a = stack_pop!($env);
 
@@ -273,43 +273,43 @@ pub struct Handler<'a> {
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
-        try_instruction!(env, self.handle_uint_add(env, instruction, pid));
-        try_instruction!(env, self.handle_uint_sub(env, instruction, pid));
-        try_instruction!(env, self.handle_int_add(env, instruction, pid));
-        try_instruction!(env, self.handle_int_sub(env, instruction, pid));
-        try_instruction!(env, self.handle_int_to_uint(env, instruction, pid));
-        try_instruction!(env, self.handle_uint_to_int(env, instruction, pid));
-        try_instruction!(env, self.handle_uint_equalq(env, instruction, pid));
-        try_instruction!(env, self.handle_uint_gtq(env, instruction, pid));
-        try_instruction!(env, self.handle_uint_ltq(env, instruction, pid));
-        try_instruction!(env, self.handle_int_equalq(env, instruction, pid));
-        try_instruction!(env, self.handle_int_gtq(env, instruction, pid));
-        try_instruction!(env, self.handle_int_ltq(env, instruction, pid));
-        try_instruction!(env, self.handle_uint8_add(env, instruction, pid));
-        try_instruction!(env, self.handle_uint8_sub(env, instruction, pid));
-        try_instruction!(env, self.handle_int8_add(env, instruction, pid));
-        try_instruction!(env, self.handle_int8_sub(env, instruction, pid));
-        try_instruction!(env, self.handle_uint16_add(env, instruction, pid));
-        try_instruction!(env, self.handle_uint16_sub(env, instruction, pid));
-        try_instruction!(env, self.handle_int16_add(env, instruction, pid));
-        try_instruction!(env, self.handle_int16_sub(env, instruction, pid));
-        try_instruction!(env, self.handle_uint32_add(env, instruction, pid));
-        try_instruction!(env, self.handle_uint32_sub(env, instruction, pid));
-        try_instruction!(env, self.handle_int32_add(env, instruction, pid));
-        try_instruction!(env, self.handle_int32_sub(env, instruction, pid));
-        try_instruction!(env, self.handle_uint64_add(env, instruction, pid));
-        try_instruction!(env, self.handle_uint64_sub(env, instruction, pid));
-        try_instruction!(env, self.handle_int64_add(env, instruction, pid));
-        try_instruction!(env, self.handle_int64_sub(env, instruction, pid));
-        try_instruction!(env, self.handle_f32_add(env, instruction, pid));
-        try_instruction!(env, self.handle_f32_sub(env, instruction, pid));
-        try_instruction!(env, self.handle_f64_add(env, instruction, pid));
-        try_instruction!(env, self.handle_f64_sub(env, instruction, pid));
+        self.handle_uint_add(env, instruction, pid)
+        .if_unhandled_try(|| self.handle_uint_sub(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_int_add(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_int_sub(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_int_to_uint(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_uint_to_int(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_uint_equalq(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_uint_gtq(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_uint_ltq(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_int_equalq(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_int_gtq(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_int_ltq(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_uint8_add(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_uint8_sub(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_int8_add(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_int8_sub(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_uint16_add(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_uint16_sub(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_int16_add(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_int16_sub(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_uint32_add(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_uint32_sub(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_int32_add(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_int32_sub(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_uint64_add(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_uint64_sub(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_int64_add(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_int64_sub(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_f32_add(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_f32_sub(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_f64_add(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_f64_sub(env, instruction, pid))
 
-        try_instruction!(env, self.handle_uint_to_string(env, instruction, pid));
-        try_instruction!(env, self.handle_int_to_string(env, instruction, pid));
-        try_instruction!(env, self.handle_to_string(env, instruction, pid));
-        Err(Error::UnknownInstruction)
+        .if_unhandled_try(|| self.handle_uint_to_string(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_int_to_string(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_to_string(env, instruction, pid))
+        .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
 
@@ -325,7 +325,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, UINT_ADD);
+        return_unless_instructions_equal!(instruction, UINT_ADD);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -344,7 +344,7 @@ impl<'a> Handler<'a> {
                       instruction: &'a [u8],
                       _: EnvId)
                       -> PassResult<'a> {
-        instruction_is!(instruction, INT_ADD);
+        return_unless_instructions_equal!(instruction, INT_ADD);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -363,7 +363,7 @@ impl<'a> Handler<'a> {
                       instruction: &'a [u8],
                       _: EnvId)
                       -> PassResult<'a> {
-        instruction_is!(instruction, INT_SUB);
+        return_unless_instructions_equal!(instruction, INT_SUB);
         let b = stack_pop!(env);
         let a = stack_pop!(env);
 
@@ -382,7 +382,7 @@ impl<'a> Handler<'a> {
                           instruction: &'a [u8],
                           _: EnvId)
                           -> PassResult<'a> {
-        instruction_is!(instruction, INT_TO_UINT);
+        return_unless_instructions_equal!(instruction, INT_TO_UINT);
         let a = stack_pop!(env);
         let a_int : BigInt = a.unpack().ok_or(error_invalid_value!(a))?;
 
@@ -397,7 +397,7 @@ impl<'a> Handler<'a> {
                           instruction: &'a [u8],
                           _: EnvId)
                           -> PassResult<'a> {
-        instruction_is!(instruction, UINT_TO_INT);
+        return_unless_instructions_equal!(instruction, UINT_TO_INT);
         let a = stack_pop!(env);
         let a_uint = BigUint::from_bytes_be(a);
 
@@ -416,7 +416,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, UINT_SUB);
+        return_unless_instructions_equal!(instruction, UINT_SUB);
         let a = stack_pop!(env);
         let b = stack_pop!(env);
 
@@ -495,7 +495,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, UINT8_ADD);
+        return_unless_instructions_equal!(instruction, UINT8_ADD);
         no_endianness_sized_uint_op!(env, read_u8, checked_add, write_u8)
     }
 
@@ -505,7 +505,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, UINT8_SUB);
+        return_unless_instructions_equal!(instruction, UINT8_SUB);
         no_endianness_sized_uint_op!(env, read_u8, checked_sub, write_u8)
     }
 
@@ -515,7 +515,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, INT8_ADD);
+        return_unless_instructions_equal!(instruction, INT8_ADD);
         no_endianness_sized_int_op!(env, read_i8, checked_add, write_i8)
     }
 
@@ -525,7 +525,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, INT8_SUB);
+        return_unless_instructions_equal!(instruction, INT8_SUB);
         no_endianness_sized_int_op!(env, read_i8, checked_sub, write_i8)
     }
 
@@ -535,7 +535,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, UINT16_ADD);
+        return_unless_instructions_equal!(instruction, UINT16_ADD);
         sized_uint_op!(env, read_u16, checked_add, write_u16)
     }
 
@@ -545,7 +545,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, UINT16_SUB);
+        return_unless_instructions_equal!(instruction, UINT16_SUB);
         sized_uint_op!(env, read_u16, checked_sub, write_u16)
     }
 
@@ -555,7 +555,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, INT16_ADD);
+        return_unless_instructions_equal!(instruction, INT16_ADD);
         sized_int_op!(env, read_i16, checked_add, write_i16)
     }
 
@@ -565,7 +565,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, INT16_SUB);
+        return_unless_instructions_equal!(instruction, INT16_SUB);
         sized_int_op!(env, read_i16, checked_sub, write_i16)
     }
 
@@ -575,7 +575,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, UINT32_ADD);
+        return_unless_instructions_equal!(instruction, UINT32_ADD);
         sized_uint_op!(env, read_u32, checked_add, write_u32)
     }
 
@@ -585,7 +585,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, UINT32_SUB);
+        return_unless_instructions_equal!(instruction, UINT32_SUB);
         sized_uint_op!(env, read_u32, checked_sub, write_u32)
     }
 
@@ -595,7 +595,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, INT32_ADD);
+        return_unless_instructions_equal!(instruction, INT32_ADD);
         sized_int_op!(env, read_i32, checked_add, write_i32)
     }
 
@@ -605,7 +605,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, INT32_SUB);
+        return_unless_instructions_equal!(instruction, INT32_SUB);
         sized_int_op!(env, read_i32, checked_sub, write_i32)
     }
 
@@ -615,7 +615,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, UINT64_ADD);
+        return_unless_instructions_equal!(instruction, UINT64_ADD);
         sized_uint_op!(env, read_u64, checked_add, write_u64)
     }
 
@@ -625,7 +625,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, UINT64_SUB);
+        return_unless_instructions_equal!(instruction, UINT64_SUB);
         sized_uint_op!(env, read_u64, checked_sub, write_u64)
     }
 
@@ -635,7 +635,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, INT64_ADD);
+        return_unless_instructions_equal!(instruction, INT64_ADD);
         sized_int_op!(env, read_i64, checked_add, write_i64)
     }
 
@@ -645,7 +645,7 @@ impl<'a> Handler<'a> {
                        instruction: &'a [u8],
                        _: EnvId)
                        -> PassResult<'a> {
-        instruction_is!(instruction, INT64_SUB);
+        return_unless_instructions_equal!(instruction, INT64_SUB);
         sized_int_op!(env, read_i64, checked_sub, write_i64)
     }
     
@@ -655,7 +655,7 @@ impl<'a> Handler<'a> {
                         instruction: &'a [u8],
                         _: EnvId)
                         -> PassResult<'a> {
-        instruction_is!(instruction, F32_ADD);
+        return_unless_instructions_equal!(instruction, F32_ADD);
         let a_bytes = stack_pop!(env);
         let a: f32 = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
             
@@ -675,7 +675,7 @@ impl<'a> Handler<'a> {
                       instruction: &'a [u8],
                       _: EnvId)
                       -> PassResult<'a> {
-        instruction_is!(instruction, F32_SUB);
+        return_unless_instructions_equal!(instruction, F32_SUB);
         let a_bytes = stack_pop!(env);
         let a: f32 = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
         
@@ -695,7 +695,7 @@ impl<'a> Handler<'a> {
                         instruction: &'a [u8],
                         _: EnvId)
                         -> PassResult<'a> {
-        instruction_is!(instruction, F64_ADD);
+        return_unless_instructions_equal!(instruction, F64_ADD);
         let a_bytes = stack_pop!(env);
         let a: f64 = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
         
@@ -715,7 +715,7 @@ impl<'a> Handler<'a> {
                       instruction: &'a [u8],
                       _: EnvId)
                       -> PassResult<'a> {
-        instruction_is!(instruction, F64_SUB);
+        return_unless_instructions_equal!(instruction, F64_SUB);
         let a_bytes = stack_pop!(env);
         let a: f64 = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
         
@@ -735,7 +735,7 @@ impl<'a> Handler<'a> {
                         instruction: &'a [u8],
                         _: EnvId)
                         -> PassResult<'a> {
-        instruction_is!(instruction, UINT_TO_STRING);
+        return_unless_instructions_equal!(instruction, UINT_TO_STRING);
 
         let a_bytes = stack_pop!(env);
         let a: BigUint = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
@@ -753,7 +753,7 @@ impl<'a> Handler<'a> {
                              instruction: &'a [u8],
                              _: EnvId)
                              -> PassResult<'a> {
-        instruction_is!(instruction, INT_TO_STRING);
+        return_unless_instructions_equal!(instruction, INT_TO_STRING);
         
         let a_bytes = stack_pop!(env);
         let a: BigInt = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
