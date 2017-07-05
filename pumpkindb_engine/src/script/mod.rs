@@ -346,39 +346,37 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
         // every time we need to know its size
         let mut len = 0;
         loop {
-            {
-                // Borrow the front of the queue mutably
-                match envs.front_mut() {
-                    Some(&mut (pid, ref mut env, ref chan)) => {
-                        let program = env.program[env.program.len() - 1];
-                        match self.pass(env, pid) {
-                            Err(Error::Reschedule) => {
-                                env.program.push(program);
-                            }
-                            Err(err) => {
+            // Borrow the front of the queue mutably
+            match envs.front_mut() {
+                Some(&mut (pid, ref mut env, ref chan)) => {
+                    let program = env.program[env.program.len() - 1];
+                    match self.pass(env, pid) {
+                        Err(Error::Reschedule) => {
+                            env.program.push(program);
+                        }
+                        Err(err) => {
+                            self.dispatcher.done(env, pid);
+                            let stack_size = env.stack_size;
+                            let _ = chan.send(ResponseMessage::EnvFailed(pid,
+                                                                         err,
+                                                                         Some(env.stack_copy()),
+                                                                         Some(stack_size)));
+                            pop_front = true;
+                        }
+                        Ok(()) => {
+                            if env.program.is_empty() ||
+                                (env.program.len() == 1 && env.program[0].len() == 0) {
                                 self.dispatcher.done(env, pid);
                                 let stack_size = env.stack_size;
-                                let _ = chan.send(ResponseMessage::EnvFailed(pid,
-                                                                             err,
-                                                                             Some(env.stack_copy()),
-                                                                             Some(stack_size)));
+                                let _ = chan.send(ResponseMessage::EnvTerminated(pid,
+                                                                                 env.stack_copy(),
+                                                                                 stack_size));
                                 pop_front = true;
                             }
-                            Ok(()) => {
-                                if env.program.is_empty() ||
-                                    (env.program.len() == 1 && env.program[0].len() == 0) {
-                                    self.dispatcher.done(env, pid);
-                                    let stack_size = env.stack_size;
-                                    let _ = chan.send(ResponseMessage::EnvTerminated(pid,
-                                                                                     env.stack_copy(),
-                                                                                     stack_size));
-                                    pop_front = true;
-                                }
-                            }
-                        };
-                    }
-                    None => (),
+                        }
+                    };
                 }
+                None => (),
             }
             // Drop the front of the queue if it's done
             if pop_front {
