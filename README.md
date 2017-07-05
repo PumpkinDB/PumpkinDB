@@ -61,7 +61,7 @@ To name a few:
 
 | Language | Library | Status |
 |----------|---------|--------|
-| **Rust** | [pumpkindb_client](https://github.com/PumpkinDB/PumpkinDB/tree/master/pumpkindb_client) | Pre-release |
+| **Rust** | [pumpkindb_client](https://github.com/PumpkinDB/PumpkinDB/tree/master/pumpkindb_client) | Early release ([0.2.0](https://crates.io/crates/pumpkindb_client/0.2.0)) |
 | **Java** | [pumpkindb-client](https://github.com/PumpkinDB/pumpkindb-java) | Pre-release |
 
 ## Trying it out
