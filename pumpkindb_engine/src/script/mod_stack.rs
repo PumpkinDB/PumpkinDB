@@ -13,6 +13,8 @@ use pumpkinscript;
 use num_bigint::BigUint;
 use num_traits::ToPrimitive;
 
+instruction!(THREEDROP, (a, b, c => ), b"\x853DROP");
+instruction!(THREEDUP, (a, b, c => a, b, c), b"\x843DUP");
 instruction!(DROP, (a => ), b"\x84DROP");
 instruction!(DUP, (a => a, a), b"\x83DUP");
 instruction!(SWAP, (a, b => b, a), b"\x84SWAP");
@@ -36,6 +38,8 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
         self.handle_builtins(env, instruction, pid)
         .if_unhandled_try(|| self.handle_drop(env, instruction, pid))
         .if_unhandled_try(|| self.handle_dup(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_3drop(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_3dup(env, instruction, pid))
         .if_unhandled_try(|| self.handle_swap(env, instruction, pid))
         .if_unhandled_try(|| self.handle_2swap(env, instruction, pid))
         .if_unhandled_try(|| self.handle_rot(env, instruction, pid))
@@ -63,6 +67,25 @@ impl<'a> Handler<'a> {
 
         env.push(v);
         env.push(v);
+        Ok(())
+    }
+
+
+    #[inline]
+    fn handle_3dup(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
+        return_unless_instructions_equal!(instruction, THREEDUP);
+        let c = stack_pop!(env);
+        let b = stack_pop!(env);
+        let a = stack_pop!(env);
+
+        env.push(a);
+        env.push(b);
+        env.push(c);
+
+        env.push(a);
+        env.push(b);
+        env.push(c);
+
         Ok(())
     }
 
@@ -187,6 +210,20 @@ impl<'a> Handler<'a> {
                    _: EnvId)
                    -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, DROP);
+        let _ = stack_pop!(env);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_3drop(&mut self,
+                   env: &mut Env<'a>,
+                   instruction: &'a [u8],
+                   _: EnvId)
+                   -> PassResult<'a> {
+        return_unless_instructions_equal!(instruction, THREEDROP);
+        let _ = stack_pop!(env);
+        let _ = stack_pop!(env);
         let _ = stack_pop!(env);
 
         Ok(())
