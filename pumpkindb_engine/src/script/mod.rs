@@ -88,7 +88,7 @@ instruction!(TRY_END, b"\x80\x83TRY"); // internal instruction
 
 include!("macros.rs");
 
-trait TryInstruction {
+pub trait TryInstruction {
     fn if_unhandled_try<F>(self, f: F) -> Result<(), Error> where F: FnOnce() -> Result<(), Error>;
     fn is_unhandled(&self) -> bool;
 }
