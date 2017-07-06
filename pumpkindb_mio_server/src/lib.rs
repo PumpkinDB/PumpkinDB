@@ -27,7 +27,7 @@ use mio::tcp::TcpListener;
 
 use mio::channel as mio_chan;
 
-use pumpkindb_engine::{script, lmdb};
+use pumpkindb_engine::{script};
 
 pub fn run(port: i64,
            senders: Vec<script::Sender<script::RequestMessage>>,

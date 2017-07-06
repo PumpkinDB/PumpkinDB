@@ -26,7 +26,6 @@ use clap::{App, Arg};
 use std::thread;
 
 use std::fs;
-use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -50,7 +49,7 @@ lazy_static! {
  };
 }
 
-use pumpkindb_engine::nvmem::{MmapedFile, MmapedRegion};
+use pumpkindb_engine::nvmem::{MmapedFile};
 
 pub fn main() {
     let args = App::new("PumpkinDB Server")

@@ -53,7 +53,7 @@ impl<N : NonVolatileMemory> Timestamp<N> {
 
 #[cfg(test)]
 mod tests {
-    use nvmem::{NonVolatileMemory, MmapedFile};
+    use nvmem::{MmapedFile};
     use timestamp::Timestamp;
     use hlc;
 

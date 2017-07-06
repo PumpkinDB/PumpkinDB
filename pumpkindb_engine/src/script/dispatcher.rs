@@ -30,7 +30,7 @@ impl<'a> Dispatcher<'a> for Vec<Box<Dispatcher<'a>>> {
     }
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
         let mut iter = self.into_iter();
-        while true {
+        loop {
             match iter.next() {
                 None => break,
                 Some(mut disp) => {

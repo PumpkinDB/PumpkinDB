@@ -98,7 +98,7 @@ mod tests {
 
     use pumpkinscript::parse;
     use messaging;
-    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, dispatcher};
+    use script::{Env, Scheduler, Error, ResponseMessage, EnvId, dispatcher};
     use std::sync::mpsc;
     use std::sync::Arc;
     use std::fs;
@@ -107,7 +107,7 @@ mod tests {
     use crossbeam;
     use storage;
     use timestamp;
-    use nvmem::{MmapedFile, MmapedRegion, NonVolatileMemory};
+    use nvmem::{MmapedFile};
 
     use std::time::Duration;
 
