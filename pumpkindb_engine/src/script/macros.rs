@@ -243,6 +243,8 @@ macro_rules! alloc_and_write {
     }};
 }
 
+// TODO: use or remove?
+#[allow(unused_macros)]
 #[cfg(test)]
 macro_rules! eval {
         ($script: expr, $env: ident, $expr: expr) => {
@@ -321,6 +323,8 @@ macro_rules! eval {
       }
 }
 
+// TODO: use or remove?
+#[allow(unused_macros)]
 #[cfg(test)]
 macro_rules! bench_eval {
         ($script: expr, $b: expr) => {
@@ -392,6 +396,8 @@ macro_rules! bench_eval {
       }
 }
 
+// TODO: use or remove?
+#[allow(unused_macros)]
 #[cfg(test)]
 macro_rules! data {
     ($ptr:expr) => {
@@ -402,6 +408,8 @@ macro_rules! data {
     };
 }
 
+// TODO: use or remove?
+#[allow(unused_macros)]
 #[cfg(test)]
 macro_rules! parsed_data {
         ($s: expr) => {
@@ -409,6 +417,8 @@ macro_rules! parsed_data {
         };
 }
 
+// TODO: use or remove?
+#[allow(unused_macros)]
 #[cfg(test)]
 macro_rules! assert_error {
     ($result: expr, $expected: expr) => {{

@@ -11,6 +11,8 @@ pub trait NonVolatileMemory : Read + Write {}
 use memmap::{Mmap, MmapViewSync, Protection};
 
 pub struct MmapedFile {
+    // TODO: use or remove `size`
+    #[allow(unused)]
     size: usize,
     offset: usize,
     mmap: Option<MmapViewSync>,
@@ -59,6 +61,8 @@ impl MmapedFile {
 
 pub struct MmapedRegion {
     mmap: MmapViewSync,
+    // TODO: use or remove `len`
+    #[allow(unused)]
     len: usize,
 }
 

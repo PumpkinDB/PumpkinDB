@@ -353,8 +353,8 @@ mod tests {
 
     use pumpkinscript::parse;
     use messaging;
-    use nvmem::{MmapedFile, MmapedRegion, NonVolatileMemory};
-    use script::{Scheduler, RequestMessage, ResponseMessage, EnvId, dispatcher};
+    use nvmem::{MmapedFile};
+    use script::{Scheduler, ResponseMessage, EnvId, dispatcher};
     use std::sync::mpsc;
     use std::sync::Arc;
     use std::fs;
@@ -363,7 +363,6 @@ mod tests {
     use crossbeam;
     use storage;
     use timestamp;
-    use rand::Rng;
 
     const _EMPTY: &'static [u8] = b"";
 

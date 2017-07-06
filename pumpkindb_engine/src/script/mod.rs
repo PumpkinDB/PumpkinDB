@@ -564,8 +564,8 @@ mod tests {
 
     use pumpkinscript::{parse, offset_by_size};
     use messaging;
-    use nvmem::{MmapedFile, MmapedRegion, NonVolatileMemory};
-    use script::{Env, Scheduler, Error, RequestMessage, ResponseMessage, EnvId, dispatcher};
+    use nvmem::{MmapedFile};
+    use script::{Env, Scheduler, Error, ResponseMessage, EnvId, dispatcher};
     use std::sync::mpsc;
     use std::sync::Arc;
     use timestamp;
@@ -575,7 +575,6 @@ mod tests {
     use crossbeam;
     use super::binparser;
     use storage;
-    use rand::Rng;
 
     const _EMPTY: &'static [u8] = b"";
 
