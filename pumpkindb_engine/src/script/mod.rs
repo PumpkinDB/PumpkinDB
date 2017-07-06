@@ -390,7 +390,7 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
                     let index: usize = rng.gen_range(1, len);
                     // Swapping is used to avoid removing elements
                     // from the queue
-                    envs.swap(0, len - 1);
+                    envs.swap(0, index);
                 }
             }
             let message = if envs.is_empty() {
