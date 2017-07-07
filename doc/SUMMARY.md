@@ -6,7 +6,9 @@
  * Stack manipulation
    * [-ROT](script/-ROT.md)
    * [2DROP](script/2DROP.md)
+   * [3DROP](script/3DROP.md)
    * [2DUP](script/2DUP.md)
+   * [3DUP](script/3DUP.md)
    * [2NIP](script/2NIP.md)
    * [2OVER](script/2OVER.md)
    * [2ROT](script/2ROT.md)
