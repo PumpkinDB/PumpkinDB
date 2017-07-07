@@ -15,6 +15,9 @@ to do this by retrieving ongoing transaction's ID
 Transaction identifiers are guaranteed to be unique and grow monotonically,
 thus allowing one to compare the order of their origination.
 
+Exact length is not guaranteed, however, for the purpose of comparability,
+it is guaranteed that all transaction identifiers are of the same length.
+
 {% common -%}
 
 ```
