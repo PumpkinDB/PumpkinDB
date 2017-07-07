@@ -190,7 +190,7 @@ macro_rules! cursor_map_op {
     }};
 }
 
-builtins!("mod_storage.builtins");
+builtins!("mod_storage.psc");
 
 impl<'a, T, N> Dispatcher<'a> for Handler<'a, T, N>
     where T : AsRef<storage::Storage<'a>> + 'a,

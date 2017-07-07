@@ -37,7 +37,7 @@ instruction!(OR, (a, b => c), b"\x82OR");
 // Category: experimental features
 instruction!(FEATUREQ, (a => b), b"\x88FEATURE?");
 
-builtins!("mod_core.builtins");
+builtins!("mod_core.psc");
 
 pub struct Handler<'a> {
     phantom: PhantomData<&'a ()>,
