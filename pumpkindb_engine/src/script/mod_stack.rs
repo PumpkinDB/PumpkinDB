@@ -31,7 +31,7 @@ pub struct Handler<'a> {
     phantom: PhantomData<&'a ()>,
 }
 
-builtins!("mod_stack.builtins");
+builtins!("mod_stack.psc");
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {

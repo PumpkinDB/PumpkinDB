@@ -59,7 +59,7 @@ macro_rules! json_is_a {
     }};
 }
 
-builtins!("mod_json.builtins");
+builtins!("mod_json.psc");
 
 impl<'a> Dispatcher<'a> for Handler<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a> {
