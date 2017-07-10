@@ -47,6 +47,7 @@
    * [CURSOR/FIRST](script/CURSOR/FIRST.md)
    * [CURSOR/LAST](script/CURSOR/LAST.md)
    * [CURSOR/NEXT](script/CURSOR/NEXT.md)
+   * [CURSOR/SEEK](script/CURSOR/SEEK.md)
    * [CURSOR/SEEKLAST](script/CURSOR/SEEKLAST.md)
    * [CURSOR/POSITIONED?](script/CURSOR/POSITIONEDQ.md)
    * [CURSOR/KEY](script/CURSOR/KEY.md)
