@@ -12,14 +12,14 @@ macro_rules! builtins {
 
       static ref BUILTIN_DEFS: Vec<Vec<u8>> = ::pumpkinscript::textparser::programs(*BUILTIN_FILE).unwrap().1;
 
-      static ref BUILTINS: ::std::collections::BTreeMap<&'static [u8], Vec<u8>> = {
+      static ref BUILTINS: ::std::collections::BTreeMap<&'static [u8], &'static [u8]> = {
           let mut map = ::std::collections::BTreeMap::new();
           let ref defs : Vec<Vec<u8>> = *BUILTIN_DEFS;
           for definition in defs {
-              match ::pumpkinscript::binparser::instruction(definition.as_slice()) {
+              match ::pumpkinscript::binparser::instruction(&definition) {
                   ::pumpkinscript::ParseResult::Done(&[0x81, b':', ref rest..], _) => {
                       let instruction = &definition[0..definition.len() - rest.len() - 2];
-                      map.insert(instruction, Vec::from(rest));
+                      map.insert(instruction, rest);
                   },
                   other => panic!("builtin definition parse error {:?}", other)
               }
@@ -38,12 +38,12 @@ macro_rules! handle_builtins {
                            instruction: &'a [u8],
                            _: EnvId)
                            -> PassResult<'a> {
-            if BUILTINS.contains_key(instruction) {
-                let vec = BUILTINS.get(instruction).unwrap();
-                env.program.push(vec.as_slice());
-                Ok(())
-            } else {
-                Err(Error::UnknownInstruction)
+            match BUILTINS.get(instruction) {
+               Some(val) => {
+                  env.program.push(val);
+                  Ok(())
+               },
+               None => Err(Error::UnknownInstruction),
             }
         }
     };
