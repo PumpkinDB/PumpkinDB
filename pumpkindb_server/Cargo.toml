@@ -13,6 +13,7 @@ authors = ["Yurii Rashkovskii <yrashk@gmail.com>"]
 [[bin]]
 doc = false
 name = "pumpkindb"
+path = "src/main.rs"
 
 [dependencies]
 clap = "2.22.1"
