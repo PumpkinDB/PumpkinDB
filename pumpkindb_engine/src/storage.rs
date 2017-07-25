@@ -10,10 +10,6 @@ use std::path;
 use std::ffi::CString;
 #[cfg(not(target_os = "windows"))]
 use libc::statvfs;
-#[cfg(not(target_os = "windows"))]
-use alloc::heap;
-#[cfg(not(target_os = "windows"))]
-use core::mem::size_of;
 use lmdb;
 
 use std::sync::Arc;
@@ -107,9 +103,7 @@ pub fn create_environment(storage_path: String, map_size: Option<i64>, maxreader
                 let canonical = fs::canonicalize(&path).unwrap();
                 let absolute_path = canonical.as_path().to_str().unwrap();
                 let absolute_path_c = CString::new(absolute_path).unwrap();
-                let statp: *mut statvfs =
-                    heap::allocate(size_of::<statvfs>(), size_of::<usize>()) as *mut statvfs;
-                let mut stat = *statp;
+                let mut stat: statvfs = ::std::mem::zeroed();
                 if statvfs(absolute_path_c.as_ptr(), &mut stat) != 0 {
                     warn!("Can't determine available disk space");
                 } else {
@@ -118,7 +112,6 @@ pub fn create_environment(storage_path: String, map_size: Option<i64>, maxreader
                           size / (1024 * 1024 * 1024));
                     env_builder.set_mapsize(size).expect("can't set map size");
                 }
-                heap::deallocate(statp as *mut u8, size_of::<statvfs>(), size_of::<usize>());
             }
         } else {
             match map_size {
