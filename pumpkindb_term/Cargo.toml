@@ -12,6 +12,7 @@ authors = ["Yurii Rashkovskii <yrashk@gmail.com>"]
 [[bin]]
 doc = false
 name = "pumpkindb-term"
+path = "src/main.rs"
 
 [dependencies]
 config = "0.3.1"
