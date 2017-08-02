@@ -58,14 +58,14 @@ fn eval(name: &[u8], script: &[u8], timestamp: Arc<timestamp::Timestamp<nvmem::M
         sender.schedule_env(EnvId::new(), Vec::from(script), callback,
                                                         Box::new(sender0));
         match receiver.recv() {
-            Ok(ResponseMessage::EnvTerminated(_, stack, stack_size)) => {
+            Ok(ResponseMessage::EnvTerminated(_, stack, _)) => {
                 sender.shutdown();
                 simple_accessor.shutdown();
                 let mut stack_ = Vec::with_capacity(stack.len());
                 for i in 0..(&stack).len() {
                     stack_.push((&stack[i]).as_slice());
                 }
-                let mut script_env = Env::new_with_stack(stack_, stack_size).unwrap();
+                let mut script_env = Env::new_with_stack(stack_).unwrap();
                 let val = script_env.pop().unwrap();
                 assert_eq!(Vec::from(val),
                            vec![1],

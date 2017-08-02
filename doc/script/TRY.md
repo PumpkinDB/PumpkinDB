@@ -13,6 +13,8 @@ the closure but will not fail the program if there was an error.
 Instead, it will push an error closure onto the stack. If no error
 occurred, `[]` (an empty closure) will be pushed onto the stack.
 
+`TRY` evaluates the closure on the current stack.
+
 {% common -%}
 
 ```

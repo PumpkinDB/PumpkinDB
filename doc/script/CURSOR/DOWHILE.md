@@ -12,6 +12,9 @@ Output stack:
 top of the stack, invoking `iterator` on the `cursor` after each run. 
 The closure should be written with the expectation of the cursor on the top of the stack.
 
+`CURSOR/DOWHILE` evaluates the closure on a new stack, popping the
+current stack back after each evaluation.
+
 {% common -%}
 
 ```
@@ -21,8 +24,8 @@ PumpkinDB> ["testkey" HLC CONCAT 1 ASSOC
    "z" HLC CONCAT 4 ASSOC
    COMMIT] WRITE
   [CURSOR DUP CURSOR/FIRST DROP
-     [CURSOR/VAL TRUE] 'CURSOR/NEXT CURSOR/DOWHILE] READ
-0x01 0x02 0x03 0x04   
+     [CURSOR/VAL >R TRUE] 'CURSOR/NEXT CURSOR/DOWHILE] READ R> R> R>
+0x04 0x03 0x02 0x01
 ```
 
 {% endmethod %}
@@ -47,6 +50,7 @@ cursor_dowhile :
    "z" HLC CONCAT 4 ASSOC
    COMMIT] WRITE
   [CURSOR DUP CURSOR/FIRST DROP
-   [CURSOR/VAL TRUE] 'CURSOR/NEXT CURSOR/DOWHILE] READ
-  4 WRAP [1 2 3 4] EQUAL?.
+   [CURSOR/VAL >R TRUE] 'CURSOR/NEXT CURSOR/DOWHILE] READ
+  R> R> R> R> 
+  4 WRAP [4 3 2 1] EQUAL?.
 ```

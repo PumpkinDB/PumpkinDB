@@ -17,6 +17,8 @@ one important distinction: all new instructions defined inside
 evaluation (using [SET](../SET.md) and [DEF](../DEF.md)) will be
 gone after the evaluation.  
 
+`EVAL/SCOPED` evaluates the closure on the current stack.
+
 {% common -%}
 
 ```

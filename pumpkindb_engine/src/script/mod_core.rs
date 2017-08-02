@@ -9,6 +9,7 @@ use pumpkinscript::{parse_bin, binparser};
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
             offset_by_size, STACK_TRUE, STACK_FALSE, TryInstruction};
 
+use super::mod_stack::{PUSH, POP, TO_R, FROM_R};
 use std::marker::PhantomData;
 
 use pumpkinscript;
@@ -231,6 +232,13 @@ impl<'a> Handler<'a> {
                       -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, DOWHILE);
         let v = stack_pop!(env);
+        let mut v1 = vec![];
+        v1.extend_from_slice(PUSH);
+        v1.extend_from_slice(v);
+        v1.extend_from_slice(TO_R);
+        v1.extend_from_slice(POP);
+        v1.extend_from_slice(FROM_R);
+
 
         let mut vec = Vec::new();
 
@@ -253,7 +261,8 @@ impl<'a> Handler<'a> {
 
         let slice = alloc_and_write!(vec.as_slice(), env);
         env.program.push(slice);
-        env.program.push(v);
+        let code = alloc_and_write!(&v1, env);
+        env.program.push(code);
 
         Ok(())
     }
@@ -272,7 +281,9 @@ impl<'a> Handler<'a> {
         let counter = BigUint::from_bytes_be(count);
         use num_iter;
         for _ in num_iter::range(BigUint::zero(), counter) {
+            env.program.push(POP);
             env.program.push(v);
+            env.program.push(PUSH);
         }
         Ok(())
     }

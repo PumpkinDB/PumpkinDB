@@ -9,6 +9,9 @@ Input stack: `code n`
 
 Output stack: result of `code` evaluation done `n` times
 
+`TIMES` evaluates the closure on a new stack and pops the previous
+stack after each evaluation.
+
 {% common -%}
 
 ```
@@ -31,8 +34,8 @@ Allocates for recursion during runtime.
 ## Tests
 
 ```test
-works : [10] 3 TIMES STACK [10 10 10] EQUAL?.
-works_0 : [10] 0 TIMES STACK LENGTH 0 EQUAL?.
+works : [10 >R] 3 TIMES R> R> R> STACK [10 10 10] EQUAL?.
+works_0 : [10 >R] 0 TIMES [R>] TRY UNWRAP 0x04 EQUAL?.
 empty_stack : [TIMES] TRY UNWRAP 0x04 EQUAL?.
 empty_stack_1 : [1 TIMES] TRY UNWRAP 0x04 EQUAL?.
 invalid_code : [1 1 TIMES] TRY UNWRAP 0x05 EQUAL?.

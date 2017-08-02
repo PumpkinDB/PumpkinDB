@@ -662,7 +662,7 @@ mod tests {
 
     #[test]
     fn txn_order() {
-        eval!("\"hello\" HLC CONCAT DUP [\"world\" ASSOC [ASSOC?] READ] WRITE 0x00 EQUAL?", env, result, {
+        eval!("[\"hello\" HLC CONCAT DUP \"world\" ASSOC [ASSOC?] READ] WRITE 0x00 EQUAL?", env, result, {
             assert_eq!(Vec::from(env.pop().unwrap()), parsed_data!("0x01"));
             assert_eq!(env.pop(), None);
         });
@@ -672,7 +672,7 @@ mod tests {
 
     #[bench]
     fn write_1000_kv_pairs_in_isolated_txns(b: &mut Bencher) {
-        bench_eval!("[HLC \"Hello\"] 1000 TIMES [[ASSOC COMMIT] WRITE] 1000 TIMES",
+        bench_eval!("[\"Hello\" >R HLC >R] 1000 TIMES [[R> R> ASSOC COMMIT] WRITE] 1000 TIMES",
                     b);
     }
 

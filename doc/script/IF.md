@@ -10,6 +10,7 @@ Output stack: maybe `b`
 
 `IF` will push the result `[b]` to the stack if `a` is `1`.
 
+`IF` evaluates the branch closure on the current stack.
 {% common -%}
 
 ```

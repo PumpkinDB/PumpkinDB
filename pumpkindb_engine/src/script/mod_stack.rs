@@ -26,6 +26,10 @@ instruction!(TWOOVER, (a, b, c, d => a, b, c, d, a, b), b"\x852OVER");
 instruction!(DEPTH, b"\x85DEPTH");
 instruction!(UNWRAP, b"\x86UNWRAP");
 instruction!(WRAP, b"\x84WRAP");
+instruction!(PUSH, b"\x81<");
+instruction!(POP, b"\x81>");
+instruction!(TO_R, b"\x82>R");
+instruction!(FROM_R, b"\x82R>");
 
 pub struct Handler<'a> {
     phantom: PhantomData<&'a ()>,
@@ -49,6 +53,10 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
         .if_unhandled_try(|| self.handle_depth(env, instruction, pid))
         .if_unhandled_try(|| self.handle_wrap(env, instruction, pid))
         .if_unhandled_try(|| self.handle_unwrap(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_push(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_pop(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_to_r(env, instruction, pid))
+        .if_unhandled_try(|| self.handle_from_r(env, instruction, pid))
         .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
@@ -236,7 +244,8 @@ impl<'a> Handler<'a> {
                     _: EnvId)
                     -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, DEPTH);
-        let bytes = BigUint::from(env.stack_size).to_bytes_be();
+        let stack_size = env.stack().len();
+        let bytes = BigUint::from(stack_size).to_bytes_be();
         let slice = alloc_and_write!(bytes.as_slice(), env);
         env.push(slice);
         Ok(())
@@ -297,4 +306,61 @@ impl<'a> Handler<'a> {
         }
         Ok(())
     }
+
+    #[inline]
+    fn handle_push(&mut self,
+                     env: &mut Env<'a>,
+                     instruction: &'a [u8],
+                     _: EnvId)
+                     -> PassResult<'a> {
+        return_unless_instructions_equal!(instruction, PUSH);
+        env.push_stack();
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_pop(&mut self,
+                   env: &mut Env<'a>,
+                   instruction: &'a [u8],
+                   _: EnvId)
+                   -> PassResult<'a> {
+        return_unless_instructions_equal!(instruction, POP);
+        if !env.pop_stack() {
+            Err(error_empty_stack!())
+        } else {
+            Ok(())
+        }
+    }
+
+
+
+    #[inline]
+    fn handle_to_r(&mut self,
+                   env: &mut Env<'a>,
+                   instruction: &'a [u8],
+                   _: EnvId)
+                   -> PassResult<'a> {
+        return_unless_instructions_equal!(instruction, TO_R);
+        let val = stack_pop!(env);
+        env.push_return(val);
+        Ok(())
+    }
+
+    #[inline]
+    fn handle_from_r(&mut self,
+                   env: &mut Env<'a>,
+                   instruction: &'a [u8],
+                   _: EnvId)
+                   -> PassResult<'a> {
+        return_unless_instructions_equal!(instruction, FROM_R);
+        match env.pop_return() {
+            Some(value) => {
+                env.push(value);
+                Ok(())
+            }
+            None => Err(error_empty_stack!())
+        }
+    }
+
+
 }

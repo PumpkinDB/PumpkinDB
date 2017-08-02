@@ -79,7 +79,7 @@ macro_rules! instruction {
     ($name : ident,
     $ident : expr) =>
     (
-     const $name : &'static[u8] = $ident;
+     pub(crate) const $name : &'static[u8] = $ident;
     )
 }
 
@@ -356,7 +356,7 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
                         }
                         Err(err) => {
                             self.dispatcher.done(env, pid);
-                            let stack_size = env.stack_size;
+                            let stack_size = env.stack().len();
                             let _ = chan.send(ResponseMessage::EnvFailed(pid,
                                                                          err,
                                                                          Some(env.stack_copy()),
@@ -367,7 +367,7 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
                             if env.program.is_empty() ||
                                 (env.program.len() == 1 && env.program[0].len() == 0) {
                                 self.dispatcher.done(env, pid);
-                                let stack_size = env.stack_size;
+                                let stack_size = env.stack().len();
                                 let _ = chan.send(ResponseMessage::EnvTerminated(pid,
                                                                                  env.stack_copy(),
                                                                                  stack_size));

@@ -14,6 +14,8 @@ a READ or a [WRITE](WRITE.md).
 
 The total number of simultaneous read transactions is limited to 126.
 
+`READ` evaluates the closure on the current stack.
+
 {% common -%}
 
 ```
