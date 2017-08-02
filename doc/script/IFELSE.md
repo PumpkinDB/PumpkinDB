@@ -12,6 +12,7 @@ Output stack: maybe `b`, maybe `c`
 `IFELSE` will push the result of `[c]` to the stack if `a` is 0, or it
 will push `[b]` otherwise.
 
+`IFELSE` evaluates the branches closures on the current stack.
 {% common -%}
 
 ```

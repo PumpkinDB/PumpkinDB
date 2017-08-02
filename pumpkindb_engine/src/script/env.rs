@@ -10,19 +10,18 @@ use super::super::messaging;
 
 use std::collections::BTreeMap;
 
-/// Initial stack size
-pub const STACK_SIZE: usize = 32_768;
 /// Initial heap size
 pub const HEAP_SIZE: usize = 32_768;
 
+use std::collections::VecDeque;
 /// Env is a representation of a stack and the heap.
 ///
 /// Doesn't need to be used directly as it's primarily
 /// used by [`Scheduler`](struct.Scheduler.html)
 pub struct Env<'a> {
     pub program: Vec<&'a [u8]>,
-    stack: Vec<&'a [u8]>,
-    pub stack_size: usize,
+    stack: VecDeque<Vec<&'a [u8]>>,
+    return_stack: Vec<&'a [u8]>,
     heap: EnvHeap,
     #[cfg(feature = "scoped_dictionary")]
     pub dictionary: Vec<BTreeMap<&'a [u8], &'a [u8]>>,
@@ -47,14 +46,9 @@ const _EMPTY: &'static [u8] = b"";
 use std::mem;
 
 impl<'a> Env<'a> {
-    /// Creates an environment with [an empty stack of default size](constant.STACK_SIZE.html)
+    /// Creates an environment with an empty stack
     pub fn new() -> Result<Self, Error> {
-        Env::new_with_stack_size(STACK_SIZE)
-    }
-
-    /// Creates an environment with an empty stack of specific size
-    pub fn new_with_stack_size(size: usize) -> Result<Self, Error> {
-        Env::new_with_stack(vec![_EMPTY; size], 0)
+        Env::new_with_stack(vec![])
     }
 
     /// Creates an environment with an existing stack and a pointer to the
@@ -62,15 +56,17 @@ impl<'a> Env<'a> {
     ///
     /// This function is useful for working with result stacks received from
     /// [Scheduler](struct.Scheduler.html)
-    pub fn new_with_stack(stack: Vec<&'a [u8]>, stack_size: usize) -> Result<Self, Error> {
+    pub fn new_with_stack(stack: Vec<&'a [u8]>) -> Result<Self, Error> {
         #[cfg(feature = "scoped_dictionary")]
         let dictionary = vec![BTreeMap::new()];
         #[cfg(not(feature = "scoped_dictionary"))]
         let dictionary = BTreeMap::new();
+        let mut stacks = VecDeque::new();
+        stacks.push_front(stack);
         Ok(Env {
             program: vec![],
-            stack: stack,
-            stack_size: stack_size,
+            stack: stacks,
+            return_stack: vec![],
             heap: EnvHeap::new(HEAP_SIZE),
             dictionary: dictionary,
             tracking_errors: 0,
@@ -79,51 +75,65 @@ impl<'a> Env<'a> {
         })
     }
 
+    #[inline]
+    pub fn push_stack(&mut self) {
+        self.stack.push_front(vec![]);
+    }
+
+    #[inline]
+    pub fn pop_stack(&mut self) -> bool {
+        if self.stack.len() > 1 {
+            self.stack.pop_front();
+            true
+        } else {
+            false
+        }
+    }
+
+    #[inline]
+    pub fn push_return(&mut self, data: &'a [u8]) {
+        self.return_stack.push(data);
+    }
+
+    #[inline]
+    pub fn pop_return(&mut self) -> Option<&'a [u8]> {
+        self.return_stack.pop()
+    }
+
     /// Returns the entire stack
     #[inline]
     pub fn stack(&self) -> &[&'a [u8]] {
-        &self.stack.as_slice()[0..self.stack_size as usize]
+        &self.stack.front().unwrap()
     }
 
     /// Returns a copy of the entire stack
     #[inline]
     pub fn stack_copy(&self) -> Vec<Vec<u8>> {
-        self.stack[0..self.stack_size as usize].into_iter().map(|v| Vec::from(*v)).collect()
+        self.stack.front().unwrap().into_iter().map(|v| Vec::from(*v)).collect()
     }
 
     /// Returns top of the stack without removing it
     #[inline]
     pub fn stack_top(&self) -> Option<&'a [u8]> {
-        if self.stack_size == 0 {
+        let s = self.stack.front().unwrap();
+        let len = s.len();
+        if len == 0 {
             None
         } else {
-            Some(self.stack.as_slice()[self.stack_size as usize - 1])
+            Some(&s[len - 1])
         }
     }
 
     /// Removes the top of the stack and returns it
     #[inline]
     pub fn pop(&mut self) -> Option<&'a [u8]> {
-        if self.stack_size == 0 {
-            None
-        } else {
-            let val = Some(self.stack.as_slice()[self.stack_size as usize - 1]);
-            self.stack.as_mut_slice()[self.stack_size as usize - 1] = _EMPTY;
-            self.stack_size -= 1;
-            val
-        }
+        self.stack.front_mut().unwrap().pop()
     }
 
     /// Pushes value on top of the stack
     #[inline]
     pub fn push(&mut self, data: &'a [u8]) {
-        // check if we are at capacity
-        if self.stack_size == self.stack.len() {
-            let mut vec = vec![_EMPTY; STACK_SIZE];
-            self.stack.append(&mut vec);
-        }
-        self.stack.as_mut_slice()[self.stack_size] = data;
-        self.stack_size += 1;
+        self.stack.front_mut().unwrap().push(data);
     }
 
     /// Allocates a slice off the Env-specific heap. Will be collected
@@ -157,21 +167,4 @@ impl<'a> Env<'a> {
             Some(ref cb) => Some(cb.cloned())
         }
     }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::{Env, _EMPTY};
-
-    #[test]
-    fn env_stack_growth() {
-        let mut env = Env::new().unwrap();
-        let target = env.stack.len() * 100;
-        for _ in 1..target {
-            env.push(_EMPTY);
-        }
-        assert!(env.stack.len() >= target);
-    }
-
 }

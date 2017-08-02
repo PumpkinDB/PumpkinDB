@@ -8,10 +8,14 @@ Input stack: `code`
 
 Output stack:
 
+`DOWHILE` evaluates the closure on a new stack, popping the
+current stack back after each evaluation.
+
 {% common -%}
 
 ```
-PumpkinDB> 1 2 3 [1 EQUAL? NOT] DOWHILE
+PumpkinDB> 1 >R [R> 1 UINT/ADD DUP >R 4 EQUAL? NOT] DOWHILE R> 
+4
 ```
 
 {% endmethod %}
@@ -31,7 +35,7 @@ Runtime allocation for code generation
 ## Tests
 
 ```test
-works : 1 2 3 [1 EQUAL? NOT] DOWHILE DEPTH 0 EQUAL?.
+works : 1 >R [R> 1 UINT/ADD DUP >R 4 EQUAL? NOT] DOWHILE R> 4 EQUAL?.
 invalid_code : [1 DOWHILE] TRY UNWRAP 0x05 EQUAL?.
 invalid_value : [[5] DOWHILE] TRY UNWRAP 0x03 EQUAL?.
 empty_stack : [DOWHILE] TRY UNWRAP 0x04 EQUAL?.

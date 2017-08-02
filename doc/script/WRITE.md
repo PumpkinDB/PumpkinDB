@@ -16,6 +16,8 @@ can also be used.
 
 The total number of simultaneous write transactions is limited to one.
 
+`WRITE` evaluates the closure on the current stack.
+
 {% common -%}
 
 ```

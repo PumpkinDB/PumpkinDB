@@ -25,6 +25,10 @@
    * [TUCK](script/TUCK.md)
    * [UNWRAP](script/UNWRAP.md)
    * [WRAP](script/WRAP.md)
+   * [<](script/PUSH.md)
+   * [>](script/POP.md)
+   * [>R](script/TO_R.md)
+   * [R>](script/FROM_R.md)
  * Logical operations
    * [AND](script/AND.md)
    * [EQUAL?](script/EQUALQ.md)

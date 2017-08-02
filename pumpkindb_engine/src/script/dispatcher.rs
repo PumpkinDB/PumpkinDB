@@ -249,7 +249,7 @@ mod tests {
                   for i in 0..(&stack).len() {
                       stack_.push((&stack[i]).as_slice());
                   }
-                  let mut script_env = Env::new_with_stack(stack_, stack_size).unwrap();
+                  let mut script_env = Env::new_with_stack(stack_).unwrap();
                   let val = script_env.pop().unwrap();
                   assert_eq!(val, b"TEST");
               },

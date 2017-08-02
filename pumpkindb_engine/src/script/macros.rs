@@ -295,7 +295,7 @@ macro_rules! eval {
                       for i in 0..(&stack).len() {
                           stack_.push((&stack[i]).as_slice());
                       }
-                      let mut $env = Env::new_with_stack(stack_, stack_size).unwrap();
+                      let mut $env = Env::new_with_stack(stack_).unwrap();
                       $expr;
                    }
                    Ok(ResponseMessage::EnvFailed(_, err, stack, stack_size)) => {
@@ -307,7 +307,7 @@ macro_rules! eval {
                       for i in 0..(&stack).len() {
                           stack_.push((&stack)[i].as_slice());
                       }
-                      let mut $env = Env::new_with_stack(stack_, stack_size.unwrap()).unwrap();
+                      let mut $env = Env::new_with_stack(stack_).unwrap();
                       $expr;
                    }
                    Err(err) => {

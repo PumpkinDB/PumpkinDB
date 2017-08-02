@@ -9,6 +9,8 @@ Input stack: `code`
 
 Output stack: result of `code` evaluation
 
+`EVAL` evaluates the closure on the current stack.
+
 {% common -%}
 
 ```
