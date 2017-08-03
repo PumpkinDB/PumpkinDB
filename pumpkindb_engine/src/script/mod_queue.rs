@@ -5,7 +5,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use pumpkinscript::{offset_by_size};
-use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK,
+use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_NO_VALUE,
             TryInstruction, STACK_TRUE, STACK_FALSE};
 
 use std::marker::PhantomData;
@@ -60,7 +60,7 @@ impl<'a> Handler<'a> {
                 env.push(value);
                 Ok(())
             }
-            None => Err(error_empty_stack!())
+            None => Err(error_no_value!())
         }
     }
 
@@ -88,7 +88,7 @@ impl<'a> Handler<'a> {
                 env.push(value);
                 Ok(())
             }
-            None => Err(error_empty_stack!())
+            None => Err(error_no_value!())
         }
     }
 

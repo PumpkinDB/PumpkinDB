@@ -27,11 +27,11 @@ None
 
 ## Errors
 
-[EmptyStack](./errors/EmptyStack.md) error if the return stack is empty
+[NoValue](./errors/NoValue.md) error if the queue is empty
 
 ## Tests
 
 ```test
 works : 1 <Q 2 <Q Q< 2 EQUAL?.
-empty_stack : [Q<] TRY UNWRAP 0x04 EQUAL?.
+empty_stack : [Q<] TRY UNWRAP 0x0a EQUAL?.
 ```
