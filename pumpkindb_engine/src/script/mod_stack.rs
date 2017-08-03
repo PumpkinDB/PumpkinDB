@@ -6,8 +6,7 @@
 
 use pumpkinscript::{offset_by_size, binparser};
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK,
-            ERROR_INVALID_VALUE, TryInstruction,
-            STACK_TRUE, STACK_FALSE};
+            ERROR_INVALID_VALUE, TryInstruction};
 
 use std::marker::PhantomData;
 
@@ -30,11 +29,6 @@ instruction!(UNWRAP, b"\x86UNWRAP");
 instruction!(WRAP, b"\x84WRAP");
 instruction!(PUSH, b"\x81<");
 instruction!(POP, b"\x81>");
-instruction!(TO_BQ, b"\x82>Q");
-instruction!(FROM_BQ, b"\x82Q>");
-instruction!(TO_FQ, b"\x82<Q");
-instruction!(FROM_FQ, b"\x82Q<");
-instruction!(QQ, b"\x82Q?");
 
 pub struct Handler<'a> {
     phantom: PhantomData<&'a ()>,
@@ -60,11 +54,6 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
         .if_unhandled_try(|| self.handle_unwrap(env, instruction, pid))
         .if_unhandled_try(|| self.handle_push(env, instruction, pid))
         .if_unhandled_try(|| self.handle_pop(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_to_bq(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_from_bq(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_to_fq(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_from_fq(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_qq(env, instruction, pid))
         .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
@@ -338,77 +327,6 @@ impl<'a> Handler<'a> {
         } else {
             Ok(())
         }
-    }
-
-    #[inline]
-    fn handle_to_bq(&mut self,
-                    env: &mut Env<'a>,
-                    instruction: &'a [u8],
-                    _: EnvId)
-                    -> PassResult<'a> {
-        return_unless_instructions_equal!(instruction, TO_BQ);
-        let val = stack_pop!(env);
-        env.queue_back_push(val);
-        Ok(())
-    }
-
-    #[inline]
-    fn handle_from_bq(&mut self,
-                      env: &mut Env<'a>,
-                      instruction: &'a [u8],
-                      _: EnvId)
-                      -> PassResult<'a> {
-        return_unless_instructions_equal!(instruction, FROM_BQ);
-        match env.queue_back_pop() {
-            Some(value) => {
-                env.push(value);
-                Ok(())
-            }
-            None => Err(error_empty_stack!())
-        }
-    }
-
-    #[inline]
-    fn handle_to_fq(&mut self,
-                    env: &mut Env<'a>,
-                    instruction: &'a [u8],
-                    _: EnvId)
-                    -> PassResult<'a> {
-        return_unless_instructions_equal!(instruction, TO_FQ);
-        let val = stack_pop!(env);
-        env.queue_front_push(val);
-        Ok(())
-    }
-
-    #[inline]
-    fn handle_from_fq(&mut self,
-                      env: &mut Env<'a>,
-                      instruction: &'a [u8],
-                      _: EnvId)
-                      -> PassResult<'a> {
-        return_unless_instructions_equal!(instruction, FROM_FQ);
-        match env.queue_front_pop() {
-            Some(value) => {
-                env.push(value);
-                Ok(())
-            }
-            None => Err(error_empty_stack!())
-        }
-    }
-
-    #[inline]
-    fn handle_qq(&mut self,
-                      env: &mut Env<'a>,
-                      instruction: &'a [u8],
-                      _: EnvId)
-                      -> PassResult<'a> {
-        return_unless_instructions_equal!(instruction, QQ);
-        if env.queue_empty() {
-            env.push(STACK_FALSE);
-        } else {
-            env.push(STACK_TRUE);
-        }
-        Ok(())
     }
 
 }

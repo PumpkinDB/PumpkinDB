@@ -236,6 +236,8 @@ use timestamp;
 pub mod mod_core;
 #[cfg(feature="mod_stack")]
 pub mod mod_stack;
+#[cfg(feature="mod_queue")]
+pub mod mod_queue;
 #[cfg(feature="mod_numbers")]
 pub mod mod_numbers;
 #[cfg(feature="mod_binaries")]

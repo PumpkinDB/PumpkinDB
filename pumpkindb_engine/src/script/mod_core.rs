@@ -9,7 +9,8 @@ use pumpkinscript::{parse_bin, binparser};
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
             offset_by_size, STACK_TRUE, STACK_FALSE, TryInstruction};
 
-use super::mod_stack::{PUSH, POP, TO_BQ, FROM_BQ};
+use super::mod_stack::{PUSH, POP};
+use super::mod_queue::{TO_BQ, FROM_BQ};
 use std::marker::PhantomData;
 
 use pumpkinscript;

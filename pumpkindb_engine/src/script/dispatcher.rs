@@ -58,6 +58,11 @@ macro_rules! for_each_dispatcher {
            let ref mut $module = $dispatcher.stack;
            $expr
         }
+        #[cfg(feature="mod_queue")]
+        {
+           let ref mut $module = $dispatcher.queue;
+           $expr
+        }
         #[cfg(feature="mod_binaries")]
         {
            let ref mut $module = $dispatcher.binaries;
@@ -116,6 +121,8 @@ pub struct StandardDispatcher<'a, P: 'a, S: 'a, N: 'a, T>
     core: mod_core::Handler<'a>,
     #[cfg(feature = "mod_stack")]
     stack: mod_stack::Handler<'a>,
+    #[cfg(feature = "mod_queue")]
+    queue: mod_queue::Handler<'a>,
     #[cfg(feature = "mod_binaries")]
     binaries: mod_binaries::Handler<'a>,
     #[cfg(feature = "mod_numbers")]
@@ -150,6 +157,8 @@ impl<'a, P: 'a, S: 'a, N: 'a, T> StandardDispatcher<'a, P, S, N, T>
                     core: mod_core::Handler::new(),
                 #[cfg(feature = "mod_stack")]
                     stack: mod_stack::Handler::new(),
+               #[cfg(feature = "mod_stack")]
+                    queue: mod_queue::Handler::new(),
                 #[cfg(feature = "mod_binaries")]
                     binaries: mod_binaries::Handler::new(),
                 #[cfg(feature = "mod_numbers")]
