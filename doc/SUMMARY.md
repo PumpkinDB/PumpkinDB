@@ -27,8 +27,11 @@
    * [WRAP](script/WRAP.md)
    * [<](script/PUSH.md)
    * [>](script/POP.md)
-   * [>R](script/TO_R.md)
-   * [R>](script/FROM_R.md)
+   * [<Q](script/TO_FQ.md)
+   * [>Q](script/TO_BQ.md)
+   * [Q<](script/FROM_FQ.md)
+   * [Q>](script/FROM_BQ.md)
+   * [Q?](script/QQ.md)
  * Logical operations
    * [AND](script/AND.md)
    * [EQUAL?](script/EQUALQ.md)

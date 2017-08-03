@@ -5,7 +5,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use pumpkinscript::{offset_by_size, binparser};
-use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE, TryInstruction};
+use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK,
+            ERROR_INVALID_VALUE, TryInstruction};
 
 use std::marker::PhantomData;
 
@@ -28,8 +29,6 @@ instruction!(UNWRAP, b"\x86UNWRAP");
 instruction!(WRAP, b"\x84WRAP");
 instruction!(PUSH, b"\x81<");
 instruction!(POP, b"\x81>");
-instruction!(TO_R, b"\x82>R");
-instruction!(FROM_R, b"\x82R>");
 
 pub struct Handler<'a> {
     phantom: PhantomData<&'a ()>,
@@ -55,8 +54,6 @@ impl<'a> Dispatcher<'a> for Handler<'a> {
         .if_unhandled_try(|| self.handle_unwrap(env, instruction, pid))
         .if_unhandled_try(|| self.handle_push(env, instruction, pid))
         .if_unhandled_try(|| self.handle_pop(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_to_r(env, instruction, pid))
-        .if_unhandled_try(|| self.handle_from_r(env, instruction, pid))
         .if_unhandled_try(|| Err(Error::UnknownInstruction))
     }
 }
@@ -331,36 +328,5 @@ impl<'a> Handler<'a> {
             Ok(())
         }
     }
-
-
-
-    #[inline]
-    fn handle_to_r(&mut self,
-                   env: &mut Env<'a>,
-                   instruction: &'a [u8],
-                   _: EnvId)
-                   -> PassResult<'a> {
-        return_unless_instructions_equal!(instruction, TO_R);
-        let val = stack_pop!(env);
-        env.push_return(val);
-        Ok(())
-    }
-
-    #[inline]
-    fn handle_from_r(&mut self,
-                   env: &mut Env<'a>,
-                   instruction: &'a [u8],
-                   _: EnvId)
-                   -> PassResult<'a> {
-        return_unless_instructions_equal!(instruction, FROM_R);
-        match env.pop_return() {
-            Some(value) => {
-                env.push(value);
-                Ok(())
-            }
-            None => Err(error_empty_stack!())
-        }
-    }
-
 
 }

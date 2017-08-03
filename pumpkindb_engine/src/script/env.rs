@@ -21,7 +21,7 @@ use std::collections::VecDeque;
 pub struct Env<'a> {
     pub program: Vec<&'a [u8]>,
     stack: VecDeque<Vec<&'a [u8]>>,
-    return_stack: Vec<&'a [u8]>,
+    queue: VecDeque<&'a [u8]>,
     heap: EnvHeap,
     #[cfg(feature = "scoped_dictionary")]
     pub dictionary: Vec<BTreeMap<&'a [u8], &'a [u8]>>,
@@ -66,7 +66,7 @@ impl<'a> Env<'a> {
         Ok(Env {
             program: vec![],
             stack: stacks,
-            return_stack: vec![],
+            queue: VecDeque::new(),
             heap: EnvHeap::new(HEAP_SIZE),
             dictionary: dictionary,
             tracking_errors: 0,
@@ -91,13 +91,28 @@ impl<'a> Env<'a> {
     }
 
     #[inline]
-    pub fn push_return(&mut self, data: &'a [u8]) {
-        self.return_stack.push(data);
+    pub fn queue_empty(&self) -> bool {
+        self.queue.is_empty()
     }
 
     #[inline]
-    pub fn pop_return(&mut self) -> Option<&'a [u8]> {
-        self.return_stack.pop()
+    pub fn queue_back_push(&mut self, data: &'a [u8]) {
+        self.queue.push_back(data);
+    }
+
+    #[inline]
+    pub fn queue_back_pop(&mut self) -> Option<&'a [u8]> {
+        self.queue.pop_back()
+    }
+
+    #[inline]
+    pub fn queue_front_push(&mut self, data: &'a [u8]) {
+        self.queue.push_front(data);
+    }
+
+    #[inline]
+    pub fn queue_front_pop(&mut self) -> Option<&'a [u8]> {
+        self.queue.pop_front()
     }
 
     /// Returns the entire stack

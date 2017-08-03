@@ -58,6 +58,7 @@ standard_mods = [ "mod_binaries",
                   "mod_msg",
                   "mod_numbers",
                   "mod_stack",
+                  "mod_queue",
                   "mod_storage",
                   "mod_string",
                   "mod_uuid"]
@@ -70,6 +71,7 @@ mod_json = []
 mod_msg = []
 mod_numbers = []
 mod_stack = []
+mod_queue = []
 mod_storage = []
 mod_string = []
 mod_uuid = []

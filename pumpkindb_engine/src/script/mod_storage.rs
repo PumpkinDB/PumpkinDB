@@ -672,7 +672,7 @@ mod tests {
 
     #[bench]
     fn write_1000_kv_pairs_in_isolated_txns(b: &mut Bencher) {
-        bench_eval!("[\"Hello\" >R HLC >R] 1000 TIMES [[R> R> ASSOC COMMIT] WRITE] 1000 TIMES",
+        bench_eval!("[\"Hello\" >Q HLC >Q] 1000 TIMES [[Q> Q> ASSOC COMMIT] WRITE] 1000 TIMES",
                     b);
     }
 

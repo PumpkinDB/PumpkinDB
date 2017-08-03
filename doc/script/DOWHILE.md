@@ -14,7 +14,7 @@ current stack back after each evaluation.
 {% common -%}
 
 ```
-PumpkinDB> 1 >R [R> 1 UINT/ADD DUP >R 4 EQUAL? NOT] DOWHILE R> 
+PumpkinDB> 1 >Q [Q> 1 UINT/ADD DUP >Q 4 EQUAL? NOT] DOWHILE Q> 
 4
 ```
 
@@ -35,7 +35,7 @@ Runtime allocation for code generation
 ## Tests
 
 ```test
-works : 1 >R [R> 1 UINT/ADD DUP >R 4 EQUAL? NOT] DOWHILE R> 4 EQUAL?.
+works : 1 >Q [Q> 1 UINT/ADD DUP >Q 4 EQUAL? NOT] DOWHILE Q> 4 EQUAL?.
 invalid_code : [1 DOWHILE] TRY UNWRAP 0x05 EQUAL?.
 invalid_value : [[5] DOWHILE] TRY UNWRAP 0x03 EQUAL?.
 empty_stack : [DOWHILE] TRY UNWRAP 0x04 EQUAL?.

@@ -9,7 +9,8 @@ use pumpkinscript::{parse_bin, binparser};
 use super::{Env, EnvId, Dispatcher, PassResult, Error, ERROR_EMPTY_STACK, ERROR_INVALID_VALUE,
             offset_by_size, STACK_TRUE, STACK_FALSE, TryInstruction};
 
-use super::mod_stack::{PUSH, POP, TO_R, FROM_R};
+use super::mod_stack::{PUSH, POP};
+use super::mod_queue::{TO_BQ, FROM_BQ};
 use std::marker::PhantomData;
 
 use pumpkinscript;
@@ -235,9 +236,9 @@ impl<'a> Handler<'a> {
         let mut v1 = vec![];
         v1.extend_from_slice(PUSH);
         v1.extend_from_slice(v);
-        v1.extend_from_slice(TO_R);
+        v1.extend_from_slice(TO_BQ);
         v1.extend_from_slice(POP);
-        v1.extend_from_slice(FROM_R);
+        v1.extend_from_slice(FROM_BQ);
 
 
         let mut vec = Vec::new();
