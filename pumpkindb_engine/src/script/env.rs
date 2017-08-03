@@ -91,6 +91,11 @@ impl<'a> Env<'a> {
     }
 
     #[inline]
+    pub fn queue_empty(&self) -> bool {
+        self.queue.is_empty()
+    }
+
+    #[inline]
     pub fn queue_back_push(&mut self, data: &'a [u8]) {
         self.queue.push_back(data);
     }
