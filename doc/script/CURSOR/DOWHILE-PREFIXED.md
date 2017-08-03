@@ -25,7 +25,7 @@ PumpkinDB> ["a" HLC CONCAT 0 ASSOC
               "testkey" HLC CONCAT 3 ASSOC
               "z" HLC CONCAT 4 ASSOC
               COMMIT] WRITE
-             ["testkey" [CURSOR/VAL >R TRUE] CURSOR/DOWHILE-PREFIXED] READ R> R> R>
+             ["testkey" [CURSOR/VAL >Q TRUE] CURSOR/DOWHILE-PREFIXED] READ Q> Q> Q>
 0x03 0x02 0x01
 ```
 
@@ -51,14 +51,14 @@ cursor_dowhile_prefixed :
    "testkey" HLC CONCAT 3 ASSOC
    "z" HLC CONCAT 4 ASSOC
    COMMIT] WRITE
-  ["testkey" [CURSOR/VAL >R TRUE] CURSOR/DOWHILE-PREFIXED] READ
-  R> R> R>
+  ["testkey" [CURSOR/VAL >Q TRUE] CURSOR/DOWHILE-PREFIXED] READ
+  Q> Q> Q>
   3 WRAP [3 2 1] EQUAL?.
 nextkey_short : ["key" HLC CONCAT 1 ASSOC
                "key" HLC CONCAT 2 ASSOC
                "key" HLC CONCAT 3 ASSOC
                "z" 4 ASSOC COMMIT] WRITE
-          ["key" [CURSOR/VAL >R TRUE] CURSOR/DOWHILE-PREFIXED] READ
-          R> R> R>
+          ["key" [CURSOR/VAL >Q TRUE] CURSOR/DOWHILE-PREFIXED] READ
+          Q> Q> Q>
           3 WRAP [3 2 1] EQUAL?.
 ```

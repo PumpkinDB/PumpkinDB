@@ -34,8 +34,8 @@ Allocates for recursion during runtime.
 ## Tests
 
 ```test
-works : [10 >R] 3 TIMES R> R> R> STACK [10 10 10] EQUAL?.
-works_0 : [10 >R] 0 TIMES [R>] TRY UNWRAP 0x04 EQUAL?.
+works : [10 >Q] 3 TIMES Q> Q> Q> STACK [10 10 10] EQUAL?.
+works_0 : [10 >Q] 0 TIMES [Q>] TRY UNWRAP 0x04 EQUAL?.
 empty_stack : [TIMES] TRY UNWRAP 0x04 EQUAL?.
 empty_stack_1 : [1 TIMES] TRY UNWRAP 0x04 EQUAL?.
 invalid_code : [1 1 TIMES] TRY UNWRAP 0x05 EQUAL?.
