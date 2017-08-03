@@ -519,7 +519,7 @@ impl<'a, T: Dispatcher<'a>> Scheduler<'a, T> {
     #[inline]
     fn handle_try(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, TRY);
-        let v = stack_pop!(env);
+        let v = env.pop().ok_or_else(|| error_empty_stack!())?;
         env.tracking_errors += 1;
         env.program.push(TRY_END);
         env.program.push(v);

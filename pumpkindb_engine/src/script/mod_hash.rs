@@ -42,7 +42,7 @@ macro_rules! hash_instruction {
     #[inline]
     pub fn $name(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, $constant);
-        let a = stack_pop!(env);
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         let mut hasher = $i::new();
         hasher.input(a);
         let mut slice = alloc_slice!($size, env);

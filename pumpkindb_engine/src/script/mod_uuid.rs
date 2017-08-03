@@ -57,9 +57,9 @@ impl<'a> Handler<'a> {
                           _: EnvId)
                           -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UUID_V5);
-        let name_bytes = stack_pop!(env);
+        let name_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         if let Ok(name) = str::from_utf8(name_bytes) {
-            let ns_uuid_bytes = stack_pop!(env);
+            let ns_uuid_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
             if let Ok(ns_uuid) = Uuid::from_bytes(ns_uuid_bytes) {
                 let uuid = Uuid::new_v5(&ns_uuid, name);
                 let mut slice = alloc_slice!(16, env);
@@ -83,7 +83,7 @@ impl<'a> Handler<'a> {
                                  -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UUID_TO_STRING);
 
-        let top = stack_pop!(env);
+        let top = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         if let Ok(uuid) = Uuid::from_bytes(top) {
             let str = uuid.hyphenated().to_string();
@@ -104,7 +104,7 @@ impl<'a> Handler<'a> {
                                  -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UUID_STRING_TO);
 
-        let top = stack_pop!(env);
+        let top = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         if let Ok(uuid_str) = str::from_utf8(top) {
             if let Ok(uuid) = Uuid::from_str(uuid_str) {

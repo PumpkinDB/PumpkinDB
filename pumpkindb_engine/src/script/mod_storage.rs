@@ -151,7 +151,7 @@ macro_rules! tx_type {
 macro_rules! cursor_op {
     ($me: expr, $env: expr, $env_id: expr, $op: ident, ($($arg: expr),*)) => {{
         let txn = read_or_write_transaction!($me, &$env_id);
-        let c = stack_pop!($env);
+        let c = $env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let tuple = ($env_id, Vec::from(c));
         let mut cursor = match $me.cursors.remove(&tuple) {
@@ -174,7 +174,7 @@ macro_rules! cursor_op {
 macro_rules! cursor_map_op {
     ($me: expr, $env: expr, $env_id: expr, $op: ident, ($($arg: expr),*), $map: expr, $orelse: expr) => {{
         let txn = read_or_write_transaction!($me, &$env_id);
-        let c = stack_pop!($env);
+        let c = $env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let tuple = ($env_id, Vec::from(c));
         let mut cursor = match $me.cursors.remove(&tuple) {
@@ -264,7 +264,7 @@ impl<'a, T, N> Handler<'a, T, N>
                         -> PassResult<'a> {
         match instruction {
             WRITE => {
-                let v = stack_pop!(env);
+                let v = env.pop().ok_or_else(|| error_empty_stack!())?;
                 if self.txns.get(&pid).is_some() && self.txns.get(&pid).unwrap().len() > 0 {
                     return Err(error_program!(
                                "Nested WRITEs are not currently allowed".as_bytes(),
@@ -312,7 +312,7 @@ impl<'a, T, N> Handler<'a, T, N>
                        -> PassResult<'a> {
         match instruction {
             READ => {
-                let v = stack_pop!(env);
+                let v = env.pop().ok_or_else(|| error_empty_stack!())?;
                 match self.db.as_ref().read() {
                     None => Err(Error::Reschedule),
                     Some(result) =>
@@ -377,8 +377,8 @@ impl<'a, T, N> Handler<'a, T, N>
                 _ => None
             }) {
             Some(&Txn::Write(ref txn, _)) => {
-                let value = stack_pop!(env);
-                let key = stack_pop!(env);
+                let value = env.pop().ok_or_else(|| error_empty_stack!())?;
+                let key = env.pop().ok_or_else(|| error_empty_stack!())?;
 
                 let mut access = txn.access();
 
@@ -423,7 +423,7 @@ impl<'a, T, N> Handler<'a, T, N>
                        pid: EnvId)
                        -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, RETR);
-        let key = stack_pop!(env);
+        let key = env.pop().ok_or_else(|| error_empty_stack!())?;
         self.txns.get(&pid)
             .and_then(|v| Some(&v[v.len() - 1]))
             .and_then(|txn| Some(txn.access()))
@@ -447,7 +447,7 @@ impl<'a, T, N> Handler<'a, T, N>
                          pid: EnvId)
                          -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, ASSOCQ);
-        let key = stack_pop!(env);
+        let key = env.pop().ok_or_else(|| error_empty_stack!())?;
         self.txns.get(&pid)
             .and_then(|v| Some(&v[v.len() - 1]))
             .and_then(|txn| Some(txn.access()))
@@ -554,7 +554,7 @@ impl<'a, T, N> Handler<'a, T, N>
                               pid: EnvId)
                               -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, CURSOR_SEEK);
-        let key = stack_pop!(env);
+        let key = env.pop().ok_or_else(|| error_empty_stack!())?;
         cursor_op!(self, env, pid, seek_range_k, (key));
         Ok(())
     }

@@ -27,7 +27,7 @@ instruction!(STRING_TO_F64, b"\x8cSTRING/->F64");
 
 macro_rules! to_sized {
     ($env: expr, $type: ident) => {{
-        let a_bytes = stack_pop!($env);
+        let a_bytes = $env.pop().ok_or_else(|| error_empty_stack!())?;
         let s = String::from_utf8(Vec::from(a_bytes)).or(Err(error_invalid_value!(a_bytes)))?;
         let a = $type::from_str(&s).or(Err(error_invalid_value!(a_bytes)))?;
         a.pack()
@@ -60,7 +60,7 @@ impl<'a> Handler<'a> {
                                -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, STRING_TO_UINT);
 
-        let a_bytes = stack_pop!(env);
+        let a_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let s = String::from_utf8(Vec::from(a_bytes)).or(Err(error_invalid_value!(a_bytes)))?;
         let a: BigUint = BigUint::from_str(&s).or(Err(error_invalid_value!(a_bytes)))?;
 
@@ -77,7 +77,7 @@ impl<'a> Handler<'a> {
                           -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, STRING_TO_INT);
 
-        let a_bytes = stack_pop!(env);
+        let a_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let s = String::from_utf8(Vec::from(a_bytes)).or(Err(error_invalid_value!(a_bytes)))?;
         let a: BigInt = BigInt::from_str(&s).or(Err(error_invalid_value!(a_bytes)))?;
 

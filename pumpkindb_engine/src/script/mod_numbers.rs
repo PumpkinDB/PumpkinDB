@@ -79,8 +79,8 @@ instruction!(F64_TO_STRING, b"\x8cF64/->STRING");
 macro_rules! uint_comparison {
     ($env: expr, $instruction: expr, $instruction_const: expr, $cmp: ident) => {{
         return_unless_instructions_equal!($instruction, $instruction_const);
-        let b = stack_pop!($env);
-        let a = stack_pop!($env);
+        let b = $env.pop().ok_or_else(|| error_empty_stack!())?;
+        let a = $env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let a_: BigUint = a.unpack().ok_or(error_invalid_value!(a))?;
         let b_: BigUint = b.unpack().ok_or(error_invalid_value!(b))?;
@@ -97,8 +97,8 @@ macro_rules! uint_comparison {
 macro_rules! int_comparison {
     ($env: expr, $instruction: expr, $instruction_const: expr, $cmp: ident) => {{
         return_unless_instructions_equal!($instruction, $instruction_const);
-        let b = stack_pop!($env);
-        let a = stack_pop!($env);
+        let b = $env.pop().ok_or_else(|| error_empty_stack!())?;
+        let a = $env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let a_: BigInt = a.unpack().ok_or(error_invalid_value!(a))?;
         let b_: BigInt = b.unpack().ok_or(error_invalid_value!(b))?;
@@ -115,8 +115,8 @@ macro_rules! int_comparison {
 
 macro_rules! no_endianness_sized_uint_op {
     ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
-        let mut b = stack_pop!($env);
-        let mut a = stack_pop!($env);
+        let mut b = $env.pop().ok_or_else(|| error_empty_stack!())?;
+        let mut a = $env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let a_int = match a.$read_op() {
             Ok(v) => v,
@@ -147,8 +147,8 @@ macro_rules! no_endianness_sized_uint_op {
 
 macro_rules! no_endianness_sized_int_op {
     ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
-        let b = stack_pop!($env);
-        let a = stack_pop!($env);
+        let b = $env.pop().ok_or_else(|| error_empty_stack!())?;
+        let a = $env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let mut a = Vec::from(a);
         a[0] ^= 1u8 << 7;
@@ -187,8 +187,8 @@ macro_rules! no_endianness_sized_int_op {
 
 macro_rules! sized_uint_op {
     ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
-        let mut b = stack_pop!($env);
-        let mut a = stack_pop!($env);
+        let mut b = $env.pop().ok_or_else(|| error_empty_stack!())?;
+        let mut a = $env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let a_int = match a.$read_op::<BigEndian>() {
             Ok(v) => v,
@@ -219,8 +219,8 @@ macro_rules! sized_uint_op {
 
 macro_rules! sized_int_op {
     ($env: expr, $read_op: ident, $op: ident, $write_op: ident) => {{
-        let b = stack_pop!($env);
-        let a = stack_pop!($env);
+        let b = $env.pop().ok_or_else(|| error_empty_stack!())?;
+        let a = $env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let mut a = Vec::from(a);
         a[0] ^= 1u8 << 7;
@@ -259,7 +259,7 @@ macro_rules! sized_int_op {
 
 macro_rules! to_string {
     ($env: expr, $type: ident) => {{
-        let a_bytes = stack_pop!($env);
+        let a_bytes = $env.pop().ok_or_else(|| error_empty_stack!())?;
         let a: $type = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
         
         format!("{}", a)
@@ -326,8 +326,8 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT_ADD);
-        let a = stack_pop!(env);
-        let b = stack_pop!(env);
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let b = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let a_int: BigUint = a.unpack().ok_or(error_invalid_value!(a))?;
         let b_int: BigUint = b.unpack().ok_or(error_invalid_value!(b))?;
@@ -345,8 +345,8 @@ impl<'a> Handler<'a> {
                       _: EnvId)
                       -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT_ADD);
-        let a = stack_pop!(env);
-        let b = stack_pop!(env);
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let b = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let a_int: BigInt = a.unpack().ok_or(error_invalid_value!(a))?;
         let b_int: BigInt = b.unpack().ok_or(error_invalid_value!(b))?;
@@ -364,8 +364,8 @@ impl<'a> Handler<'a> {
                       _: EnvId)
                       -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT_SUB);
-        let b = stack_pop!(env);
-        let a = stack_pop!(env);
+        let b = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let a_int: BigInt = a.unpack().ok_or(error_invalid_value!(a))?;
         let b_int: BigInt = b.unpack().ok_or(error_invalid_value!(b))?;
@@ -383,7 +383,7 @@ impl<'a> Handler<'a> {
                           _: EnvId)
                           -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT_TO_UINT);
-        let a = stack_pop!(env);
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         let a_int : BigInt = a.unpack().ok_or(error_invalid_value!(a))?;
 
         let a_uint = a_int.to_biguint().ok_or(error_invalid_value!(a))?;
@@ -398,7 +398,7 @@ impl<'a> Handler<'a> {
                           _: EnvId)
                           -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT_TO_INT);
-        let a = stack_pop!(env);
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
         let a_uint = BigUint::from_bytes_be(a);
 
         let mut bytes = vec![0x01];
@@ -417,8 +417,8 @@ impl<'a> Handler<'a> {
                        _: EnvId)
                        -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT_SUB);
-        let a = stack_pop!(env);
-        let b = stack_pop!(env);
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let b = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let a_uint = BigUint::from_bytes_be(a);
         let b_uint = BigUint::from_bytes_be(b);
@@ -656,10 +656,10 @@ impl<'a> Handler<'a> {
                         _: EnvId)
                         -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, F32_ADD);
-        let a_bytes = stack_pop!(env);
+        let a_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let a: f32 = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
             
-        let b_bytes = stack_pop!(env);
+        let b_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b: f32 = b_bytes.unpack().ok_or(error_invalid_value!(b_bytes))?;
 
         let bytes = (a + b).pack();
@@ -676,10 +676,10 @@ impl<'a> Handler<'a> {
                       _: EnvId)
                       -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, F32_SUB);
-        let a_bytes = stack_pop!(env);
+        let a_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let a: f32 = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
         
-        let b_bytes = stack_pop!(env);
+        let b_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b: f32 = b_bytes.unpack().ok_or(error_invalid_value!(b_bytes))?;
         
         let bytes = (b - a).pack();
@@ -696,10 +696,10 @@ impl<'a> Handler<'a> {
                         _: EnvId)
                         -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, F64_ADD);
-        let a_bytes = stack_pop!(env);
+        let a_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let a: f64 = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
         
-        let b_bytes = stack_pop!(env);
+        let b_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b: f64 = b_bytes.unpack().ok_or(error_invalid_value!(b_bytes))?;
         
         let bytes = (a + b).pack();
@@ -716,10 +716,10 @@ impl<'a> Handler<'a> {
                       _: EnvId)
                       -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, F64_SUB);
-        let a_bytes = stack_pop!(env);
+        let a_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let a: f64 = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
         
-        let b_bytes = stack_pop!(env);
+        let b_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let b: f64 = b_bytes.unpack().ok_or(error_invalid_value!(b_bytes))?;
         
         let bytes = (b - a).pack();
@@ -737,7 +737,7 @@ impl<'a> Handler<'a> {
                         -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UINT_TO_STRING);
 
-        let a_bytes = stack_pop!(env);
+        let a_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let a: BigUint = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
 
         let s = format!("{}", a);
@@ -755,7 +755,7 @@ impl<'a> Handler<'a> {
                              -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, INT_TO_STRING);
         
-        let a_bytes = stack_pop!(env);
+        let a_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
         let a: BigInt = a_bytes.unpack().ok_or(error_invalid_value!(a_bytes))?;
 
         let s = format!("{}", a);

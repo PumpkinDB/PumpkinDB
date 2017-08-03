@@ -55,8 +55,8 @@ impl<'a> Handler<'a> {
                     _: EnvId)
                     -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, EQUALQ);
-        let a = stack_pop!(env);
-        let b = stack_pop!(env);
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let b = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         if a == b {
             env.push(STACK_TRUE);
@@ -70,8 +70,8 @@ impl<'a> Handler<'a> {
     #[inline]
     fn handle_ltp(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, LTQ);
-        let a = stack_pop!(env);
-        let b = stack_pop!(env);
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let b = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         if b < a {
             env.push(STACK_TRUE);
@@ -85,8 +85,8 @@ impl<'a> Handler<'a> {
     #[inline]
     fn handle_gtp(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, GTQ);
-        let a = stack_pop!(env);
-        let b = stack_pop!(env);
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let b = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         if b > a {
             env.push(STACK_TRUE);
@@ -104,8 +104,8 @@ impl<'a> Handler<'a> {
                      _: EnvId)
                      -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, CONCAT);
-        let a = stack_pop!(env);
-        let b = stack_pop!(env);
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let b = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let slice = alloc_slice!(a.len() + b.len(), env);
 
@@ -124,9 +124,9 @@ impl<'a> Handler<'a> {
                     _: EnvId)
                     -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, SLICE);
-        let end = stack_pop!(env);
-        let start = stack_pop!(env);
-        let slice = stack_pop!(env);
+        let end = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let start = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let slice = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let start_int = BigUint::from_bytes_be(start).to_u64().unwrap() as usize;
         let end_int = BigUint::from_bytes_be(end).to_u64().unwrap() as usize;
@@ -152,9 +152,9 @@ impl<'a> Handler<'a> {
     #[inline]
     fn handle_pad(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, PAD);
-        let byte = stack_pop!(env);
-        let size = stack_pop!(env);
-        let value = stack_pop!(env);
+        let byte = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let size = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let value = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         if byte.len() != 1 {
             return Err(error_invalid_value!(byte));
@@ -189,7 +189,7 @@ impl<'a> Handler<'a> {
                      _: EnvId)
                      -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, LENGTH);
-        let a = stack_pop!(env);
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let len = BigUint::from(a.len() as u64);
         let len_bytes = len.to_bytes_be();

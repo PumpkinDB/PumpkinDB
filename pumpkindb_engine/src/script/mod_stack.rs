@@ -68,7 +68,7 @@ impl<'a> Handler<'a> {
     #[inline]
     fn handle_dup(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, DUP);
-        let v = stack_pop!(env);
+        let v = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         env.push(v);
         env.push(v);
@@ -79,9 +79,9 @@ impl<'a> Handler<'a> {
     #[inline]
     fn handle_3dup(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, THREEDUP);
-        let c = stack_pop!(env);
-        let b = stack_pop!(env);
-        let a = stack_pop!(env);
+        let c = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let b = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         env.push(a);
         env.push(b);
@@ -101,8 +101,8 @@ impl<'a> Handler<'a> {
                    _: EnvId)
                    -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, SWAP);
-        let a = stack_pop!(env);
-        let b = stack_pop!(env);
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let b = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         env.push(a);
         env.push(b);
@@ -117,10 +117,10 @@ impl<'a> Handler<'a> {
                     _: EnvId)
                     -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, TWOSWAP);
-        let a = stack_pop!(env);
-        let b = stack_pop!(env);
-        let c = stack_pop!(env);
-        let d = stack_pop!(env);
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let b = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let c = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let d = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         env.push(b);
         env.push(a);
@@ -138,8 +138,8 @@ impl<'a> Handler<'a> {
                    _: EnvId)
                    -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, OVER);
-        let a = stack_pop!(env);
-        let b = stack_pop!(env);
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let b = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         env.push(b);
         env.push(a);
@@ -155,10 +155,10 @@ impl<'a> Handler<'a> {
                     _: EnvId)
                     -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, TWOOVER);
-        let d = stack_pop!(env);
-        let c = stack_pop!(env);
-        let b = stack_pop!(env);
-        let a = stack_pop!(env);
+        let d = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let c = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let b = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         env.push(a);
         env.push(b);
@@ -173,9 +173,9 @@ impl<'a> Handler<'a> {
     #[inline]
     fn handle_rot(&mut self, env: &mut Env<'a>, instruction: &'a [u8], _: EnvId) -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, ROT);
-        let a = stack_pop!(env);
-        let b = stack_pop!(env);
-        let c = stack_pop!(env);
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let b = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let c = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         env.push(b);
         env.push(a);
@@ -191,12 +191,12 @@ impl<'a> Handler<'a> {
                    _: EnvId)
                    -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, TWOROT);
-        let f = stack_pop!(env);
-        let e = stack_pop!(env);
-        let d = stack_pop!(env);
-        let c = stack_pop!(env);
-        let b = stack_pop!(env);
-        let a = stack_pop!(env);
+        let f = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let e = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let d = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let c = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let b = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         env.push(c);
         env.push(d);
@@ -215,7 +215,7 @@ impl<'a> Handler<'a> {
                    _: EnvId)
                    -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, DROP);
-        let _ = stack_pop!(env);
+        let _ = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         Ok(())
     }
@@ -227,9 +227,9 @@ impl<'a> Handler<'a> {
                    _: EnvId)
                    -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, THREEDROP);
-        let _ = stack_pop!(env);
-        let _ = stack_pop!(env);
-        let _ = stack_pop!(env);
+        let _ = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let _ = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let _ = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         Ok(())
     }
@@ -255,14 +255,14 @@ impl<'a> Handler<'a> {
                    _: EnvId)
                    -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, WRAP);
-        let n = stack_pop!(env);
+        let n = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let mut n_int = BigUint::from_bytes_be(n).to_u64().unwrap() as usize;
 
         let mut vec = Vec::new();
 
         while n_int > 0 {
-            let item = stack_pop!(env);
+            let item = env.pop().ok_or_else(|| error_empty_stack!())?;
             vec.insert(0, item);
             n_int -= 1;
         }
@@ -291,7 +291,7 @@ impl<'a> Handler<'a> {
                      _: EnvId)
                      -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UNWRAP);
-        let mut current = stack_pop!(env);
+        let mut current = env.pop().ok_or_else(|| error_empty_stack!())?;
         while current.len() > 0 {
             match binparser::data(current) {
                 pumpkinscript::ParseResult::Done(rest, val) => {

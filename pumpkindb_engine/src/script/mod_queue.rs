@@ -43,7 +43,7 @@ impl<'a> Handler<'a> {
                     _: EnvId)
                     -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, TO_BQ);
-        let val = stack_pop!(env);
+        let val = env.pop().ok_or_else(|| error_empty_stack!())?;
         env.queue_back_push(val);
         Ok(())
     }
@@ -71,7 +71,7 @@ impl<'a> Handler<'a> {
                     _: EnvId)
                     -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, TO_FQ);
-        let val = stack_pop!(env);
+        let val = env.pop().ok_or_else(|| error_empty_stack!())?;
         env.queue_front_push(val);
         Ok(())
     }

@@ -37,7 +37,7 @@ pub struct Handler<'a> {
 macro_rules! json_is_a {
     ($env: expr, $instruction: expr, $c: expr, { $t: ident }) => {{
         return_unless_instructions_equal!($instruction, $c);
-        let a = stack_pop!($env);
+        let a = $env.pop().ok_or_else(|| error_empty_stack!())?;
 
         match json::from_slice::<json::Value>(a) {
             Ok(json::Value::$t) => $env.push(STACK_TRUE),
@@ -48,7 +48,7 @@ macro_rules! json_is_a {
     }};
     ($env: expr, $instruction: expr, $c: expr, $t: ident) => {{
         return_unless_instructions_equal!($instruction, $c);
-        let a = stack_pop!($env);
+        let a = $env.pop().ok_or_else(|| error_empty_stack!())?;
 
         match json::from_slice::<json::Value>(a) {
             Ok(json::Value::$t(_)) => $env.push(STACK_TRUE),
@@ -94,7 +94,7 @@ impl<'a> Handler<'a> {
                         _: EnvId)
                         -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, JSONQ);
-        let a = stack_pop!(env);
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         match json::from_slice::<json::Value>(a) {
             Ok(_) => env.push(STACK_TRUE),
@@ -167,8 +167,8 @@ impl<'a> Handler<'a> {
                            -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, JSON_GET);
 
-        let field = stack_pop!(env);
-        let a = stack_pop!(env);
+        let field = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let key = match String::from_utf8(Vec::from(field)) {
             Ok(k) => k,
@@ -201,8 +201,8 @@ impl<'a> Handler<'a> {
                             -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, JSON_HASQ);
 
-        let field = stack_pop!(env);
-        let a = stack_pop!(env);
+        let field = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let key = match String::from_utf8(Vec::from(field)) {
             Ok(k) => k,
@@ -232,9 +232,9 @@ impl<'a> Handler<'a> {
                            -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, JSON_SET);
 
-        let value = stack_pop!(env);
-        let field = stack_pop!(env);
-        let a = stack_pop!(env);
+        let value = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let field = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let key = match String::from_utf8(Vec::from(field)) {
             Ok(k) => k,
@@ -268,7 +268,7 @@ impl<'a> Handler<'a> {
                                  -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, JSON_STRING_TO);
 
-        let a = stack_pop!(env);
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         match json::from_slice::<json::Value>(a) {
             Ok(json::Value::String(val)) => {
@@ -290,7 +290,7 @@ impl<'a> Handler<'a> {
                                  -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, JSON_TO_STRING);
 
-        let a = stack_pop!(env);
+        let a = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let s = match String::from_utf8(Vec::from(a)) {
             Ok(k) => k,

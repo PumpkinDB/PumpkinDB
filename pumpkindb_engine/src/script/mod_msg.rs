@@ -45,8 +45,8 @@ impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Handler<'a, P, S> {
                       _: EnvId)
                       -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, PUBLISH);
-        let topic = stack_pop!(env);
-        let data = stack_pop!(env);
+        let topic = env.pop().ok_or_else(|| error_empty_stack!())?;
+        let data = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         self.publisher.publish(topic, data);
 
@@ -61,7 +61,7 @@ impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Handler<'a, P, S> {
                       -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, SUBSCRIBE);
 
-        let topic = stack_pop!(env);
+        let topic = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         match env.published_message_callback() {
             None => (),
@@ -83,7 +83,7 @@ impl<'a, P: messaging::Publisher, S: messaging::Subscriber> Handler<'a, P, S> {
                         -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UNSUBSCRIBE);
 
-        let identifier = stack_pop!(env);
+        let identifier = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         self.subscriber.unsubscribe(identifier);
 
