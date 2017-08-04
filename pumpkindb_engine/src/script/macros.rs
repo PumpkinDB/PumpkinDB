@@ -65,20 +65,6 @@ macro_rules! handle_error {
 }
 
 #[macro_export]
-macro_rules! stack_pop {
-    ($env: expr) => {
-        match $env.pop() {
-            None => {
-                return Err(error_empty_stack!())
-            }
-            Some(e) => {
-                e
-            }
-        }
-    }
-}
-
-#[macro_export]
 macro_rules! return_unless_instructions_equal {
     ($instruction: expr, $exp: expr) => {
         if $instruction != $exp {
