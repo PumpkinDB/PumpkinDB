@@ -15,8 +15,8 @@ Output stack: `a`
 {% common -%}
 
 ```
-PumpkinDB> [1 >Q] EVAL Q>
-1
+PumpkinDB> [1 >Q 2 >Q] EVAL Q>
+2
 ```
 
 {% endmethod %}

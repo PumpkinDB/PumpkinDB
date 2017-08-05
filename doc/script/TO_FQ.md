@@ -15,7 +15,7 @@ Output stack: -
 {% common -%}
 
 ```
-PumpkinDB> [2 <Q 1 <Q] EVAL Q>
+PumpkinDB> [2 <Q 1 <Q] EVAL Q<
 1
 ```
 
