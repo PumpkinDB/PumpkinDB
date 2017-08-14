@@ -13,19 +13,24 @@
 | Project status | Usable, between alpha and beta |
 | Production-readiness | Depends on your risk tolerance |
 
-PumpkinDB is a compact event sourcing database engine, featuring:
+PumpkinDB is an immutable ordered key-value database engine, featuring:
 
-* Immutable key/value storage
 * ACID transactions
-* Binary keys and values (allows any encoding to be used: JSON, XML, Protobuf, Cap'n Proto, etc.)
+* Persistent storage
 * An embedded programming language (PumpkinScript)
-* A range of event indexing and querying primitives
+* Binary keys and values (allows any encoding to be used: JSON, XML, Protobuf, Cap'n Proto, etc.)
+* Standalone and embedded scenarios
 
-## What is event sourcing?
+## Why immutable?
 
-Event sourcing is a pattern in which, instead of storing the current state of
-the data and using it as a source of truth, one should immutably record the full series of actions taken and designate that log as a source of truth instead. This approach can simplify tasks in complex, changing domains by avoiding the need to synchronize data models and domain models. It also provides
-great auditing and transactional capabilities, as well as opportunities for lossless error correction.
+Simply put, the data replaced is data deleted and is therefore, an unsafe way to manage data. Bugs,
+misunderstanding, changing scope and requirements and other factors might influence what data (and
+especially *past* data) means and how can it be used.
+
+By guaranteeing the immutability of key's value once it is set, PumpkinDB forces its users
+to think of their data through a temporal perspective.
+
+This approach is highly beneficial for implementing event sourcing and similar types of architectures.
 
 ## What is PumpkinDB?
 
@@ -39,23 +44,24 @@ over a network interface (or API when using PumpkinDB as an embedded solution).
 
 PumpkinDB offers a wide array of primitives for concurrency, storage, journalling, indexing and other common building blocks.
 
-## Why is it an event sourcing database engine?
+## Why is it a database engine?
 
 The core ideas behind PumpkinDB stem from the so called
 [lazy event sourcing](https://www.youtube.com/watch?v=aqv8d1pjmU8)
 approach which is based on storing and indexing events while delaying domain
 binding for as long as possible. That said, the intention of this database is to
-be a building block for different kinds of event sourcing systems, ranging from
-the classic one (using it as an event store) all the way to the lazy one (using
-indices) and anywhere in between. It's also possible to implement different approaches within a single database for different parts of the domain.
+be a building block for different kinds of architectures, be it
+classic event sourcing (using it as an event store), lazy event sourcing (using
+indices) or anything else. It's also possible to implement different approaches within
+a single database for different parts of the domain.
 
-Instead of devising custom protocols for talking to PumpkinDB, the protocol of communication has become a pipeline to a script executor. This offers us enormous extension and flexibility capabilities.
+Instead of devising custom protocols for talking to PumpkinDB, the protocol of
+communication has become a pipeline to a script executor. This offers us enormous extension
+and flexibility capabilities.
 
-To name a few:
-
-* Low-level imperative querying (as a foundation for declarative queries)
-* Indexing filters
-* Subscription filters
+While an external application can talk to PumpkinDB over a network connection, PumpkinDB's
+engine itself is embeddable and can be used directly. Currenly, it is available for Rust
+applications only, but this may one day extend to all languages that can interface with C.
 
 ## Client libraries
 
