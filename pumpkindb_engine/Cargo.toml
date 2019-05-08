@@ -39,7 +39,7 @@ pumpkinscript = { version = "0.2", path = "../pumpkinscript" }
 
 [dev-dependencies]
 quickcheck = "0.4.1"
-quickcheck_macros = "0.4.1"
+quickcheck_macros = "0.8.0"
 matches = "0.1.4"
 
 [features]

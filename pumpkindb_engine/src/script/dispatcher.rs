@@ -15,8 +15,6 @@ pub trait Dispatcher<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a>;
 }
 
-include!("macros.rs");
-
 impl<'a> Dispatcher<'a> for Vec<Box<Dispatcher<'a>>> {
     fn init(&mut self, env: &mut Env<'a>, pid: EnvId) {
         for mut disp in self.into_iter() {

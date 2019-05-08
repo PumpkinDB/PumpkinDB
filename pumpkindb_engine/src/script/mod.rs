@@ -59,6 +59,8 @@
 //!   from carrying these references outside of the scope of the transaction)
 //!
 
+#[macro_use]
+pub mod macros;
 pub mod envheap;
 pub mod dispatcher;
 pub use self::dispatcher::Dispatcher;
@@ -85,8 +87,6 @@ macro_rules! instruction {
 
 instruction!(TRY, b"\x83TRY");
 instruction!(TRY_END, b"\x80\x83TRY"); // internal instruction
-
-include!("macros.rs");
 
 pub trait TryInstruction {
     fn if_unhandled_try<F>(self, f: F) -> Result<(), Error> where F: FnOnce() -> Result<(), Error>;

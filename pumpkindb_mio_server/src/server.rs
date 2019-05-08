@@ -4,15 +4,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::collections::BTreeMap;
 use std::io;
 use std::rc::Rc;
 use std::sync::mpsc;
-use std::collections::BTreeMap;
 
 use slab;
-use mio::channel as mio_chan;
+use mio_extras::channel as mio_chan;
+use mio::net::*;
 use mio::*;
-use mio::tcp::*;
 
 use super::connection::Connection;
 

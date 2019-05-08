@@ -12,6 +12,7 @@ authors = ["Yurii Rashkovskii <yrashk@gmail.com>"]
 
 [dependencies]
 mio = "0.6.4"
+mio-extras = "2.0.5"
 byteorder = "1.0.0"
 memmap = "0.5.2"
 slab = "0.3.0"
