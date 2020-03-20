@@ -14,7 +14,6 @@ use lmdb;
 use lmdb::traits::{LmdbResultExt, AsLmdbBytes, FromLmdbBytes};
 use storage;
 use std::mem;
-use std::error::Error as StdError;
 use std::collections::HashMap;
 use super::{Env, EnvId, Dispatcher, PassResult, Error, STACK_TRUE, STACK_FALSE, offset_by_size,
             ERROR_EMPTY_STACK, ERROR_INVALID_VALUE, ERROR_DUPLICATE_KEY, ERROR_NO_TX,
@@ -476,7 +475,6 @@ impl<'a, T, N> Handler<'a, T, N>
 						 instruction: &'a [u8],
 						 pid: EnvId)
 						 -> PassResult<'a> {
-        use serde_cbor;
         return_unless_instructions_equal!(instruction, CURSOR);
         let db = self.db.as_ref();
         let cursor = self.txns.get(&pid)

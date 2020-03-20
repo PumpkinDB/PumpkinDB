@@ -58,7 +58,6 @@
 //!   important part, the storage itself as transactional model of LMDB precludes us
 //!   from carrying these references outside of the scope of the transaction)
 //!
-#![feature(try_from)]
 extern crate core;
 #[macro_use] extern crate nom;
 extern crate num_bigint;
@@ -88,10 +87,10 @@ use std::fmt;
 #[inline]
 pub fn offset_by_size(size: usize) -> usize {
     match size {
-        0...120 => 1,
-        120...255 => 2,
-        255...65535 => 3,
-        65536...4294967296 => 5,
+        0..=120 => 1,
+        120..=255 => 2,
+        255..=65535 => 3,
+        65536..=4294967296 => 5,
         _ => unreachable!(),
     }
 }

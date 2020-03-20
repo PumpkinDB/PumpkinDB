@@ -100,7 +100,7 @@ macro_rules! error_database {
         let vec = Vec::new();
 
         error_program!(
-            $err.description().as_bytes(),
+            $err.to_string().as_bytes(),
             &vec,
             ERROR_DATABASE
         )

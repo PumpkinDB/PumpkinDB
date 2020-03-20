@@ -58,7 +58,8 @@
 //!   important part, the storage itself as transactional model of LMDB precludes us
 //!   from carrying these references outside of the scope of the transaction)
 //!
-
+#[macro_use]
+pub mod macros;
 pub mod envheap;
 pub mod dispatcher;
 pub use self::dispatcher::Dispatcher;
@@ -85,8 +86,6 @@ macro_rules! instruction {
 
 instruction!(TRY, b"\x83TRY");
 instruction!(TRY_END, b"\x80\x83TRY"); // internal instruction
-
-include!("macros.rs");
 
 pub trait TryInstruction {
     fn if_unhandled_try<F>(self, f: F) -> Result<(), Error> where F: FnOnce() -> Result<(), Error>;
@@ -153,10 +152,10 @@ use pumpkinscript;
 #[inline]
 pub fn offset_by_size(size: usize) -> usize {
     match size {
-        0...120 => 1,
-        120...255 => 2,
-        255...65535 => 3,
-        65536...4294967296 => 5,
+        0..=120 => 1,
+        120..=255 => 2,
+        255..=65535 => 3,
+        65536..=4294967296 => 5,
         _ => unreachable!(),
     }
 }
@@ -169,7 +168,7 @@ pub type EnvId = ProcessUniqueId;
 
 pub trait SchedulerHandle {
     fn schedule_env(&self, env_id: EnvId, program: Vec<u8>, response_sender: Sender<ResponseMessage>,
-                    published_message_callback: Box<messaging::PublishedMessageCallback + Send>);
+                    published_message_callback: Box<dyn messaging::PublishedMessageCallback + Send>);
     fn shutdown(&self);
 }
 
@@ -178,7 +177,7 @@ pub type Receiver<T> = mpsc::Receiver<T>;
 
 impl SchedulerHandle for Sender<RequestMessage> {
     fn schedule_env(&self, env_id: EnvId, program: Vec<u8>, response_sender: Sender<ResponseMessage>,
-                    published_message_callback: Box<messaging::PublishedMessageCallback + Send>) {
+                    published_message_callback: Box<dyn messaging::PublishedMessageCallback + Send>) {
         let _ = self.send(RequestMessage::ScheduleEnv(env_id, program, response_sender, published_message_callback));
     }
 
@@ -190,7 +189,7 @@ impl SchedulerHandle for Sender<RequestMessage> {
 use rand::{thread_rng, Rng};
 
 impl<T : SchedulerHandle> SchedulerHandle for Vec<T> {
-    fn schedule_env(&self, env_id: EnvId, program: Vec<u8>, response_sender: Sender<ResponseMessage>, published_message_callback: Box<messaging::PublishedMessageCallback + Send>) {
+    fn schedule_env(&self, env_id: EnvId, program: Vec<u8>, response_sender: Sender<ResponseMessage>, published_message_callback: Box<dyn messaging::PublishedMessageCallback + Send>) {
         let mut rng = thread_rng();
         let index: usize = rng.gen_range(0, self.len() - 1);
         match self.get(index) {
@@ -211,7 +210,7 @@ pub enum RequestMessage {
     /// Requests scheduling a new environment with a given
     /// id and a program.
     ScheduleEnv(EnvId, Vec<u8>, Sender<ResponseMessage>,
-                Box<messaging::PublishedMessageCallback + Send>),
+                Box<dyn messaging::PublishedMessageCallback + Send>),
     /// Requests Scheduler shutdown
     Shutdown,
 }

@@ -35,7 +35,7 @@ impl EnvHeap {
         let nchunks = self.chunks.len();
         //Look for chunks with enough free space.
         for i in 0..nchunks {
-            let cap = self.chunks[i].1.cap();
+            let cap = self.chunks[i].1.capacity();
             let ptr = self.chunks[i].0;
             if ptr + size > cap {
                 if i == (nchunks - 1) {
