@@ -241,7 +241,7 @@ mod tests {
   #[test]
   pub fn dynamic_dispatch() {
       crossbeam::scope(|scope| {
-          let dispatchers: Vec<Box<Dispatcher>> = vec![Box::new(MyDispatcher::new())];
+          let dispatchers: Vec<Box<dyn Dispatcher>> = vec![Box::new(MyDispatcher::new())];
           let (mut scheduler, sender) = Scheduler::new(dispatchers);
           let handle = scope.spawn(move || scheduler.run() );
           let sender_ = sender.clone();
