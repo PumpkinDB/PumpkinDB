@@ -6,8 +6,6 @@
 //
 // This program is used to run doctests defined in doc/script
 //
-#![feature(slice_patterns)]
-
 extern crate glob;
 extern crate regex;
 extern crate crossbeam;

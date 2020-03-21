@@ -15,6 +15,7 @@ extern crate num_cpus;
 extern crate log;
 extern crate log4rs;
 extern crate mio;
+extern crate mio_extras;
 
 extern crate pumpkindb_mio_server as server;
 
@@ -29,7 +30,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use mio::channel as mio_chan;
+use mio_extras::channel as mio_chan;
 
 
 lazy_static! {

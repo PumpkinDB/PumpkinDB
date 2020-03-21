@@ -12,7 +12,8 @@ use std::rc::Rc;
 use byteorder::{ByteOrder, BigEndian};
 
 use mio::*;
-use mio::tcp::*;
+use mio::net::*;
+use mio::unix::UnixReady;
 
 const MAX_PRE_ALLOC: usize = 10000;
 
@@ -48,7 +49,7 @@ impl Connection {
         Connection {
             sock: sock,
             token: token,
-            interest: Ready::hup(),
+            interest: Ready::from(UnixReady::hup()),
             send_queue: Vec::new(),
             is_idle: true,
             is_reset: false,
@@ -59,7 +60,7 @@ impl Connection {
 
     pub fn readable(&mut self) -> io::Result<Option<Vec<u8>>> {
 
-        let msg_len = match try!(self.read_message_length()) {
+        let msg_len = match self.read_message_length()? {
             None => {
                 return Ok(None);
             }

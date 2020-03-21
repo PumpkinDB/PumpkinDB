@@ -22,7 +22,8 @@ lazy_static = "1.4.0"
 num_cpus = "1.3.0"
 log = "0.3.6"
 log4rs = { version = "0.6.1", features = ["toml_format"] }
-mio = "0.6.4"
+mio = "0.6.21"
+mio-extras = "2.0.6"
 
 pumpkindb_engine = { version = "0.2", path = "../pumpkindb_engine" }
 pumpkindb_mio_server = { version = "0.2", path = "../pumpkindb_mio_server" }
