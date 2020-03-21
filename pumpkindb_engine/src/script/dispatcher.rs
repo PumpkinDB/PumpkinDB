@@ -17,12 +17,12 @@ pub trait Dispatcher<'a> {
 
 impl<'a> Dispatcher<'a> for Vec<Box<dyn Dispatcher<'a>>> {
     fn init(&mut self, env: &mut Env<'a>, pid: EnvId) {
-        for mut disp in self.into_iter() {
+        for disp in self.into_iter() {
             disp.init(env, pid);
         }
     }
     fn done(&mut self, env: &mut Env<'a>, pid: EnvId) {
-        for mut disp in self.into_iter() {
+        for disp in self.into_iter() {
             disp.done(env, pid);
         }
     }
@@ -31,7 +31,7 @@ impl<'a> Dispatcher<'a> for Vec<Box<dyn Dispatcher<'a>>> {
         loop {
             match iter.next() {
                 None => break,
-                Some(mut disp) => {
+                Some(disp) => {
                     let result = disp.handle(env, instruction, pid);
                     if result.is_unhandled() {
                         continue

@@ -109,7 +109,7 @@ fn main() {
                     for program in programs {
                         if program.len() > 0 {
                             match binparser::instruction(program.as_slice()) {
-                                pumpkinscript::ParseResult::Done(&[0x81, b':', ref rest..], program) => {
+                                pumpkinscript::ParseResult::Done(&[0x81, b':', ref rest@..], program) => {
                                     eval(&program[1..], rest, timestamp.clone());
                                 }
                                 other => panic!("test definition parse error {:?}", other),

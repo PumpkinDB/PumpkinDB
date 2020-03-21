@@ -44,7 +44,7 @@ impl<'a> Handler<'a> {
                           -> PassResult<'a> {
         return_unless_instructions_equal!(instruction, UUID_V4);
         let uuid = Uuid::new_v4();
-        let mut slice = alloc_slice!(16, env);
+        let slice = alloc_slice!(16, env);
         slice.copy_from_slice(uuid.as_bytes());
         env.push(slice);
         Ok(())
@@ -62,7 +62,7 @@ impl<'a> Handler<'a> {
             let ns_uuid_bytes = env.pop().ok_or_else(|| error_empty_stack!())?;
             if let Ok(ns_uuid) = Uuid::from_bytes(ns_uuid_bytes) {
                 let uuid = Uuid::new_v5(&ns_uuid, name);
-                let mut slice = alloc_slice!(16, env);
+                let slice = alloc_slice!(16, env);
                 slice.copy_from_slice(uuid.as_bytes());
                 env.push(slice);
                 Ok(())

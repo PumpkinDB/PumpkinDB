@@ -248,7 +248,7 @@ impl<'a, T, N> Handler<'a, T, N>
         if slice.is_err() {
             return Err(slice.unwrap_err());
         }
-        let mut slice = slice.unwrap();
+        let slice = slice.unwrap();
         let _ = now.write_bytes(&mut slice[0..]).unwrap();
         Ok(slice)
     }
