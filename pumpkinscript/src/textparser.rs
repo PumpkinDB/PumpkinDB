@@ -25,8 +25,8 @@ fn prefix_instruction(instruction: &[u8]) -> Vec<u8> {
 #[inline]
 fn hex_digit(v: u8) -> u8 {
     match v {
-        0x61u8...0x66u8 => v - 32 - 0x41 + 10,
-        0x41u8...0x46u8 => v - 0x41 + 10,
+        0x61u8..=0x66u8 => v - 32 - 0x41 + 10,
+        0x41u8..=0x46u8 => v - 0x41 + 10,
         _ => v - 48,
     }
 }
@@ -34,17 +34,17 @@ fn hex_digit(v: u8) -> u8 {
 macro_rules! write_size {
     ($vec : expr, $size : expr) => {
       match $size {
-        0...120 => $vec.push($size as u8),
-        121...255 => {
+        0..=120 => $vec.push($size as u8),
+        121..=255 => {
             $vec.push(121u8);
             $vec.push($size as u8);
         }
-        256...65535 => {
+        256..=65535 => {
             $vec.push(122u8);
             $vec.push(($size >> 8) as u8);
             $vec.push($size as u8);
         }
-        65536...4294967296 => {
+        65536..=4294967296 => {
             $vec.push(123u8);
             $vec.push(($size >> 24) as u8);
             $vec.push(($size >> 16) as u8);
@@ -152,7 +152,7 @@ named!(int_str<String>,
                num_part: take_while1!(is_digit) >>
                ({
                    let sign_str = if let Some(sign) = sign_opt { sign.to_string() } else { "".to_owned() };
-                   (sign_str + str::from_utf8(num_part).unwrap())})));
+                   sign_str + str::from_utf8(num_part).unwrap()})));
            
 
 
@@ -289,7 +289,7 @@ named!(sint<Vec<u8>>,
            }
            //compv[0] ^= 1u8 << 7;
            bytes.extend_from_slice(&compv);
-           (sized_vec(bytes))
+           sized_vec(bytes)
         })));
 
 named!(uint<Vec<u8>>,
@@ -325,7 +325,7 @@ named!(float32<Vec<u8>>,
                    if val == -0.0f32 {
                        val = 0.0f32;
                    }
-                   (sized_vec(val.pack()))
+                   sized_vec(val.pack())
                })));
 
 named!(float64<Vec<u8>>,
@@ -349,7 +349,7 @@ named!(float64<Vec<u8>>,
                    if val == -0.0f64 {
                        val = 0.0f64;
                    }
-                   (sized_vec(val.pack()))
+                   sized_vec(val.pack())
                })));
 
     

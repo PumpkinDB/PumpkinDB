@@ -280,7 +280,7 @@ impl<'a> Handler<'a> {
         let v = env.pop().ok_or_else(|| error_empty_stack!())?;
 
         let counter = BigUint::from_bytes_be(count);
-        use num_iter;
+
         for _ in num_iter::range(BigUint::zero(), counter) {
             env.program.push(POP);
             env.program.push(v);

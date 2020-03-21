@@ -17,7 +17,7 @@ macro_rules! builtins {
           let ref defs : Vec<Vec<u8>> = *BUILTIN_DEFS;
           for definition in defs {
               match ::pumpkinscript::binparser::instruction(&definition) {
-                  ::pumpkinscript::ParseResult::Done(&[0x81, b':', ref rest..], _) => {
+                  ::pumpkinscript::ParseResult::Done(&[0x81, b':', ref rest@..], _) => {
                       let instruction = &definition[0..definition.len() - rest.len() - 2];
                       map.insert(instruction, rest);
                   },
@@ -100,7 +100,7 @@ macro_rules! error_database {
         let vec = Vec::new();
 
         error_program!(
-            $err.description().as_bytes(),
+            $err.to_string().as_bytes(),
             &vec,
             ERROR_DATABASE
         )

@@ -30,7 +30,7 @@ pub struct Env<'a> {
     // current TRY status
     pub tracking_errors: usize,
     pub aborting_try: Vec<Error>,
-    published_message_callback: Option<Box<messaging::PublishedMessageCallback + Send>>,
+    published_message_callback: Option<Box<dyn messaging::PublishedMessageCallback + Send>>,
 }
 
 impl<'a> ::std::fmt::Debug for Env<'a> {
@@ -172,11 +172,11 @@ impl<'a> Env<'a> {
     }
 
     pub fn set_published_message_callback(&mut self,
-                                          callback: Box<messaging::PublishedMessageCallback + Send>) {
+                                          callback: Box<dyn messaging::PublishedMessageCallback + Send>) {
         self.published_message_callback = Some(callback);
     }
 
-    pub fn published_message_callback(&self) -> Option<Box<messaging::PublishedMessageCallback + Send>> {
+    pub fn published_message_callback(&self) -> Option<Box<dyn messaging::PublishedMessageCallback + Send>> {
         match self.published_message_callback {
             None => None,
             Some(ref cb) => Some(cb.cloned())

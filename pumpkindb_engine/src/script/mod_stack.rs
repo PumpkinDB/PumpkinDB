@@ -271,7 +271,7 @@ impl<'a> Handler<'a> {
             .into_iter()
             .fold(0, |a, item| a + item.len() + offset_by_size(item.len()));
 
-        let mut slice = alloc_slice!(size, env);
+        let slice = alloc_slice!(size, env);
 
         let mut offset = 0;
         for item in vec {

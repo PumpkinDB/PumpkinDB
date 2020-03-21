@@ -10,9 +10,10 @@ use std::sync::mpsc;
 use std::collections::BTreeMap;
 
 use slab;
-use mio::channel as mio_chan;
 use mio::*;
-use mio::tcp::*;
+use mio::net::*;
+use mio::unix::UnixReady;
+use mio_extras::channel as mio_chan;
 
 use super::connection::Connection;
 
@@ -35,7 +36,7 @@ impl messaging::PublishedMessageCallback for RelayedPublishedMessageSender  {
         let _ = self.sender.send((self.identifier.clone(), topic.to_vec(), message.to_vec()));
     }
 
-    fn cloned(&self) -> Box<messaging::PublishedMessageCallback + Send> {
+    fn cloned(&self) -> Box<dyn messaging::PublishedMessageCallback + Send> {
         Box::new(RelayedPublishedMessageSender{
             identifier: self.identifier.clone(),
             sender: self.sender.clone(),
@@ -94,9 +95,9 @@ impl Server {
             let mut i = 0;
 
             while i < cnt {
-                let event = self.events.get(i).expect("Failed to get event");
+                let event = self.events.iter().nth(i).expect("Failed to get event");
 
-                self.ready(poll, event.token(), event.kind());
+                self.ready(poll, event.token(), event.readiness());
 
                 i += 1;
             }
@@ -150,12 +151,12 @@ impl Server {
             return;
         }
 
-        if event.is_error() {
+        if UnixReady::from(event).is_error() {
             self.find_connection_by_token(token).mark_reset();
             return;
         }
 
-        if event.is_hup() {
+        if UnixReady::from(event).is_hup() {
             self.find_connection_by_token(token).mark_reset();
             return;
         }

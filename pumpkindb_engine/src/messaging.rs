@@ -17,7 +17,7 @@ pub trait Publisher : Sized {
 /// `Subscriber` handles management of subscribers
 ///
 pub trait Subscriber : Sized {
-    fn subscribe(&self, topic: &[u8], callback: Box<PublishedMessageCallback + Send>) -> Vec<u8>;
+    fn subscribe(&self, topic: &[u8], callback: Box<dyn PublishedMessageCallback + Send>) -> Vec<u8>;
     fn unsubscribe(&self, identifier: &[u8]);
 }
 
@@ -28,14 +28,14 @@ pub trait Subscriber : Sized {
 ///
 pub trait PublishedMessageCallback {
     fn call(&self, topic: &[u8], message: &[u8]);
-    fn cloned(&self) -> Box<PublishedMessageCallback + Send>;
+    fn cloned(&self) -> Box<dyn PublishedMessageCallback + Send>;
 }
 
 impl PublishedMessageCallback for mpsc::Sender<(Vec<u8>, Vec<u8>)> {
     fn call(&self, topic: &[u8], message: &[u8]) {
         let _ = self.send((Vec::from(topic), Vec::from(message)));
     }
-    fn cloned(&self) -> Box<PublishedMessageCallback + Send> {
+    fn cloned(&self) -> Box<dyn PublishedMessageCallback + Send> {
         Box::new(self.clone())
     }
 }
@@ -75,7 +75,7 @@ mod simple {
         Publish(Message),
         Subscribe {
             topic: Vec<u8>,
-            callback: Box<PublishedMessageCallback + Send>,
+            callback: Box<dyn PublishedMessageCallback + Send>,
             identifier: Vec<u8>
         },
         Unsubscribe { identifier: Vec<u8> },
@@ -86,7 +86,7 @@ mod simple {
         sender: mpsc::Sender<SimpleControlMessage>,
         receiver: mpsc::Receiver<SimpleControlMessage>,
         subscriptions: BTreeMap<Vec<u8>, Vec<Vec<u8>>>,
-        identifier_subscription: BTreeMap<Vec<u8>, Box<PublishedMessageCallback + Send>>,
+        identifier_subscription: BTreeMap<Vec<u8>, Box<dyn PublishedMessageCallback + Send>>,
     }
 
     pub struct SimpleAccessor {
@@ -100,7 +100,7 @@ mod simple {
         }
 
         fn send_subscribe(&self, topic: Vec<u8>,
-                          callback: Box<PublishedMessageCallback + Send>,
+                          callback: Box<dyn PublishedMessageCallback + Send>,
                           identifier: Vec<u8>) {
             let _ = self.sender.send(SimpleControlMessage::Subscribe{
                 topic: topic,
@@ -182,7 +182,7 @@ mod simple {
     }
 
     impl Subscriber for SimpleAccessor {
-        fn subscribe(&self, topic: &[u8], callback: Box<PublishedMessageCallback + Send>) -> Vec<u8> {
+        fn subscribe(&self, topic: &[u8], callback: Box<dyn PublishedMessageCallback + Send>) -> Vec<u8> {
             let uuid = Uuid::new_v4();
             let id = uuid.as_bytes()[..].to_vec();
             self.send_subscribe(Vec::from(topic), callback, id.clone());

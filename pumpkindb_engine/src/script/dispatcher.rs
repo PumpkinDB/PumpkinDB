@@ -15,16 +15,14 @@ pub trait Dispatcher<'a> {
     fn handle(&mut self, env: &mut Env<'a>, instruction: &'a [u8], pid: EnvId) -> PassResult<'a>;
 }
 
-include!("macros.rs");
-
-impl<'a> Dispatcher<'a> for Vec<Box<Dispatcher<'a>>> {
+impl<'a> Dispatcher<'a> for Vec<Box<dyn Dispatcher<'a>>> {
     fn init(&mut self, env: &mut Env<'a>, pid: EnvId) {
-        for mut disp in self.into_iter() {
+        for disp in self.into_iter() {
             disp.init(env, pid);
         }
     }
     fn done(&mut self, env: &mut Env<'a>, pid: EnvId) {
-        for mut disp in self.into_iter() {
+        for disp in self.into_iter() {
             disp.done(env, pid);
         }
     }
@@ -33,7 +31,7 @@ impl<'a> Dispatcher<'a> for Vec<Box<Dispatcher<'a>>> {
         loop {
             match iter.next() {
                 None => break,
-                Some(mut disp) => {
+                Some(disp) => {
                     let result = disp.handle(env, instruction, pid);
                     if result.is_unhandled() {
                         continue
@@ -243,7 +241,7 @@ mod tests {
   #[test]
   pub fn dynamic_dispatch() {
       crossbeam::scope(|scope| {
-          let dispatchers: Vec<Box<Dispatcher>> = vec![Box::new(MyDispatcher::new())];
+          let dispatchers: Vec<Box<dyn Dispatcher>> = vec![Box::new(MyDispatcher::new())];
           let (mut scheduler, sender) = Scheduler::new(dispatchers);
           let handle = scope.spawn(move || scheduler.run() );
           let sender_ = sender.clone();

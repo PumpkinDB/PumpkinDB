@@ -6,10 +6,6 @@
 extern crate alloc;
 
 #[cfg(test)]
-#[macro_use]
-extern crate matches;
-
-#[cfg(test)]
 extern crate test;
 
 extern crate core;

@@ -1,11 +1,14 @@
 language: rust
 rust:
   - stable
-  - nightly-2017-06-20
+  - nightly-2020-03-20
 matrix:
   allow_failures:
     - rust: stable
 script:
   - cargo build --all --verbose
-  - cargo build --all --features="experimental" --verbose
+  # Option --features not accepted any more in a virtual root
+  #error: --features is not allowed in the root of a virtual workspace
+  #note: while this was previously accepted, it didn't actually do anything
+  #- cargo build --all --features="experimental" --verbose
   - make test

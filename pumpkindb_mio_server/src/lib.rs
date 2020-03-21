@@ -3,9 +3,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
-#![feature(slice_patterns, advanced_slice_patterns)]
-
 extern crate mio;
+extern crate mio_extras;
 extern crate memmap;
 extern crate byteorder;
 extern crate rand;
@@ -23,9 +22,8 @@ mod connection;
 mod server;
 
 use mio::Poll;
-use mio::tcp::TcpListener;
-
-use mio::channel as mio_chan;
+use mio::net::TcpListener;
+use mio_extras::channel as mio_chan;
 
 use pumpkindb_engine::{script};
 
